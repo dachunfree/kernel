@@ -1,0 +1,32 @@
+首先观察下dts，了解下pinctrl构成：
+
+pinctrl@56000000{
+		reg = <0x56000000 0x1000>;
+		compatible = "samsung,s3c2440-pinctrl";
+
+		wakeup-interrupt-controller {
+			compatible = "samsung,s3c2410-wakeup-eint";
+			interrupts = <0x0 0x0 0x0 0x3 0x0 0x0 0x1 0x3 0x0 0x0 0x2 0x3 0x0 0x0 0x3 0x3 0x0 0x0 0x4 0x4 0x0 0x0 0x5 0x4>;
+		};
+		//bank
+		gpa {
+			gpio-controller;   -------------------->表示是一个bank
+			#gpio-cells = <0x2>; ------------------>用来识别 确定引脚，需要几个u32数值
+		};
+		//group 
+		i2c0-bus {                                samsung,pins：用哪些引脚完成这些功能(这个组用哪些引脚)
+			samsung,pins = "gpe-14", "gpe-15"; ---> 看datasheet：GPE15 Input/output IICSDA – – GPE14 Input/output IICSCL  
+			samsung,pin-function = <0x2>;---------> 怎么配置寄存器值。GPE15：10 = IICSDA；GPE14：10 = IICSCL；                           
+			phandle = <0x4>;
+		};
+	}   
+	
+具体按键gpio如下：	
+	buttons {
+    compatible = "jz2440_button";
+		eint-pins  = <&gpf 0 0>, <&gpf 2 0>, <&gpg 3 0>, <&gpg 11 0>; -------> 	Values for gpio specifier:              
+    interrupts-extended = <&intc 0 0 0 3>,                                 	- Pin number: is a value between 0 to 7.
+                          <&intc 0 0 2 3>,                                 	- Flags: 0 - Active High                
+                          <&gpg 3 3>,                                      		 1 - Active Low                       
+                          <&gpg 11 3>;
+	};

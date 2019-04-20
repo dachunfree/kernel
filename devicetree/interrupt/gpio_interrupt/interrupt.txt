@@ -1,0 +1,88 @@
+
+#############################################中断执行###########################################################
+1.entry-armv.S 中 中断向量表的处理及跳转
+	.L__vectors_start:
+		W(b)	vector_irq
+			vector_stub	irq, IRQ_MODE, 4 //宏，展开即 vector_irq
+			.long	__irq_svc			@  3  (SVC_26 / SVC_32)
+			  __irq_svc:
+					svc_entry
+					irq_handler //中断处理函数
+						.macro	irq_handler //宏开始
+						ldr	r1, =handle_arch_irq //中断处理函数
+						ldr	pc, [r1] //跳转执行
+						.endm //宏结束
+				
+2.irq-s3c24xx.c中handle_arch_irq 执行
+  s3c24xx_handle_irq   <-------------<------------------<-----------------------------------<-----------------------------
+  	s3c24xx_handle_intc(s3c_intc[0], regs, 0))                                                                           | 
+  		pnd = readl_relaxed(intc->reg_intpnd); //读出pend                                                                  | 
+  		offset = readl_relaxed(intc->reg_intpnd + 4); //读出当前硬件中断号                                                 | 
+  		handle_domain_irq(intc->domain, intc_offset + offset, regs);//domain为s3c_intc中初始化的                           | 
+  			__handle_domain_irq(domain, hwirq, true, regs);                                                                  | 
+  					irq = irq_find_mapping(domain, hwirq);//硬件中断到虚拟中断号的转换                                           | 
+  						return domain->linear_revmap[hwirq];//返回虚拟中断号                                                       | 
+  					generic_handle_irq(irq);                                                                                     | 
+  						struct irq_desc *desc = irq_to_desc(irq);//根据虚拟中断号得到中断描述符                                    |  
+  						generic_handle_irq_desc(desc);//处理中断                                                                   | 
+  							desc->handle_irq(desc);//中断处理函数                                                                    | 
+                                                                                                                         | 
+		                                                                                                                     | 
+#############################################中断初始化###########################################################		   | 
+3.上面介绍了发生中断后，是如何一步一步执行中断处理函数。那么hw_irq和v_irq是怎么建立映射？如何建立映射的呢？              | 
+3.1看中断初始化函数：                                                                                                    | 
+main.c中：                                                                                                               | 
+	start_kernel                                                                                                           | 
+		init_IRQ();                                                                                                          |
+			//MACHINE_START(S3C2440, "SMDK2440")                                                                               |
+			machine_desc->init_irq(); //调用两个其中一个初始化函数                                                             | 
+			irqchip_init();//以此默认的为例。                                                                                  | 
+				of_irq_init(__irqchip_of_table);//                                                                               | 
+					for_each_matching_node_and_match(np, matches, &match)//遍历matches。                                           | 
+					desc = kzalloc(sizeof(*desc), GFP_KERNEL);//为符合"interrupt-controller"分配of_intc_desc结构体                 | 
+					desc->irq_init_cb = match->data;<-----------------------------------------------|                              | 
+																																													|                              | 
+3.2 分析__irqchip_of_table：																															|                              | 
+IRQCHIP_DECLARE(s3c2410_irq, "samsung,s3c2410-irq", s3c2410_init_intc_of);								|                              | 
+																																													|                              | 
+#define _OF_DECLARE(table, name, compat, fn, fn_type)			\																|                              |
+	static const struct of_device_id __of_table_s3c2410_irq	\ 															|                              |
+		__used __section(__irqchip_of_table)			 //段属性，在vmlinux.lds中可以找到					|                              | 
+		 = { .compatible =  "samsung,s3c2410-irq",,				\																		|                              | 
+		     .data = s3c2410_init_intc_of  }----->------------>------------->-------->--------|                              | 
+                                                                                                                         | 
+//此段属性中放置了一个或者多个of_device_id结构体，里面含有compatible成员。如果对比双方的compatible                       | 
+//属性相同，并且节点含有"interrupt-controller"属性，则调用.data来处理设备节点。                                          | 
+                                                                                                                         | 
+3.3 分析s3c2410_init_intc_of 函数：                                                                                      | 
+s3c2410_init_intc_of                                                                                                     | 
+	domain = irq_domain_add_linear(np, num_ctrl * 32,&s3c24xx_irq_ops_of, NULL);//分配一个domain                           | 
+		domain->ops = ops; //s3c24xx_irq_ops_of：                                                                            |
+	intc = kzalloc(sizeof(struct s3c_irq_intc), GFP_KERNEL);//分配struct s3c_irq_intc *intc.设置相关offset,mask,pending		 |			
+	set_handle_irq(s3c24xx_handle_irq);	------------------->----------------------------->------------------------>---------
+	
+			
+两个重要函数：			
+s3c24xx_irq_ops_of			
+	.map = s3c24xx_irq_map_of；//hw_irq映射v_irq；
+	.xlate = s3c24xx_irq_xlate_of//解析设备树，获取相关hwirq等信息  
+	
+########################################################中断注册##########################################################     
+request_irq(unsigned int irq, irq_handler_t handler, unsigned long flags,const char *name, void *dev)
+	request_threaded_irq(irq, handler, NULL, flags, name, dev);
+		desc = irq_to_desc(irq);//通过虚拟中断号找到desc中断描述符 
+		action = kzalloc(sizeof(struct irqaction), GFP_KERNEL);  //分配struct irqaction 结构体
+		action->handler = handler;//真正的中断执行函数放在action中
+		retval = __setup_irq(irq, desc, action);
+		  if (new->thread_fn && !nested)//如果有thread_fn,实现中断线程化
+		  	ret = setup_irq_thread(new, irq, false);
+		  		t = kthread_create(irq_thread, new, "irq/%d-%s", irq,new->name);//创建内核线程
+		  		sched_setscheduler_nocheck(t, SCHED_FIFO, &param);//设置线程相关调度
+		  *old_ptr = new;//不用中断线程化，将action 赋给decs->action
+		  if (new->thread)//如果中断线程化，唤醒线程                                                 
+      		wake_up_process(new->thread); 
+中断线程化：
+	在linux中，中断具有最高的优先级。不论在任何时刻，只要产生中断事件，内核将立即执行相应的中断处理程序，等到所有挂起的中断和
+软中断处理完毕后，才能执行正常的任务，因此可能造成实时任务得不到及时的处理。中断线程化之后，中断作为内核线程运行而且被赋与不
+同的实时优先级，实时任务可以有比中断线程更高的优先级。这样，具有最高的优先级的实时任务就能得到优先处理，即使在严重负载下仍有
+实时性保证。

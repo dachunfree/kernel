@@ -1,0 +1,105 @@
+主要看下gpio中断控制器的用法：
+
+首先看devicetree：  
+1.主中断控制器：
+
+	interrupt-controller@4a000000 {
+		compatible = "samsung,s3c2410-irq";
+		reg = <0x4a000000 0x100>;
+		interrupt-controller;
+		#interrupt-cells = <0x4>;
+		phandle = <0x1>;
+	};
+	
+2.gpio中断控制器	
+
+pinctrl@56000000 {
+		reg = <0x56000000 0x1000>;
+		compatible = "samsung,s3c2440-pinctrl";
+		//主要用到了如下两个中断控制器
+		gpf {
+			gpio-controller;
+			#gpio-cells = <0x2>;
+			interrupt-controller;//表示中断控制器
+			#interrupt-cells = <0x2>;
+			phandle = <0x6>;
+		};
+
+		gpg {
+			gpio-controller;
+			#gpio-cells = <0x2>; ---------
+			interrupt-controller;        |
+			#interrupt-cells = <0x2>;    |
+			phandle = <0xe>;             |
+		};                             |
+};                                 |
+//按键中断实例                     |
+	buttons {                        |                                          
+		compatible = "jz2440_button";  |                      
+		eint-pins = <&gpf 0x0 0x0>, ---------------------->   
+							 	<&gpf 0x2 0x0>,                           
+							 	<&gpg 0x3 0x0>                            
+							 	<&gpg 0xb 0x0>;                           
+							 	                                          
+							 	                                          
+							 	                                          
+							 	
+							 	                                 主中断控制器： <ctrl_num parent_irq ctrl_irq type>
+		interrupts-extended = <&intc 0x0 0x0 0x0 0x3>,----->     1:ctrl_num contains the controller to use:                               
+		 											<&intc 0x0 0x0 0x2 0x3>,               - 0 ... main controller                                            
+		 											<&gpg 0x3 0x3>,                        - 1 ... sub controller                                             
+		 											<&gpg 0xb 0x3>; ---------              - 2 ... second main controller on s3c2416 and s3c2450              
+	};                                               |          2:parent_irq contains the parent bit in the main controller and will be  
+                                                   |            ignored in main controllers                                 
+                                                   |          3:ctrl_irq contains the interrupt bit of the controller //哪一个中                  
+                                                   |          4:type contains the trigger type to use   //触发方式（同下）   
+                                                   |                              
+                                                   |
+                                                   |
+                                                   |gpio中断控制器：
+                                                   |------> - First Cell: represents the external gpio interrupt number local to the     
+                                                          		 external gpio interrupt space of the controller.                             
+                                                              - Second Cell: flags to identify the type of the interrupt                
+                                                                - 1 = rising edge triggered                                             
+                                                                - 2 = falling edge triggered                                            
+                                                                - 3 = rising and falling edge triggered                                 
+                                                                - 4 = high level triggered                                              
+                                                                - 8 = low level triggered                                               
+                                                                                                                                        
+3.设备树转换为platform_device:
+	具体看interrupt.txt.了解中断是如何从设备树解析的。
+	
+4.获取中断和gpio相关。
+
+	a.首先匹配到节点“"jz2440_button";”  
+	   static const struct of_device_id of_match_buttons[] = {
+	   	{ .compatible = "jz2440_button", .data = NULL },      
+	   };                                                     
+		struct platform_driver buttons_drv = {                                                                                                                     
+	  	.probe		= buttons_probe,                                                      
+	  	.driver		= {                                                                   
+	  		.name	= "mybuttons",                                                          
+	  		.of_match_table = of_match_buttons, /* 能支持哪些来自于dts的platform_device */
+	  	}                                                                               
+	  };  
+	b.匹配成功后调取  buttons_probe函数。
+	
+	c.从struct platform_device *pdev中获取  struct device_node *dp_node。
+	
+	d.获取中断：
+		res = platform_get_resource(pdev, IORESOURCE_IRQ, i);
+	  irq  = res->start;  //已经mapping过，是v_irq
+	
+	e.获取gpio
+		pin = of_get_named_gpio(dp_node, "eint-pins", i);   
+	
+5. 程序运行结果：
+
+	0:res->start：1 
+	pins_desc[0].pin = 84
+	1:res->start：2 
+	pins_desc[1].pin = 86
+	2:res->start：3 
+	pins_desc[2].pin = 95
+	3:res->start：15 
+	pins_desc[3].pin = 103                                                               
