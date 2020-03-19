@@ -1,0 +1,40 @@
+
+					
+
+首先，soft/hard lockup的实现在kernel/watchdog.c中，
+
+主体涉及到了3个东西：kernel线程，时钟中断，NMI中断（不可屏蔽中断）。
+
+这3个东西具有不一样的优先级，依次是kernel线程 < 时钟中断 < NMI中断。
+
+而正是用到了他们之间优先级的区别，所以才可以调试系统运行中的两种问题：
+
+a. 抢占被长时间关闭而导致进程无法调度（soft lockup）
+
+b. 中断被长时间关闭而导致更严重的问题（hard lockup）
+
+watch_dog.c中：
+实现lockup_detector_init。调用关系如下：
+start_kernel
+	rest_init
+		kernel_thread(kernel_init, NULL, CLONE_FS);
+			kernel_init
+				kernel_init_freeable
+					lockup_detector_init();
+
+1.创建线程：
+static struct smp_hotplug_thread watchdog_threads = {
+	.store			= &softlockup_watchdog,
+	.thread_should_run	= watchdog_should_run,
+	.thread_fn		= watchdog,
+	.thread_comm		= "watchdog/%u",
+	.setup			= watchdog_enable,
+	.cleanup		= watchdog_cleanup,
+	.park			= watchdog_disable,
+	.unpark			= watchdog_enable,
+};
+lockup_detector_init
+	smpboot_update_cpumask_percpu_thread(&watchdog_threads, &watchdog_cpumask)
+	
+/****************************实验一个死锁*********************************/
+		

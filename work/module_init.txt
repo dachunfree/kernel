@@ -1,0 +1,54 @@
+1.pa的pinctrl申请及初始化
+pa_init(np);
+	nufront_sta_of_probe
+		nufront_sta_init
+	
+
+2.驱动注册
+late_initcall(nufront_sta_init);
+	#define late_initcall(fn)		__define_initcall(fn, 7)	
+		#define __define_initcall(fn, id) \
+			static initcall_t __initcall_##fn##id __used \
+			__attribute__((__section__(".initcall" #id ".init"))) = fn; \
+			LTO_REFERENCE_INITCALL(__initcall_##fn##id)
+			
+翻译下此宏：
+static initcall_t __initcall_nufront_sta_init7 __used \
+__attribute__((__section__(".initcall" 7".init"))) = nufront_sta_init; \
+LTO_REFERENCE_INITCALL(__initcall_nufront_sta_init7)
+
+应用了段属性（放在.initcall" 7".init），查看链接脚本（include/asm-generic/vmlinux.lds.h）：
+#define INIT_CALLS_LEVEL(level)                                         \
+VMLINUX_SYMBOL(__initcall##level##_start) = .;          \
+*(.initcall##level##.init)                              \
+*(.initcall##level##s.init)                             \
+
+  VMLINUX_SYMBOL(__initcall_start) = .;                   \
+  *(.initcallearly.init)                                  \
+  INIT_CALLS_LEVEL(0)                                     \
+  INIT_CALLS_LEVEL(1)                                     \
+  INIT_CALLS_LEVEL(2)                                     \
+  INIT_CALLS_LEVEL(3)                                     \
+  INIT_CALLS_LEVEL(4)                                     \
+  INIT_CALLS_LEVEL(5)                                     \
+  INIT_CALLS_LEVEL(rootfs)                                \
+  INIT_CALLS_LEVEL(6)                                     \
+  INIT_CALLS_LEVEL(7)                                     \
+  VMLINUX_SYMBOL(__initcall_end) = .;
+
+3.看kernel初始化，initcall机制
+start_kernel（）
+	rest_init();
+		kernel_thread(kernel_init, NULL, CLONE_FS);
+			kernel_init_freeable();
+				do_basic_setup();
+					do_initcalls();
+						static void __init do_initcalls(void)
+							for (level = 0; level < ARRAY_SIZE(initcall_levels) - 1; level++)//按级别依次调用
+							do_initcall_level(level);
+								for (fn = initcall_levels[level]; fn < initcall_levels[level+1]; fn++) //从段中获取函数
+								do_one_initcall(*fn);
+
+ 
+
+

@@ -1,0 +1,14 @@
+
+从dts中获取中断号的几种方法：
+ /* platform_get_irq - get an IRQ for a device
+ * @dev: platform device
+ * @num: IRQ number index
+ */
+ 
+1.platform_get_irq(struct platform_device *dev, unsigned int num);
+
+2.
+irq_of_parse_and_map(struct device_node *dev, int index)
+	of_irq_parse_one(dev, index, &oirq) //分析device node中的interrupt相关属性
+	irq_create_of_mapping(&oirq);//创建映射，并返回对应的IRQ number 
+	
