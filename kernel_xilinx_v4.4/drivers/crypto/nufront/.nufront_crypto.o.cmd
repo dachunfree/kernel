@@ -1,0 +1,1 @@
+cmd_drivers/crypto/nufront/nufront_crypto.o := arm-xilinx-linux-gnueabi-ld -EL    -r -o drivers/crypto/nufront/nufront_crypto.o drivers/crypto/nufront/nufront_core.o drivers/crypto/nufront/nufront_ablkcipher.o drivers/crypto/nufront/nufront_dma.o 
