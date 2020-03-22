@@ -209,13 +209,19 @@ ENDPROC(__dabt_svc)
 
 	.align	5
 __irq_svc:
-	svc_entry
-	irq_handler
+	svc_entry   //保存现场
+	irq_handler   //中断执行
 
 #ifdef CONFIG_PREEMPT
-	get_thread_info tsk
-	ldr	r8, [tsk, #TI_PREEMPT]		@ get preempt count
+	get_thread_info tsk                           //获取当前 current thread 信息
+	ldr	r8, [tsk, #TI_PREEMPT]		@ get preempt count offset
 	ldr	r0, [tsk, #TI_FLAGS]		@ get flags
+	/*preempt_count用来判断当前是否可以发生抢占，如果preempt_count不等于0
+	/（可能是代码调用preempt_disable显式的禁止了抢占，也可能是处于中断上下文等），
+	说明当前不能进行抢占，直接进入恢复现场的工作。如果preempt_count等于0，
+	说明已经具备了抢占的条件，当然具体是否要抢占当前进程还是要看看
+	thread info中的flag成员是否设定了_TIF_NEED_RESCHED这个标记
+	（可能是当前的进程的时间片用完了，也可能是由于中断唤醒了优先级更高的进程）*/
 	teq	r8, #0				@ if preempt count != 0
 	movne	r0, #0				@ force flags to 0
 	tst	r0, #_TIF_NEED_RESCHED
@@ -373,10 +379,10 @@ ENDPROC(__fiq_abt)
 #error "sizeof(struct pt_regs) must be a multiple of 8"
 #endif
 
-	.macro	usr_entry, trace=1, uaccess=1
+	.macro	usr_entry, trace=1, uaccess=1             //宏开始
  UNWIND(.fnstart	)
  UNWIND(.cantunwind	)	//@ don't unwind the user space
-	sub	sp, sp, #S_FRAME_SIZE
+	sub	sp, sp, #S_FRAME_SIZE              //sp_svc,sizeof(struct pt_regs).18 个32位寄存器
  ARM(	stmib	sp, {r1 - r12}	)
  THUMB(	stmia	sp, {r0 - r12}	)
 
@@ -424,7 +430,7 @@ ENDPROC(__fiq_abt)
 #endif
 	ct_user_exit save = 0
 	.endif
-	.endm
+	.endm                //宏结束
 
 	.macro	kuser_cmpxchg_check
 #if !defined(CONFIG_CPU_32v6K) && defined(CONFIG_KUSER_HELPERS)
@@ -453,12 +459,12 @@ ENDPROC(__dabt_usr)
 
 	.align	5
 __irq_usr:
-	usr_entry
+	usr_entry                           //进行user的模式相关的寄存器的保存。
 	kuser_cmpxchg_check
-	irq_handler
+	irq_handler                         //中断执行
 	get_thread_info tsk
 	mov	why, #0
-	b	ret_to_user_from_irq
+	b	ret_to_user_from_irq               //恢复现场前处理。里面还会检查标志位，是否需要调度，是否有信号。
  UNWIND(.fnend		)
 ENDPROC(__irq_usr)
 
@@ -1095,10 +1101,10 @@ vector_rst:
 	.if 4
 	sub	lr, lr, 4
 
-	.long	__irq_usr			@  0  (USR_26 / USR_32)    // base address + 0
+	.long	__irq_usr			@  0  (USR_26 / USR_32)    // base address + 0。user模式发送中断
 	.long	__irq_invalid			@  1  (FIQ_26 / FIQ_32)
 	.long	__irq_invalid			@  2  (IRQ_26 / IRQ_32)
-	.long	__irq_svc			@  3  (SVC_26 / SVC_32)    //base address + 12
+	.long	__irq_svc			@  3  (SVC_26 / SVC_32)    //base address + 12。svc模式发送中断
 	.long	__irq_invalid			@  4
 	.long	__irq_invalid			@  5
 	.long	__irq_invalid			@  6

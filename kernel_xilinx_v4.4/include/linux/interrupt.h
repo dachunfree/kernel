@@ -533,6 +533,10 @@ extern void __tasklet_schedule(struct tasklet_struct *t);
 
 static inline void tasklet_schedule(struct tasklet_struct *t)
 {
+/*程序在多个上下文中可以多次调度同一个tasklet执行（也可能来自多个cpu core），
+不过实际上该tasklet只会一次挂入首次调度到的那个cpu的tasklet链表，也就是说，
+即便是多次调用tasklet_schedule，实际上tasklet只会挂入一个指定CPU的tasklet队列中（而且只会挂入一次），
+也就是说只会调度一次执行。这是通过TASKLET_STATE_SCHED这个flag来完成的*/
 	if (!test_and_set_bit(TASKLET_STATE_SCHED, &t->state))
 		__tasklet_schedule(t);
 }

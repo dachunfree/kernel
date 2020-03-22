@@ -94,15 +94,25 @@ ret_slow_syscall:
 	disable_irq_notrace			@ disable interrupts
 ENTRY(ret_to_user_from_irq)
 	ldr	r1, [tsk, #TI_FLAGS]
+	//#define _TIF_WORK_MASK		(_TIF_NEED_RESCHED | _TIF_SIGPENDING | _TIF_NOTIFY_RESUME) // _TIF_NEED_RESCHED用户调度??
+	//thread info(ti)是否需要调度、是否有信号处理、返回用户空间之前是否需要调用callback函数
 	tst	r1, #_TIF_WORK_MASK
-	bne	slow_work_pending
+	bne	slow_work_pending           //z 非0则跳转到此。及r1 & #_TIF_WORK_MASK != 0;
+/*
+   tst：逻辑处理指令，用于把一个寄存器的内容和另一个寄存器的内容或立即数进行按位的与运算，
+		并根据运算结果更新CPSR中条件标志位的值。当前运算结果为1，则Z=0；当前运算结果为0，则Z=1
+　 cmp：算数处理指令，用于把一个寄存器的内容和另一个寄存器的内容或立即数进行减法比较，不存储结果，都会更改标志位
+　 bne: 数据跳转指令，标志寄存器中Z标志位不等于零时, 跳转到BNE后标签处
+　 beq: 数据跳转指令，标志寄存器中Z标志位等于零时, 跳转到BEQ后标签处
+*/
 no_work_pending:
 	asm_trace_hardirqs_on save = 0
 
 	/* perform architecture specific actions before user return */
 	arch_ret_to_user r1, lr
 	ct_user_enter save = 0
-
+/*进入中断的时候保存的现场（寄存器值）恢复到实际的ARM的各个寄存器中，
+从而完全返回到了中断发生的那一点*/
 	restore_user_regs fast = 0, offset = 0
 ENDPROC(ret_to_user_from_irq)
 ENDPROC(ret_to_user)

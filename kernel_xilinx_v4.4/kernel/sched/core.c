@@ -3073,6 +3073,7 @@ again:
  *
  *      To drive preemption between tasks, the scheduler sets the flag in timer
  *      interrupt handler scheduler_tick().
+ 		为了触发抢占，在定时器中断处理函数scheduler_tick（）中，调度器会设置TIF_NEED_RESCHED 抢占标志；
  *
  *   3. Wakeups don't really cause entry into schedule(). They add a
  *      task to the run-queue and that's it.

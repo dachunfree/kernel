@@ -160,6 +160,12 @@ void __local_bh_enable_ip(unsigned long ip, unsigned int cnt)
 	 * Keep preemption disabled until we are done with
 	 * softirq processing:
 	 */
+	 /*。假设在临界区代码执行的时候，发生了中断，由于代码并没有阻止top half的抢占，
+	 因此中断handler会抢占当前正在执行的thread。在中断handler中，我们raise了softirq，
+	 在返回中断现场的时候，由于disable了bottom half，因此虽然触发了softirq，但是不会调度执行。
+	 因此，代码返回临界区继续执行，直到local_bh_enable。一旦enable了bottom half，
+	 那么之前raise的softirq就需要调度执行了，因此，这也是为什么在local_bh_enable会调用do_softirq函数。
+	 */
 	preempt_count_sub(cnt - 1);
 
 	if (unlikely(!in_interrupt() && local_softirq_pending())) {
@@ -244,7 +250,7 @@ asmlinkage __visible void __do_softirq(void)
 	 */
 	current->flags &= ~PF_MEMALLOC;
 	//取得目前有哪些位存在软件中断
-	pending = local_softirq_pending();
+	pending = local_softirq_pending(); //raise_softirq_irqoff(unsigned int nr)
 	account_irq_enter_time(current);
 	//关闭软中断，其实就是设置正在处理软件中断标记，在同一个CPU上使得不能重入__do_softirq函数
 	__local_bh_disable_ip(_RET_IP_, SOFTIRQ_OFFSET);
@@ -299,6 +305,11 @@ restart:
 将唤醒一个软件中断处理的内核进程，在内核进程中处理pending中的软件中断。
 这里要注意，之前我们分析的触发软件中断的位置其实是中断上下文中，
 而在软中断的内核线程中实际已经是进程的上下文。*/
+/*
+再次检查softirq pending，有可能上面的softirq handler在执行过程中，
+发生了中断，又raise了softirq。如果的确如此，那么我们需要跳转到restart那里重新处理soft irq。
+当然，也不能总是在这里不断的loop，因此linux kernel设定了下面的条件：
+*/
 	pending = local_softirq_pending();
 	if (pending) {
 		//softirq的处理时间没有超过2个ms
@@ -404,7 +415,7 @@ void irq_exit(void)
 
 	account_irq_exit_time(current);
 	preempt_count_sub(HARDIRQ_OFFSET);
-	//没有中断(soft irq,nmi,hard)正在处理，且有软中断pending。
+	//没有中断(soft irq,nmi,hard)正在处理(或者上锁了)，且有软中断pending。
 	if (!in_interrupt() && local_softirq_pending())
 		invoke_softirq();
 

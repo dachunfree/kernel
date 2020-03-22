@@ -36,7 +36,7 @@
 #define PREEMPT_SHIFT	0
 #define SOFTIRQ_SHIFT	(PREEMPT_SHIFT + PREEMPT_BITS)   //0+8 = 8
 #define HARDIRQ_SHIFT	(SOFTIRQ_SHIFT + SOFTIRQ_BITS)   // 8 + 8 =16
-#define NMI_SHIFT	(HARDIRQ_SHIFT + HARDIRQ_BITS)      // 4
+#define NMI_SHIFT	(HARDIRQ_SHIFT + HARDIRQ_BITS)      //4+16 = 20
 
 #define __IRQ_MASK(x)	((1UL << (x))-1)
 
@@ -51,7 +51,18 @@
 #define NMI_OFFSET	(1UL << NMI_SHIFT)
 
 #define SOFTIRQ_DISABLE_OFFSET	(2 * SOFTIRQ_OFFSET)
-
+/*
+thread_info->preempt_count:表示
+-----------------------------------------------------------------------
+|                  |20 |19      16|15            9| 8 |7             0|
+-----------------------------------------------------------------------
+bit[0-7]  :preemption count用来记录当前被显式的禁止抢占的次数
+bit[8]    :SOFTIRQ:当前是否有softirq，串行执行，1bit足矣。通过该bit可以知道当前task是否在sofirq context
+bit[9-15] :由于内核同步的需求，进程上下文需要禁止softirq。这时候，kernel提供了local_bh_enable和local_bh_disable
+		   这样的接口函数。这部分的概念是和preempt disable/enable类似的，占用了bit9～15，最大可以支持127次嵌套.
+bit[16-19]:hardirq count.描述当前中断handler嵌套的深度.没有中断嵌套，一般都是0或者1.
+bit[20]   :NMI.FIQ中
+*/
 /* We use the MSB mostly because its available */
 #define PREEMPT_NEED_RESCHED	0x80000000
 
