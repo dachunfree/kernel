@@ -36,13 +36,13 @@ ret_fast_syscall:
  UNWIND(.cantunwind	)
 	disable_irq_notrace			@ disable interrupts
 	ldr	r1, [tsk, #TI_FLAGS]		@ re-check for syscall tracing
-	tst	r1, #_TIF_SYSCALL_WORK | _TIF_WORK_MASK
+	tst	r1, #_TIF_SYSCALL_WORK | _TIF_WORK_MASK   //判断是否需要调度。TIF_NEED_RESCHED | _TIF_SIGPENDING |  _TIF_NOTIFY_RESUME | _TIF_UPROBE)
 	bne	fast_work_pending
 
 	/* perform architecture specific actions before user return */
 	arch_ret_to_user r1, lr
 
-	restore_user_regs fast = 1, offset = S_OFF
+	restore_user_regs fast = 1, offset = S_OFF   //恢复用户空间的代码
  UNWIND(.fnend		)
 ENDPROC(ret_fast_syscall)
 
@@ -155,6 +155,7 @@ ENTRY(vector_swi)
 #ifdef CONFIG_CPU_V7M
 	v7m_exception_entry
 #else
+	//保存用户空间现场。
 	sub	sp, sp, #S_FRAME_SIZE
 	stmia	sp, {r0 - r12}			@ Calling r0 - r12
  ARM(	add	r8, sp, #S_PC		)
@@ -256,7 +257,7 @@ local_restart:
 9001:
 	sub	lr, lr, #4
 	str	lr, [sp, #S_PC]
-	b	ret_fast_syscall
+	b	ret_fast_syscall    //返回用户空间。
 #endif
 ENDPROC(vector_swi)
 

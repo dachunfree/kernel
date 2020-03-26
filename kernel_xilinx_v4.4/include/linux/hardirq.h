@@ -39,6 +39,9 @@ extern void rcu_nmi_exit(void);
 		trace_hardirq_enter();			\
 	} while (0)
 
+//记录硬件中断的次数
+//
+
 /*
  * Enter irq context (on NO_HZ, update jiffies):
  */

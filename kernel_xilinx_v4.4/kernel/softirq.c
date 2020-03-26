@@ -232,7 +232,10 @@ static inline void lockdep_softirq_end(bool in_hardirq)
 static inline bool lockdep_softirq_start(void) { return false; }
 static inline void lockdep_softirq_end(bool in_hardirq) { }
 #endif
-
+/*一旦一个softirq handler被调度执行（无论在哪一个processor上），那么，
+本地的softirq handler都无法抢占其运行，要等到当前的softirq handler运行完毕后，
+才能执行下一个soft irq handler。注意：上面我们说的是本地，是local，
+softirq handler是可以在多个CPU上同时运行的*/
 asmlinkage __visible void __do_softirq(void)
 {
 	unsigned long end = jiffies + MAX_SOFTIRQ_TIME;
@@ -440,6 +443,10 @@ inline void raise_softirq_irqoff(unsigned int nr)
 	 * Otherwise we wake up ksoftirqd to make sure we
 	 * schedule the softirq soon.
 	 */
+	 //如果在中断上下文，我们只要set __softirq_pending的某个bit就OK了，
+	 //在中断返回的时候自然会进行软中断的处理。但是
+	 //如果在context上下文调用这个函数的时候，
+	 //我们必须要调用wakeup_softirqd函数用来唤醒本CPU上的softirqd这个内核线程。
 	if (!in_interrupt())
 		wakeup_softirqd();
 }
@@ -448,7 +455,7 @@ void raise_softirq(unsigned int nr)
 {
 	unsigned long flags;
 
-	local_irq_save(flags);
+	local_irq_save(flags); //关闭中断cpsr
 	raise_softirq_irqoff(nr);
 	local_irq_restore(flags);
 }
@@ -456,6 +463,8 @@ void raise_softirq(unsigned int nr)
 void __raise_softirq_irqoff(unsigned int nr)
 {
 	trace_softirq_raise(nr);
+//_raise_softirq_irqoff函数设定本CPU上的__softirq_pending的某个bit等于1，
+//具体的bit是由soft irq number（nr参数）指定的
 	or_softirq_pending(1UL << nr);
 }
 

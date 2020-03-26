@@ -1707,6 +1707,16 @@ long _do_fork(unsigned long clone_flags,
 	 * requested, no event is reported; otherwise, report if the event
 	 * for the type of forking is enabled.
 	 */
+	 /*Linux的内核提供了ptrace这样的系统调用，通过它，
+	 一个进程（我们称之 tracer，例如strace、gdb）可以观测和控制另外一个进程（被trace的进程，
+	 我们称之tracee）的执行。一旦Tracer和 tracee建立了跟踪关系，
+	 那么所有发送给tracee的信号(除SIGKILL)都会汇报给Tracer，
+	 以便Tracer可以控制或者观测 tracee的执行。*/
+	 /*
+	 如果用户进程 在创建的时候有携带CLONE_UNTRACED的flag，
+	 那么该进程则不能被trace。对于内核线程，在创建的时候都会携带该flag，
+	 这也就意味着，内核线程是无法被traced，也就不需要上报event给tracer。
+	 */
 	if (!(clone_flags & CLONE_UNTRACED)) {
 		if (clone_flags & CLONE_VFORK)
 			trace = PTRACE_EVENT_VFORK;

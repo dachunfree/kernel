@@ -1237,6 +1237,8 @@ __vectors_start:                              //中断向量表
 	W(b)	vector_addrexcptn
 	W(b)	vector_irq
 	W(b)	vector_fiq
+//此时pc指向系统调用异常的处理入口:vector swi.因为系统调用代码编译到其他文件，
+//b 无法跳跃过去+- 32M
 
 	.data
 

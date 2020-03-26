@@ -1,0 +1,284 @@
+    当电源按钮按下后，到shell命令起来，能理解4个CPU核到底发生了什么是非常重要的，嵌入Linux内核的引导过程和pc是不一样的，
+原因是环境设置和可用硬件都不一样了。比如，嵌入式没有硬盘和PC BIOS，取而代之的是一个引导监控器和flash 盘。所以两者基本的
+差一点是“找内核并装载它”，一旦内核装载到了内存，所有CPU架构的事件处理过程和负载分配都相同。
+
+    Linux的引导过程分三个阶段：
+
+1、加电（按下电源按钮）；
+2、System Startup Boot Monitor；
+3、Bootloader uboot；
+4、ARM Linux Startup；
+5、进入shell command状态；
+
+说明：
+1、当按下power on键，引导监视器代码运行（从一个预先定义好的地址NOR flash 内存的0地址）；
+2、启动监视器初始化PB11MPCore 硬件周边设备，然后启动真正的bootloader U-Boot；
+3、在启动监视器下，利用一个自动脚本，也可以由用户手动输入适当的命令来完成U-Boot初始化内存，并copy 压缩的内核映像（uImage）到主内存，
+   这个映像可以放在NOR上，MMC上，CompactFlash上或者主机PC上。
+4、由ARM11 MPCore来执行；
+5、然后传递一些初始化参数给内核；
+6、内核映像自己解压自己，并开始初始化自己的数据结构，如建立一些用户进程，引导所有的CPU核，并且在用户空间运行命令行环境；
+
+
+第一章、System startup (Boot Monitor 引导监视器)
+
+1、当系统加电或reset，ARM11 MPCore的所有CPUs取下一条指令（从 restet 向量地址，即NOR flash 的 
+   0x00000000地址）到它们自己的PC寄存器，这个地址放了引导监视器的程序；
+2、只有CPU0 继续执行引导监视器代码，并且其它CPUs执行WFI 指令，这是一个循环，检测SYS_FLAGS
+   寄存器。其它CPUs在Linux 内核引导过程中，才开始执行有意义的代码，在随后的ARM Linux一节中有详细
+   描述；
+
+   引导监视器是一个是由ARM平台库组成的、标准的ARM 应用程序，它运行在系统引导完成后。
+
+   当系统reset的情况下，引导监视器完成下面的动作：
+   a、执行CPU0上的主代码和其它CPUs上执行WFI指令；
+   b、初始化内存控制器、配置主板外设；
+   c、在内存中建立一个栈；
+   d、Copy自己到主内存DRAM里；
+   e、复位引导内存的映射；
+   f、重新映射和直接访问依赖于PB11MPCore 的C库I/O例程，如输出口UART0 或LCD，
+      输入口UART0 或 keyboard）
+   
+   g、NOR flash上如果有就自动运行一个引导脚本，并且把PB11MPCore的面板切换到ON，引导监视器也可以
+      进到shell命令行的提示符状态；
+
+   所以，基本上引装在板子上的导监视器应用类似于PC机器的BIOS。它的功能有限，不能引导一个Linux映像。
+因此，另一个bootloader需要完成引导过程，它就是U-Boot。U-Boot 代码编译成ARM平台格式，并烧到NOR flash 
+上，最后的步骤是从引导监视器命令行启动U-Boot映像。这一步也可以用一个脚本或手工输入适当的命令来做。
+
+第二章、Bootloader(U-Boot)
+
+1、当放在NOR flash的bootloader被引导监视器调用的时候，它还不能访问系统RAM，因为这个时候内存控制器还
+   没有初始化成U-Boot所希望的那样；
+2、U-Boot是如何从flash memory移动自己到主 memory的呢？
+3、为了得到能正常工作的C环境并运行初始化代码，U-Boot需要分配最小的栈，ARM11 MPCore是在锁定L1 data cache
+   memory的情况下完成的。U-Boot的初始化阶段，SDRAM控制器初始化完成前，cache内存用作临时数据存储；
+4、然后，U-Boot初始化ARM11 MPCore、它的caches和它的SCU；
+5、下一步，所有可用的内存bank被初步的映射，并且进行简单的内存测试，用来确定SDRAM所有banks的大小；
+6、最后，bootloader安装它自己在SDRAM高端（upper end of）区域，并且分配内存用来给malloc（）函数用，
+   和保存全局board信息数据用。
+7、在低端内存，异常处理代码向量被copied进来；
+8、最后，建立栈。
+
+   在这个阶段，第二个bootloader U-Boot是在主内存里的，并且C环境建立了。bootloader先传递一些引导参数给内核，然后
+准备从预先设置好的地址启动Linux内核映像。另外，还要初始化串口或控制台给内核用。最后，它调用内核映像，方法是jumping到
+start标签的代码（arch/arm/boot/compressed/head.s 汇编代码)，这是Linux内核解压自己的代码的开始；
+
+bootloader能完成很多功能，最小集如下：
+
+1、配置系统主内存：
+   内核不具备建立和配置RAM的能力和知识，找到并初始化内存是bootloader的任务，内核只负责使用这些内存保存数据。
+传递物理内存layout给内核是通过ATAG_MEM 参数，下面有具体说明。
+
+2、在确定的的地址装载内核映像：
+   uImage映像是由一个特定魔数的头信息和数据区组成，头信息和数据合起来有一个checksum。在数据区，保存有开始和
+结束偏移量，用以确定压缩映像的长度，以便于知道多大内存需要分配。ARM Linux 内核被定位在主内存的0x7fc0地址。
+
+
+3、初始化控制台：
+   因为对所有平台来说，为了debug工具的需要，一个串口控制台是最基本的。bootloader应该在目标板上初始化并使能一个串口，
+然后传递相关的控制台参数选项给内核，目的是通知内核已经准备好的串口号。
+
+4、初始化启动参数，并传递给内核：
+   bootloader必须以tags的形式传递参数，描述setup已经完成，内存的大小和轮廓，可选的各种测试见下表:
+
+Tag name	Description
+ATAG_NONE	Empty tag used to end list
+ATAG_CORE	First tag used to start list
+ATAG_MEM	Describes a physical area of memory
+ATAG_VIDEOTEXT	Describes a VGA text display
+ATAG_RAMDISK	Describes how the ramdisk will be used in kernel
+ATAG_INITRD2	Describes where the compressed ramdisk image is placed in memory
+ATAG_SERIAL	64 bit board serial number
+ATAG_REVISION	32 bit board revision number
+ATAG_VIDEOLFB	Initial values for vesafb-type framebuffers
+ATAG_CMDLINE	Command line to pass to kernel
+
+5、获得 ARM Linux的机器类型：
+    bootloader 也会提供机器类型，它是一个系统唯一的数字id。因为它是预定义的，所以它可以被硬编码代码中，
+否则就从board登记处读出。机器类型数字可以从ARM-Linux项目网页上获取。
+
+6、带着合适的寄存器值进入内核运行：
+
+   最后，开始运行内核之前，ARM11 MPCore寄存器必须合理的设置：
+   a、监管模式（SVC）；
+   b、IRQ和FIQ中断禁止；
+   c、MMU 关闭；
+   d、数据cache 关闭；
+   e、指令cache可以开也可以关；
+   f、CPU register0=0；
+   g、CPU register1=ARM Linux 机器类型；
+   h、CPU register2=传递参数的物理地址；
+ 
+
+7、uboot启动中函数调用过程
+    a、汇编code -> 
+    b、board_init_r(init_sequence数组定义了一系列初始化函数,包括arch_cpu_init、board_early_init_f、init_func_i2c、dram_init等) -> 
+    c、这里可以进入cmd模式,输入某个命令来测试u-boot,但默认进入do_cboot ->
+    d、do_cboot(判断启动方式选择进入recovery_mode、fastboot_mode、autodloader_mode、normal_mode之一的启动模式),但默认进入normal_mode -> 
+    e、normal_mode -> 
+    f、vlx_nand_boot -> 
+    g、vlx_entry -> 
+    h、start_linux
+
+第三章、ARM Linux
+
+    上述所说，bootloader会跳到压缩的内核映像代码，并传递一些ATAG标记的初始化参数，压缩内核是以‘start’标签开始，
+这个标签定义在arch/arm/boot/compressed/head.s 汇编文件里。从这一步开始，引导过程包含3个阶段。
+     一、内核首先解压自己；
+     二、处理器依赖部分的内核代码执行：主要初始化CPU和内存；
+     三、最后，独立于处理器部分的内核代码执行：即开始ARM多核处理，通过启动所有ARM11的核，并且初始化所有内核组件和数据结构；
+
+     下图是ARMLinux内核的引导概图：
+
+
+
+启动分三步：
+
+1、映像解压：
+
+a、U-Boot跳到“start”标签，标签在 /arm/boot/compressed/head.S文件里；
+b、参数通过U-Boot r0保存(CPU架构ID)和r1(ATAG参数列表指针)来传递；
+c、执行cpu架构相关代码,然后关闭缓存和MMU；
+d、正确C环境设置；
+e、分配适当的值给寄存器和堆栈指针。如 r4 = 内核物理起始地址 - sp = 解压器代码地址；
+f、再一次把cache memory打开，cache memory例程遍历proc_type 列表，找出对应的arm 架构类型，
+   对ARM11 多核（ARM v6）：
+   __armv4_mmu_cache_on   打开
+   __armv4_mmu_cache_off  关闭  
+   __armv6_mmu_cache_flush   刷新缓存内存到内存
+
+g、确定将要解压的内核映像是否会覆盖压缩的内核映像，并跳到相应的处理例程；
+h、调用解压例程：decompress_kernel()，位置在arch/arm/boot/compressed/misc.c
+   这个函数会在输出终端上显示“Uncompressing Linux...“消息；
+    接着调用gunzip()函数，并显示“done, booting the kernel” 消息；
+i、调用__armv6_mmu_cache_flush函数刷新cache 内存的内容到RAM；
+j、调用__armv4_mmu_cache_off关闭，因为内核初始化例程希望cache在开始的时候是关闭的；
+k、跳到内存中内核的开始地址，这个地址保存在r4寄存器中；
+l、内核的起始地址依据不同的平台架构而不同，对PB11MPCore核，保存在arch/arm/mach-realview/Makefile.boot文件里的变量zreladdr-y中，
+   zreladdr-y := 0x00008000
+
+2、处理器(ARM)依赖的内核代码
+
+    内核开始入口点定义在文本文件：arch/arm/kernel/head.S中，解压器关闭MMU、cache内存、设置好合适的寄存器值后跳到这个入口。共包含以下
+事件序列：
+   a、确保CPU运行在超级模式并禁用所有中断；
+   b、调用 __lookup_processor_type（arch/arm/kernel/head-common.S）查找处理器类型，该函数返回一个指向proc_info_list（变量定义在
+      arch/arm/mm/proc-v6.S）的指针，这一项是ARM11对应的处理器信息；
+   c、调用 __lookup_machine_type（arch/arm/kernel/head-common.S）查找机器类型，该函数返回一个指向 machine_desc 结构的指针，这一项
+      专门为 PB11MPCore 核定义的；
+   d、 调用 __create_page_tables建立页表，个数是内核运行所需要的数量；也就是说在内核执行过程中映射用；
+   e、跳到__v6_setup procedure例程，（arch/arm/mm/proc-v6.S），这个例程初始化CPU0的TLB，cache，MMU；
+   f、使能MMU，函数是__enable_mmu（），它设置一些配置位后调用函数__turn_mmu_on（）（arch/arm/kernel/head.S）；
+   g、在函数__turn_mmu_on中，会设置合适的控制寄存器值，然后跳到__switch_data，执行第一个函数__mmap_switched（）
+      （在arch/arm/kernel/head-common.S文件中）；
+   h、在__mmap_switched（）中，copy到RAM的数据段和BSS段被清0，最后跳到start_kernel()例程，该函数在init/main.c，这个是LINUX的开始处。
+
+3、处理器(ARM)无关的内核代码
+    从这个阶段开始,就是公共的处理序列，是独立于硬件架构的Linux内核引导过程；但仍有一些函数依赖于硬件，并且会覆盖独立于硬件的代码的执行。我们会
+专注于多核Linux部分的启动和cpus的初始化，主要针对ARM11的多核架构而言。
+    第一步、函数 start_kernel(): (init/main.c) <目前我们在处理器0>
+     a、用local_irq_disable()函数屏蔽CPU0上的中断 (include/linux/irqflags.h)；
+      b、用lock_kernel()函数锁内核，避免被高优先级中断抢占(include/linux/smp-lock.h)；
+      c、用函数boot_cpu_init() (init/main.c)激活CPU0；
+      d、用函数tick_init() (kernel/time/tick-common.c)初始化内核tick控制器；
+      e、用函数page_address_init() (mm/highmem.c)初始化内存子系统；
+      f、用函数printk(linux_banner)  (init/version.c)打印内核版本信息到终端；
+      g、用函数setup_arch(&command_line)设置架构特有的子系统如内存、I/O、处理器、等等，其中command_line 是从U-Boot传来的参数列表
+         (arch/arm/kernel/setup.c)；
+         1）在函数setup_arch(&command_line) 中, 我们执行架构相关的代码。对ARM11 多核, 是调用smp_init_cpus()函数,这个函数初始化cpu的映射。
+            就是在这一阶段，内核知道在ARM11系统架构里，有4个核。(arch/arm/mach-realview/platsmp.c)
+        2）用函数cpu_init()初始化一个处理器(这一步是指CPU0 )，它复制cache信息,初始化多核相关的信息,并设置每一个CPU的栈(arch/arm/kernel/setup.c)；
+      h、用函数setup_per_cpu_areas()设置多处理器环境，这个函数确定单个CPU所需要的内存大小，并分配和初始化4个核分别所需要的内存，这样一来，每一个CPU有
+         了自己的区域放置数据；(init/main.c)
+     i、用函数smp_prepare_boot_cpu()来允许正在引导的处理器（CPU0）访问自己的初始化过的数据；(arch/arm/kernel/smp.c)；
+      j、用函数sched_init() (kernel/sched.c)设置Linux调度器；
+         1）为每一个cpu相应的数据初始化一个运行队列；
+         2）用函数init_idle(current, smp_processor_id())为cpu0 fork一个idle线程；
+     k、用函数build_all_zonelists() (mm/page_alloc.c)初始化内存区域：包括DMA, normal, high三个区；
+     l、用函数 parse_early_param() (init/main.c) 和函数 parse_args() (kernel/params.c)解析传递过来的命令行参数列表；
+     m、初始化中断表、GIC、异常处理向量表（用函数init_IRQ() (arch/arm/kernel/irq.c) 和函数 trap_init() (arch/arm/kernel/traps.c)），并为每一个
+        中断分配CPU亲和力值；
+     n、用函数softirq_init() (kernel/softirq.c)引导CPU（这里是CPU0）能接受由tasklet传来的通知；
+     o、初始化并运行系统timer，用函数time_init() (arch/arm/kernel/time.c)；
+     p、使能CPU0的本地中断，用函数local_irq_enable() (include/linux/irqflags.h)；
+     q、初始化显示终端，用函数console_init() (drivers/char/tty_io.c)；
+     r、找出所有内存区域的free的内存页总数，用函数mem_init() (arch/arm/mm/init.c)；
+     s、初始化内存分配器，用函数kmem_cache_init() (mm/slab.c)；
+     t、确定CPU的时钟的速度，相当于BogoMips的值，用函数calibrate_delay() (init/calibrate.c)；
+     u、初始化内核内部组件，如page tables, SLAB caches, VFS, buffers, signals queues, 线程和进程最大值等；
+     v、初始化proc/文件系统，用函数proc_root_init() (fs/proc/root.c)；
+     w、调用函数 rest_init()建立进程1；
+
+    第二步、函数rest_init(): (init/main.c) 
+     a、建立 “init process”，这个进程又叫进程1，所用函数kernel_thread(kernel_init, NULL, CLONE_FS | CLONE_SIGHAND)；
+      b、建立内核守护进程，又叫进程2，所用函数是：pid = kernel_thread(kthreadd, NULL, CLONE_FS | CLONE_FILES) (kernel/kthread.c) ，它是所有内
+         核线程的父亲；
+      c、释放内核锁kernel lock，它是在start_kernel() 里锁上的。所用函数unlock_kernel()(include/linux/smp-lock.h)；
+      d、执行schedule()，开始运行调度器；(文件kernel/sched.c)；
+      e、运行cpu0上的的idle线程，所用函数cpu_idle()，这个线程使CPU0成为调度器，当没有其它未执行的进程运行在CPU0上时候，它将返回。CPU的idle线程负责节
+         省电力，并保持低耗电状态；(arch/arm/kernel/process.c)
+
+
+   第三步、函数kernel_init(): (init/main.c) <进程1>
+     
+      A、通过调用函数smp_prepare_cpus（）开始准备SMP环境(arch/arm/mach-realview/platsmp.c)；
+          1、使能CPU0上的本地timer,所用函数local_timer_setup(cpu) (arch/arm/mach-realview/localtimer.c)；
+          2、移动CPU0相应的数据信息到它自己的存储区，所用函数smp_store_cpu_info(cpu) (arch/arm/kernel/smp.c) ；
+          3、初始化当前使用的CPU情况，描述了CPU的设置，所用函数cpu_set(i，cpu_present_map)。这将告诉内核,有4个cpu；
+          4、初始化Snoop控制器，所用函数scu_enable() (arch/arm/mach-realview/platsmp.c)；
+          5、调用函数poke_milo()，它关心正在启动的次要处理器；(arch/arm/mach-realview/platsmp.c)
+           a、在函数poke_milo()中，它通过清除SYS_FLAGSCLR寄存器的低2位，来触发其它CPU执行realview_secondary_startup例程，并把
+                realview_secondary_startup例程的起始地址写入SYS_FLAGSSET (arch/arm/mach-realview/headsmp.S)；
+             b、在realview_secondary例程中，次要CPUs都等待一个同步信号，这个信号将从运行在CPU0上的内核发出，意思是他们都已经准备好被初始化，当所有的
+                处理器都已经ready，他们将被初始化，所用函数secondary_startup（）(arch/arm/mach-realview/headsmp.S) ；
+             c、secondary_startup例程，使次要CPUs做了和CPU0类似的初始化过程；(arch/arm/mach-realview/headsmp.S) 
+               1）切换到超级模式，屏蔽所有中断；
+                 2）找处理器类型，用函数__lookup_processor_type（），这个函数返回一个指针，指向proc_info_list列表，（ARM11多核架构定义在文件
+                    arch/arm/mm/proc-v6.S中）；
+                 3）每一个CPU都使用__cpu_up（）函数提供的页表，__cpu_up下面有讲；
+                 4）跳到__v6_setup例程，（arch/arm/mm/proc-v6.S） 初始化对应于每一个CPU的TLB, cache 和MMU；
+                 5）用__enable_mmu 例程使能MMU，它设置一些配置位，然后调用__turn_mmu_on (arch/arm/kernel/head.S)；
+                 6）在__turn_mmu_on函数中，会设置一些控制寄存器，然后跳到__secondary_data，这里会执行__secondary_switched例程(arch/arm/kernel/head.S)；
+                 7）__secondary_switched例程，会跳到secondary_start_kernel例程（ arch/arm/kernel/smp.c），这个例程设置一些栈指针到线程结构里，
+                    线程结构是通过运行在CPU0上的cpu_up函数分配的；
+                 8）secondary_start_kernel (arch/arm/kernel/smp.c) 是次要处理器的官方起始点，它被看作是一个运行在对应的CPU上的内核线程，
+                    在这个线程里，下面的步骤是进一步的初始化动作：
+                       一、用函数cpu_init()初始化CPU，它复制cache信息, 初始化SMP特定的信息, 并建立每个cpu栈(arch/arm/kernel/setup.c)；
+                       二、用函数platform_secondary_init(cpu)，来和CPU0上的引导线程同步，使能一些对应CPU上的分发中断控制器接口，如timer、irq；
+                           (arch/arm/mach-realview/platsmp.c)
+                       三、用函数local_irq_enable() 和 local_fiq_enable() (include/linux/irqflags.h)使能本地中断；
+                       四、建立对应CPU上的本地timer，所用函数：local_timer_setup(cpu) (arch/arm/mach-realview/localtimer.c)；
+                       五、确定CPU 时钟的 BogoMips，所用函数： calibrate_delay() (init/calibrate.c)；
+                       六、移动对应CPU的数据到它自己的存储区，所用函数smp_store_cpu_info(cpu) (arch/arm/kernel/smp.c)；
+                       七、在二级CPU上执行idle线程，也可以叫0号线程，所用函数cpu_idle()。这个函数当没有其他等待进程运行在CPUx上时候，返回。
+                           (arch/arm/kernel/process.c)
+      B、调用函数smp_init() (init/main.c) <在CPU0上>
+         1、引导每一个离线CPU（CPU1,CPU2 and CPU3），所用函数cpu_up(cpu): (arch/arm/kernel/smp.c)；
+              a、用函数fork_idle(cpu)手动建立新的idle线程，并指派它到相应的CPU的数据结构；
+              b、分配并初始化内存页表，并允许二级CPU安全地使能MMU，所用函数pgd_alloc()；
+              c、通知二级CPU到哪里去找它的栈、和页表；
+              d、引导二级CPU，所用函数boot_secondary(cpu,idle): (arch/arm/mach-realview/platsmp.c)；
+                 1）用锁机制spin_lock(&boot_lock)同步CPU0和二级CPU上的引导进程；
+                 2）通知二级处理器,它可以开始引导内核它自己的部分；
+                 3）用函数smp_cross_call(mask_cpu)发一个软件中断，唤醒二级核起来 (include/asm-arm/mach-realview/smp.h)；
+                 4）等待二级处理器完成各自的引导和校准，所用函数secondary_start_kernel（），这个函数前面已经讲过了； 
+              e、在每一个CPU上重复这个过程；
+           2、在终端上显示内核信息：“SMP: Total of 4 processors activated (334.02 BogoMIPS)“，所用函数smp_cpus_done(max_cpus) 
+            (arch/arm/kernel/smp.c)；
+
+       C、调用函数sched_init_smp() (kernel/sched.c)
+         1、建立调度器作用域，所用函数arch_init_sched_domains(&cpu_online_map)，它将设置多核的拓扑结构(kernel/sched.c)；
+          2、检查多少个在线CPU存在，并适当地调整调度器粒度值，所用函数sched_init_granularity() (kernel/sched.c)；
+          3、do_basic_setup()函数初始化driver 的模式，用函数driver_init()(drivers/base/init.c)初始化系统控制接口、网络socket接口，
+             用init_workqueues()接口支持工作队列，最后调用do_initcalls ()初始化内嵌的驱动例程；(init/main.c）
+       D、调用函数init_post() (init/main.c)；
+
+   第四步、函数init_post() (init/main.c):
+      这里是我们切换到用户模式的地方，调用下面的序列：
+       run_init_process("/sbin/init");
+      run_init_process("/etc/init");
+      run_init_process("/bin/init");
+      run_init_process("/bin/sh");
+
+   第五步、/sbin/init 进程执行，并在终端上显示很多信息,并且最后它把控制权交给终端，停留在激活状态。
