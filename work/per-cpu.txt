@@ -1,0 +1,22 @@
+问题：
+我一直不明白per-CPU的意义。它是为了解决CPU之间同步问题引入的，但到底是怎么解决的呢？ 
+每个CPU都有自己的副本，也没有讲副本和原始变量之间的同步。如果不需要同步，那每个CPU的副本不相当于四个变量了？
+如果需要同步，那不跟设计per-cpu之前一样的问题？ 
+
+答案：
+1.统计计数：
+SLUB 分配器在每个 CPU 上都维护一个 pageset 链表，然后每个 CPU 都会进行自己的 SLUB 分配，这时就需要 percpu 
+变量来统计各自 cpu 上页分配的数量，最后 SLUB 再将所有 CPU 的页分配数加起来就知道现在系统到底分配了多少页。
+PER-CPU 变量的应用场景就是每个 CPU 使用自己的副本，最后系统将所有副本统计起来，就可以知道某个数据的使用情况了
+
+2.减少全局锁竞争。
+每个cpu维护自己的链表即可。
+
+static void tasklet_action(struct softirq_action *a)
+	/*per-cpu 链表.从本cpu的tasklet链表中取出全部的tasklet，保存在list这个临时变量中，
+	同时重新初始化本cpu的tasklet链表，使该链表为空。由于bottom half是开中断执行的，
+	因此在操作tasklet链表的时候需要使用关中断保护
+	*/
+	list = __this_cpu_read(tasklet_vec.head);
+	__this_cpu_write(tasklet_vec.head, NULL);
+	__this_cpu_write(tasklet_vec.tail, this_cpu_ptr(&tasklet_vec.head));

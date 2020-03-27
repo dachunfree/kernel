@@ -253,7 +253,7 @@ asmlinkage __visible void __do_softirq(void)
 	 */
 	current->flags &= ~PF_MEMALLOC;
 	//取得目前有哪些位存在软件中断
-	pending = local_softirq_pending(); //raise_softirq_irqoff(unsigned int nr)
+	pending = local_softirq_pending(); //raise_softirq_irqoff(unsigned int nr).本地cpu
 	account_irq_enter_time(current);
 	//关闭软中断，其实就是设置正在处理软件中断标记，在同一个CPU上使得不能重入__do_softirq函数
 	__local_bh_disable_ip(_RET_IP_, SOFTIRQ_OFFSET);
@@ -500,7 +500,7 @@ EXPORT_SYMBOL(__tasklet_schedule);
 void __tasklet_hi_schedule(struct tasklet_struct *t)
 {
 	unsigned long flags;
-
+	//这里的三行代码就是将一个tasklet挂入链表的尾部
 	local_irq_save(flags);
 	t->next = NULL;
 	*__this_cpu_read(tasklet_hi_vec.tail) = t;
@@ -525,6 +525,10 @@ static void tasklet_action(struct softirq_action *a)
 	struct tasklet_struct *list;
 
 	local_irq_disable();
+	/*per-cpu 链表.从本cpu的tasklet链表中取出全部的tasklet，保存在list这个临时变量中，
+	同时重新初始化本cpu的tasklet链表，使该链表为空。由于bottom half是开中断执行的，
+	因此在操作tasklet链表的时候需要使用关中断保护
+	*/
 	list = __this_cpu_read(tasklet_vec.head);
 	__this_cpu_write(tasklet_vec.head, NULL);
 	__this_cpu_write(tasklet_vec.tail, this_cpu_ptr(&tasklet_vec.head));
@@ -534,9 +538,24 @@ static void tasklet_action(struct softirq_action *a)
 		struct tasklet_struct *t = list;
 
 		list = list->next;
+		/*
+		tasklet_trylock主要是用来设定该tasklet的state为TASKLET_STATE_RUN，
+		同时判断该tasklet是否已经处于执行状态，这个状态很重要，它决定了后续的代码逻辑。
+		***我们在设计tasklet的时候就规定，同一种类型的tasklet只能在一个cpu上执行，因此tasklet_trylock就是起这个作用的。
 
+		你也许会奇怪：为何这里从tasklet的链表中摘下一个本cpu要处理的tasklet list，
+		而这个list中的tasklet已经处于running状态了，会有这种情况吗？会的，
+		HW block A的驱动使用的tasklet机制并且在中断handler（top half）中将静态定义的tasklet 调度执行。
+		HW block A的硬件中断首先送达cpu0处理，因此该driver的tasklet被挂入CPU0对应的tasklet链表并在适当的
+		时间点上开始执行该tasklet。这时候，cpu0的硬件中断又来了，该driver的tasklet callback function被抢占，
+		虽然tasklet仍然处于running状态。与此同时，HW block A硬件又一次触发中断并在cpu1上执行，这时候，
+		该driver的tasklet处于running状态，并且TASKLET_STATE_SCHED已经被清除，因此，调用tasklet_schedule函数将
+		会使得该driver的tasklet挂入cpu1的tasklet链表中。由于cpu0在处理其他硬件中断，因此，cpu1的tasklet后发先至，
+		进入tasklet_action函数调用，这时候，当从cpu1的tasklet摘取所有需要处理的tasklet链表中，
+		HW block A对应的tasklet实际上已经是在cpu0上处于执行状态了。
+		*/
 		if (tasklet_trylock(t)) {
-			if (!atomic_read(&t->count)) {
+			if (!atomic_read(&t->count)) { //0表示enable
 				if (!test_and_clear_bit(TASKLET_STATE_SCHED,
 							&t->state))
 					BUG();

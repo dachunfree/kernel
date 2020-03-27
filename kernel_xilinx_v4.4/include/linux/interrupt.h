@@ -484,15 +484,29 @@ static inline struct task_struct *this_cpu_ksoftirqd(void)
      wrt another tasklets. If client needs some intertask synchronization,
      he makes it with spinlocks.
  */
+/*
+我们假设HW block A的驱动使用的tasklet机制并且在中断handler（top half）
+中将静态定义的tasklet（这个tasklet是各个cpu共享的，不是per cpu的）
+调度执行（也就是调用tasklet_schedule函数）。
+当HW block A检测到硬件的动作（例如接收FIFO中数据达到半满）就会触发
+IRQ line上的电平或者边缘信号，GIC检测到该信号会将该中断分发给某个CPU执行
+其top half handler，我们假设这次是cpu0，因此该driver的tasklet被挂入CPU0对应
+的tasklet链表（tasklet_vec）并将state的状态设定为TASKLET_STATE_SCHED。
+HW block A的驱动中的tasklet虽已调度，但是没有执行，如果这时候，
+硬件又一次触发中断并在cpu1上执行，虽然tasklet_schedule函数被再次调用，
+但是由于TASKLET_STATE_SCHED已经设定，
+因此不会将HW block A的驱动中的这个tasklet挂入cpu1的tasklet链表中。*/
 
 struct tasklet_struct
 {
 	struct tasklet_struct *next;
-	unsigned long state;
-	atomic_t count;
+	unsigned long state; //TASKLET_STATE_SCHED表示该tasklet以及被调度到某个CPU上执行，TASKLET_STATE_RUN表示该tasklet正在某个cpu上执行
+	atomic_t count; //count成员是和enable或者disable该tasklet的状态相关，如果count等于0那么该tasklet是处于enable的，如果大于0，表示该tasklet是disable的。
+	//tasklet_disable 是锁
 	void (*func)(unsigned long);
 	unsigned long data;
 };
+
 
 #define DECLARE_TASKLET(name, func, data) \
 struct tasklet_struct name = { NULL, 0, ATOMIC_INIT(0), func, data }
@@ -530,6 +544,21 @@ static inline void tasklet_unlock_wait(struct tasklet_struct *t)
 #endif
 
 extern void __tasklet_schedule(struct tasklet_struct *t);
+/*
+我们假设HW block A的驱动使用的tasklet机制并且在中断handler（top half）
+中将静态定义的tasklet（这个tasklet是各个cpu共享的，不是per cpu的）
+调度执行（也就是调用tasklet_schedule函数）。
+当HW block A检测到硬件的动作（例如接收FIFO中数据达到半满）就会触发
+IRQ line上的电平或者边缘信号，GIC检测到该信号会将该中断分发给某个CPU执行
+其top half handler，我们假设这次是cpu0，因此该driver的tasklet被挂入CPU0对应
+的tasklet链表（tasklet_vec）并将state的状态设定为TASKLET_STATE_SCHED。
+HW block A的驱动中的tasklet虽已调度，但是没有执行，如果这时候，
+硬件又一次触发中断并在cpu1上执行，虽然tasklet_schedule函数被再次调用，
+但是由于TASKLET_STATE_SCHED已经设定，
+因此不会将HW block A的驱动中的这个tasklet挂入cpu1的tasklet链表中。*/
+//static DECLARE_TASKLET(hmac_tasklet, RxMain, 0);
+//tasklet_schedule(&hmac_tasklet);
+
 
 static inline void tasklet_schedule(struct tasklet_struct *t)
 {
