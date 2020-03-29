@@ -337,19 +337,20 @@ static struct task_struct *dup_task_struct(struct task_struct *orig)
 	struct thread_info *ti;
 	int node = tsk_fork_get_node(orig);
 	int err;
-
+	//·ÖÅäÄÚºËÕ»ºÍthread_infoÊı¾İ½á¹¹ËùĞèÒªµÄmemory£¨Í³Ò»·ÖÅä£©£¬·ÖÅätask sturctĞèÒªµÄmemory
 	tsk = alloc_task_struct_node(node);
 	if (!tsk)
 		return NULL;
 
-	ti = alloc_thread_info_node(tsk, node); //·ÖÅä thread_info£¬Ã¿¸ö½ø³Ì¶¼ÓĞ×Ô¼ºµÄÄÚºËÕ»å
+	ti = alloc_thread_info_node(tsk, node); //·ÖÅä thread_info£¬Ã¿¸ö½ø³Ì¶¼ÓĞ×Ô¼ºµÄÄÚºËÕ»
 	if (!ti)
 		goto free_tsk;
-
+	/*½«¸¸½ø³ÌµÄthread_infoºÍtask_structÊı¾İ½á¹¹µÄÄÚÈİÍêÈ«copyµ½×Ó½ø³ÌµÄthread_info
+	ºÍtask_structÊı¾İ½á¹¹*/
 	err = arch_dup_task_struct(tsk, orig);
 	if (err)
 		goto free_ti;
-
+	//Éè¶¨ÄÚºËÕ»ºÍthread_infoÒÔ¼°task sturctÖ®¼äµÄÁªÏµ
 	tsk->stack = ti; //tiÎªÄÚºËÕ»
 #ifdef CONFIG_SECCOMP
 	/*
@@ -360,7 +361,6 @@ static struct task_struct *dup_task_struct(struct task_struct *orig)
 	 */
 	tsk->seccomp.filter = NULL;
 #endif
-
 	setup_thread_stack(tsk, orig);
 	clear_user_return_notifier(tsk);
 	clear_tsk_need_resched(tsk);
@@ -374,6 +374,8 @@ static struct task_struct *dup_task_struct(struct task_struct *orig)
 	 * One for us, one for whoever does the "release_task()" (usually
 	 * parent)
 	 */
+	/*½«task_structÊı¾İ½á¹¹µÄusage³ÉÔ±Éè¶¨Îª2¡£usage³ÉÔ±ÆäÊµ¾ÍÊÇÒ»¸öreference count¡£
+	Ö®ËùÒÔ±»Éè¶¨Îª2£¬ÒòÎªforkÖ®ºóÒÑ¾­´æÔÚÁ½¸öreferenceÁË£¬Ò»¸öÊÇ×Ô¼º£¬ÁíÍâÒ»¸öÊÇÆä¸¸½ø³Ì¡£*/
 	atomic_set(&tsk->usage, 2);
 #ifdef CONFIG_BLK_DEV_IO_TRACE
 	tsk->btrace_seq = 0;
@@ -1251,7 +1253,11 @@ static struct task_struct *copy_process(unsigned long clone_flags,
 	int retval;
 	struct task_struct *p;
 	void *cgrp_ss_priv[CGROUP_CANFORK_COUNT] = {};
-
+	/*CLONE_NEWNSÕâ¸öflag¾ÍÊÇÓÃÀ´¿ØÖÆÔÚcloneµÄÊ±ºò£¬¸¸×Ó½ø³ÌÊÇ·ñÒª¹²Ïímount namespaceµÄ¡£
+	  CLONE_FS flagÊÇÓÃÀ´¿ØÖÆ¸¸×Ó½ø³ÌÊÇ·ñ¹²ÏíÎÄ¼şÏµÍ³ĞÅÏ¢£¨ÀıÈçÎÄ¼şÏµÍ³µÄroot¡¢µ±Ç°¹¤×÷
+	  Ä¿Â¼µÈ£©£¬Èç¹ûÉè¶¨ÁË¸Ãflag£¬ÄÇÃ´¸¸×Ó½ø³Ì¹²ÏíÎÄ¼şÏµÍ³ĞÅÏ¢£¬Èç ¹û²»Éè¶¨¸Ãflag£¬
+	  ÄÇÃ´×Ó½ø³ÌÔòcopy¸¸½ø³ÌµÄÎÄ¼şÏµÍ³ĞÅÏ¢£¬Ö®ºó£¬×Ó½ø³Ìµ÷ÓÃchroot£¬chdir£¬umaskÀ´
+	  ¸Ä±äÎÄ¼şÏµÍ³ĞÅÏ¢½«²»»áÓ°Ïìµ½ ¸¸½ø³Ì¡£*/
 	if ((clone_flags & (CLONE_NEWNS|CLONE_FS)) == (CLONE_NEWNS|CLONE_FS))
 		return ERR_PTR(-EINVAL);
 
@@ -1262,6 +1268,10 @@ static struct task_struct *copy_process(unsigned long clone_flags,
 	 * Thread groups must share signals as well, and detached threads
 	 * can only be started up within the thread group.
 	 */
+	/*CLONE_THREADÕâ¸öflag±»Éè¶¨µÄ»°£¬Ôò±íÊ¾±»´´½¨µÄ×Ó½ø³ÌÓë¸¸½ø³ÌÔÚÒ»¸öÏß³Ì×éÖĞ
+	  Èç¹ûÉè¶¨CLONE_SIGHANDÕâ¸öflag£¬Ôò±íÊ¾´´½¨µÄ×Ó½ø³ÌÓë¸¸½ø³Ì¹²ÏíÏàÍ¬µÄĞÅºÅ´¦Àí
+	  £¨signal handler£©±í¡£Ïß³Ì×éÓ¦¸Ã¹²Ïísignal handler£¨POSIX¹æ¶¨£©£¬
+	  Òò´Ë£¬µ±Éè¶¨ÁËCLONE_THREADºó±ØĞëÍ¬Ê±Éè¶¨CLONE_SIGHAND*/
 	if ((clone_flags & CLONE_THREAD) && !(clone_flags & CLONE_SIGHAND))
 		return ERR_PTR(-EINVAL);
 
@@ -1270,6 +1280,9 @@ static struct task_struct *copy_process(unsigned long clone_flags,
 	 * thread groups also imply shared VM. Blocking this case allows
 	 * for various simplifications in other code.
 	 */
+	/*Éè¶¨ÁËCLONE_SIGHAND±íÊ¾¹²Ïísignal handler£¬Ç°ÌáÌõ¼ş¾ÍÊÇÒª¹²ÏíµØÖ·¿Õ¼ä
+	£¨Ò²¾ÍÊÇËµ±ØĞëÉè¶¨CLONE_VM£©£¬·ñÔò£¬ÎŞ·¨¹²Ïísignal handler¡£ÒòÎªÈç¹û²»¹²ÏíµØÖ·¿Õ¼ä£¬
+	 ¼´±ãÊÇÍ¬ÑùµØÖ·µÄhandler£¬ÆäÎïÀíµØÖ·¶¼ÊÇ²»Ò»ÑùµÄ¡£*/
 	if ((clone_flags & CLONE_SIGHAND) && !(clone_flags & CLONE_VM))
 		return ERR_PTR(-EINVAL);
 
@@ -1279,6 +1292,7 @@ static struct task_struct *copy_process(unsigned long clone_flags,
 	 * multi-rooted process trees, prevent global and container-inits
 	 * from creating siblings.
 	 */
+	//CLONE_PARENTÕâ¸öflag±íÊ¾ĞÂforkµÄ½ø³ÌÏëÒªºÍ´´½¨¸Ã½ø³ÌµÄclonerÓµÓĞÍ¬ÑùµÄ¸¸½ø³Ì¡£
 	if ((clone_flags & CLONE_PARENT) &&
 				current->signal->flags & SIGNAL_UNKILLABLE)
 		return ERR_PTR(-EINVAL);
@@ -1299,12 +1313,14 @@ static struct task_struct *copy_process(unsigned long clone_flags,
 		goto fork_out;
 
 	retval = -ENOMEM;
-	p = dup_task_struct(current); //
+	p = dup_task_struct(current); 
 	if (!p)
 		goto fork_out;
 
 	ftrace_graph_init_task(p);
-
+	/*ÓÅÏÈ¼¶¼Ì³ĞµÄ·½·¨ÊÇÕâÑùµÄ£¬µ±¸ßÓÅÏÈ¼¶½ø³ÌÔÚµÈ´ıµÍÓÅÏÈ¼¶µÄ½ø³Ì³ÌÕ¼ÓÃµÄ¾ºÕù×ÊÔ´Ê±£¬
+	ÎªÁËÊ¹µÍÓÅÏÈ¼¶µÄ½ø³ÌÄÜ¹»¾¡¿ì»ñµÃµ÷¶ÈÔËĞĞ£¨ÒÔ±ãÊÍ·Å¸ßÓÅÏÈ¼¶½ø³ÌĞèÒªµÄ¾ºÕù×ÊÔ´£©£¬
+	ÓÉ²Ù×÷ÏµÍ³kernel°ÑµÍÓÅÏÈ¼¶½ø³ÌµÄÓÅÏÈ¼¶Ìá¸ßµ½µÈ´ı¾ºÕù×ÊÔ´¸ßÓÅÏÈ¼¶½ø³ÌµÄÓÅÏÈ¼¶¡£*/
 	rt_mutex_init_task(p);
 
 #ifdef CONFIG_PROVE_LOCKING
@@ -1417,6 +1433,7 @@ static struct task_struct *copy_process(unsigned long clone_flags,
 #endif
 
 	/* Perform scheduler related setup. Assign this task to a CPU. */
+	//ÎªĞÂ½ø³ÌÉèÖÃµ÷¶ÈÆ÷Ïà¹Ø²ÎÊı
 	retval = sched_fork(clone_flags, p);
 	if (retval)
 		goto bad_fork_cleanup_policy;
@@ -1752,7 +1769,7 @@ long _do_fork(unsigned long clone_flags,
 			init_completion(&vfork);
 			get_task_struct(p);
 		}
-
+		//»½ĞÑĞÂ½ø³Ì¡£
 		wake_up_new_task(p);
 
 		/* forking complete and child started to run, tell ptracer */
