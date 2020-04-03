@@ -15,11 +15,11 @@ struct timer_list {
 	 * same cacheline
 	 */
 	struct hlist_node	entry;
-	unsigned long		expires;
-	void			(*function)(unsigned long);
-	unsigned long		data;
+	unsigned long		expires; //期望定时器到期时刻的jiffies计数值
+	void			(*function)(unsigned long); //call back function
+	unsigned long		data; //回调函数的参数
 	u32			flags;
-	int			slack;
+	int			slack; //对有些对到期时间精度不太敏感的定时器，到期时刻允许适当地延迟一小段时间，该字段用于计算每次延迟的HZ数。
 
 #ifdef CONFIG_TIMER_STATS
 	int			start_pid;

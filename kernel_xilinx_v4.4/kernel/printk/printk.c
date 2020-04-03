@@ -1676,8 +1676,9 @@ asmlinkage int vprintk_emit(int facility, int level,
 		level = LOGLEVEL_DEFAULT;
 		in_sched = true;
 	}
-
+	// 由于没有定义宏CONFIG_BOOT_PRINTK_DELAY，所以boot_delay_msec是空函数
 	boot_delay_msec(level);
+	//printk_delay这个函数中判断变量printk_delay_msec的值，它的初始值是0
 	printk_delay();
 
 	/* This stops the holder of console_sem just where we want him */
@@ -1722,6 +1723,7 @@ asmlinkage int vprintk_emit(int facility, int level,
 	 * The printf needs to come first; we need the syslog
 	 * prefix which might be passed-in as a parameter.
 	 */
+	 //先将要打印的字符串缓存入printk_buf中
 	text_len = vscnprintf(text, sizeof(textbuf), fmt, args);
 
 	/* mark and strip a trailing newline */
@@ -2308,7 +2310,7 @@ skip:
 		raw_spin_unlock(&logbuf_lock);
 
 		stop_critical_timings();	/* don't trace print latency */
-		call_console_drivers(level, ext_text, ext_len, text, len);
+		call_console_drivers(level, ext_text, ext_len, text, len); //将log_buf中从_con_start到_log_end之间的内容输出
 		start_critical_timings();
 		local_irq_restore(flags);
 	}

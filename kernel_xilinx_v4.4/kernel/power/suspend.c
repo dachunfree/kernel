@@ -107,6 +107,8 @@ static bool valid_state(suspend_state_t state)
 	 * support and need to be valid to the low level
 	 * implementation, no valid callback implies that none are valid.
 	 */
+	 //如果是freeze，无需平台代码参与即可支持，直接返回true。对于standby和mem，
+	 //则需要调用suspend_ops的valid回掉，由底层平台代码判断是否支持。
 	return suspend_ops && suspend_ops->valid && suspend_ops->valid(state);
 }
 
@@ -267,17 +269,18 @@ static int suspend_test(int level)
 static int suspend_prepare(suspend_state_t state)
 {
 	int error;
-
+	//检查suspend_ops是否提供了.enter回调，没有的话，返回错误
 	if (!sleep_state_supported(state))
 		return -EPERM;
 
 	pm_prepare_console();
-
+	//调用pm_notifier_call_chain，发送suspend开始的消息（PM_SUSPEND_PREPARE）
 	error = pm_notifier_call_chain(PM_SUSPEND_PREPARE);
 	if (error)
 		goto Finish;
 
 	trace_suspend_resume(TPS("freeze_processes"), 0, true);
+	//freeze用户空间进程和一些内核线程
 	error = suspend_freeze_processes();
 	trace_suspend_resume(TPS("freeze_processes"), 0, false);
 	if (!error)
@@ -313,7 +316,7 @@ void __weak arch_suspend_enable_irqs(void)
 static int suspend_enter(suspend_state_t state, bool *wakeup)
 {
 	int error;
-
+	//调用s3c_pm_ops->prepare函数
 	error = platform_suspend_prepare(state);
 	if (error)
 		goto Platform_finish;
@@ -351,20 +354,21 @@ static int suspend_enter(suspend_state_t state, bool *wakeup)
 		trace_suspend_resume(TPS("machine_suspend"), state, false);
 		goto Platform_wake;
 	}
-
+	//禁止所有的非boot cpu.smp
 	error = disable_nonboot_cpus();
 	if (error || suspend_test(TEST_CPUS))
 		goto Enable_cpus;
-
+	//关全局中断。如果无法关闭，则为bug
 	arch_suspend_disable_irqs();
 	BUG_ON(!irqs_disabled());
-
+	//关闭核心模块
 	error = syscore_suspend();
 	if (!error) {
 		*wakeup = pm_wakeup_pending();
 		if (!(suspend_test(TEST_CORE) || *wakeup)) {
 			trace_suspend_resume(TPS("machine_suspend"),
 				state, true);
+			//s3c_pm_ops->enter函数。进入休眠了
 			error = suspend_ops->enter(state);
 			trace_suspend_resume(TPS("machine_suspend"),
 				state, false);
@@ -372,10 +376,12 @@ static int suspend_enter(suspend_state_t state, bool *wakeup)
 		} else if (*wakeup) {
 			error = -EBUSY;
 		}
+/*******************************唤醒了********************************************/
 		syscore_resume();
 	}
-
+	//开中断
 	arch_suspend_enable_irqs();
+	//kai CPU
 	BUG_ON(irqs_disabled());
 
  Enable_cpus:
@@ -402,18 +408,22 @@ static int suspend_enter(suspend_state_t state, bool *wakeup)
  */
 int suspend_devices_and_enter(suspend_state_t state)
 {
+	// struct platform_suspend_ops s3c_pm_ops
 	int error;
 	bool wakeup = false;
-
+	//再次检查平台代码是否需要提供以及是否提供了suspend_ops。
 	if (!sleep_state_supported(state))
 		return -ENOSYS;
-
+	//调用suspend_ops的begin回调（有的话），通知平台代码，以便让其作相应的处理（需要的话）。
+	//可能失败，需要跳至Close处执行恢复操作（suspend_ops->end）。
 	error = platform_suspend_begin(state);
 	if (error)
 		goto Close;
-
+	/*调用suspend_console，挂起console。该接口由"kernel\printk.c"实现，主要是hold住一个lock，
+	该lock会阻止其它代码访问console*/
 	suspend_console();
 	suspend_test_start();
+	//调用所有设备的->prepare和->suspend回调函数
 	error = dpm_suspend_start(PMSG_SUSPEND);
 	if (error) {
 		pr_err("PM: Some devices failed to suspend, or early wake event detected\n");
@@ -424,6 +434,7 @@ int suspend_devices_and_enter(suspend_state_t state)
 		goto Recover_platform;
 
 	do {
+		//让各类设备休眠
 		error = suspend_enter(state, &wakeup);
 	} while (!error && !wakeup && platform_suspend_again(state));
 
@@ -465,6 +476,10 @@ static void suspend_finish(void)
  * Fail if that's not the case.  Otherwise, prepare for system suspend, make the
  * system enter the given sleep state and clean up after wakeup.
  */
+ /*
+ suspend的最终目的，是让系统进入可恢复的挂起状态，而该功能必须有平台相关代码的参与才能完成，
+ 因此内核PM Core就提供了一系列的回调函数（封装在platform_suspend_ops中)
+*/
 static int enter_state(suspend_state_t state)
 {
 	int error;
@@ -497,6 +512,8 @@ static int enter_state(suspend_state_t state)
 
 	pr_debug("PM: Preparing system for sleep (%s)\n", pm_states[state]);
 	pm_suspend_clear_flags();
+	/*调用suspend_prepare，进行suspend前的准备，主要包括switch console和
+	process&thread freezing。如果失败，则终止suspend过程。*/
 	error = suspend_prepare(state);
 	if (error)
 		goto Unlock;
@@ -507,11 +524,18 @@ static int enter_state(suspend_state_t state)
 	trace_suspend_resume(TPS("suspend_enter"), state, false);
 	pr_debug("PM: Suspending system (%s)\n", pm_states[state]);
 	pm_restrict_gfp_mask();
+	/*该接口负责suspend和resume的所有实际动作。前半部分，suspend console、suspend device、
+	关中断、调用平台相关的suspend_ops使系统进入低功耗状态。后半部分，在系统被事件唤醒后，
+	处理相关动作，调用平台相关的suspend_ops恢复系统、开中断、resume device、resume console。
+	*/
 	error = suspend_devices_and_enter(state);
 	pm_restore_gfp_mask();
 
  Finish:
 	pr_debug("PM: Finishing wakeup.\n");
+	/*
+		恢复（或等待恢复）process&thread，还原console
+	*/
 	suspend_finish();
  Unlock:
 	mutex_unlock(&pm_mutex);

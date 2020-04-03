@@ -1258,7 +1258,7 @@ int dpm_suspend_late(pm_message_t state)
 
 		get_device(dev);
 		mutex_unlock(&dpm_list_mtx);
-
+		//对于 dpm_suspended_list 中的设备调用device相关的late函数。
 		error = device_suspend_late(dev);
 
 		mutex_lock(&dpm_list_mtx);
@@ -1365,7 +1365,7 @@ static int __device_suspend(struct device *dev, pm_message_t state, bool async)
 	 */
 	if (pm_runtime_barrier(dev) && device_may_wakeup(dev))
 		pm_wakeup_event(dev, 0);
-
+	//如果休眠之前已经有唤醒发生，就不在休眠
 	if (pm_wakeup_pending()) {
 		async_error = -EBUSY;
 		goto Complete;
@@ -1511,7 +1511,7 @@ int dpm_suspend(pm_message_t state)
 
 		get_device(dev);
 		mutex_unlock(&dpm_list_mtx);
-
+		//对于链表 dpm_prepared_list中的device 调用如下函数
 		error = device_suspend(dev);
 
 		mutex_lock(&dpm_list_mtx);
@@ -1632,6 +1632,7 @@ int dpm_prepare(pm_message_t state)
 		mutex_unlock(&dpm_list_mtx);
 
 		trace_device_pm_callback_start(dev, "", state.event);
+		//对于dpm_list链表中的设备，调用struct device 中的 prepare函数
 		error = device_prepare(dev, state);
 		trace_device_pm_callback_end(dev, error);
 

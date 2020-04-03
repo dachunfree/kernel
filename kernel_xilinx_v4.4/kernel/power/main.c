@@ -365,7 +365,7 @@ static ssize_t state_store(struct kobject *kobj, struct kobj_attribute *attr,
 		error = -EBUSY;
 		goto out;
 	}
-
+	//解析用户传入的buffer（freeze、standby or mem），转换成state参数
 	state = decode_state(buf, n);
 	if (state < PM_SUSPEND_MAX)
 		error = pm_suspend(state);
@@ -379,7 +379,18 @@ static ssize_t state_store(struct kobject *kobj, struct kobj_attribute *attr,
 	return error ? error : n;
 }
 
-power_attr(state);
+power_attr(state); //挂载再sys目录下
+/*
+static struct kobj_attribute state_attr = {	\
+	.attr	= {				\
+		.name = __stringify(_name),	\
+		.mode = 0644,			\
+	},					\
+	.show	= state_show,			\
+	.store	= state_store,		\
+}
+
+*/
 
 #ifdef CONFIG_PM_SLEEP
 /*
@@ -650,10 +661,10 @@ static int __init pm_init(void)
 		return error;
 	hibernate_image_size_init();
 	hibernate_reserved_size_init();
-	power_kobj = kobject_create_and_add("power", NULL);
+	power_kobj = kobject_create_and_add("power", NULL); //sys 创建power目录
 	if (!power_kobj)
 		return -ENOMEM;
-	error = sysfs_create_group(power_kobj, &attr_group);
+	error = sysfs_create_group(power_kobj, &attr_group);//power 目录下创建mem standby等
 	if (error)
 		return error;
 	pm_print_times_init();

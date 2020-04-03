@@ -93,7 +93,7 @@ static int s3c_pm_enter(suspend_state_t state)
 	 * to happen if you suspend with no wakeup (system will often
 	 * require a full power-cycle)
 	*/
-
+	//有没有设置唤醒源
 	if (!of_have_populated_dt() &&
 	    !any_allowed(s3c_irqwake_intmask, s3c_irqwake_intallow) &&
 	    !any_allowed(s3c_irqwake_eintmask, s3c_irqwake_eintallow)) {
@@ -103,7 +103,7 @@ static int s3c_pm_enter(suspend_state_t state)
 	}
 
 	/* save all necessary core registers not covered by the drivers */
-
+	//保存当前的状态
 	if (!of_have_populated_dt()) {
 		samsung_pm_save_gpios();
 		samsung_pm_saved_gpios();
@@ -113,7 +113,7 @@ static int s3c_pm_enter(suspend_state_t state)
 	s3c_pm_save_core();
 
 	/* set the irq configuration for wake */
-
+	//配置唤醒源
 	s3c_pm_configure_extint();
 
 	S3C_PMDBG("sleep: irq wakeup masks: %08lx,%08lx\n",
@@ -122,7 +122,7 @@ static int s3c_pm_enter(suspend_state_t state)
 	s3c_pm_arch_prepare_irqs();
 
 	/* call cpu specific preparation */
-
+	//pm_cpu_prep = s3c2410_pm_prepare;恢复函数。当系统唤醒时候读取uboot，会跳过去执行次函数resume
 	pm_cpu_prep();
 
 	/* flush cache back to ram */
@@ -138,13 +138,13 @@ static int s3c_pm_enter(suspend_state_t state)
 	/* this will also act as our return point from when
 	 * we resume as it saves its own register state and restores it
 	 * during the resume.  */
-
+	//s3c2410_cpu_suspend == pm_cpu_sleep.汇编。关闭sdram前确保相关页表和代码load到tlb和cache中
 	ret = cpu_suspend(0, pm_cpu_sleep);
 	if (ret)
 		return ret;
-
+/****************************************唤醒操作****************************************/
 	/* restore the system state */
-
+	//下面唤醒了
 	s3c_pm_restore_core();
 	s3c_pm_restore_uarts();
 

@@ -614,6 +614,7 @@ void __init early_abt_enable(void)
 	local_abt_enable();
 	fsr_info[22].fn = do_bad;
 }
+list_for_each_entry_safe(pos, _pos, &active_id_list, list);
 
 #ifndef CONFIG_ARM_LPAE
 static int __init exceptions_init(void)
