@@ -14,7 +14,7 @@ struct timer_list {
 	 * All fields that change during normal runtime grouped to the
 	 * same cacheline
 	 */
-	struct hlist_node	entry;
+	struct hlist_node	entry;   //hash 桶。时间轮计算好后加入此。
 	unsigned long		expires; //期望定时器到期时刻的jiffies计数值
 	void			(*function)(unsigned long); //call back function
 	unsigned long		data; //回调函数的参数

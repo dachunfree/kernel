@@ -61,39 +61,39 @@ EXPORT_SYMBOL(jiffies_64);
 /*
  * per-CPU timer vector definitions:
  */
-#define TVN_BITS (CONFIG_BASE_SMALL ? 4 : 6)
-#define TVR_BITS (CONFIG_BASE_SMALL ? 6 : 8)
-#define TVN_SIZE (1 << TVN_BITS)
-#define TVR_SIZE (1 << TVR_BITS)
-#define TVN_MASK (TVN_SIZE - 1)
-#define TVR_MASK (TVR_SIZE - 1)
+#define TVN_BITS (CONFIG_BASE_SMALL ? 4 : 6)    //6
+#define TVR_BITS (CONFIG_BASE_SMALL ? 6 : 8)   //8
+#define TVN_SIZE (1 << TVN_BITS) //64
+#define TVR_SIZE (1 << TVR_BITS) //256
+#define TVN_MASK (TVN_SIZE - 1) //63
+#define TVR_MASK (TVR_SIZE - 1) //255
 #define MAX_TVAL ((unsigned long)((1ULL << (TVR_BITS + 4*TVN_BITS)) - 1))
 
 struct tvec {
-	struct hlist_head vec[TVN_SIZE];
+	struct hlist_head vec[TVN_SIZE]; //64
 };
 
 struct tvec_root {
-	struct hlist_head vec[TVR_SIZE];
+	struct hlist_head vec[TVR_SIZE]; //TVR_SIZE = 256
 };
-
+//时间轮算法。将 32bit 的 jiffies 值分成了 5 个部分，用来索引五个不同的数组
+//（Linux 术语叫做 Timer Vector，简称 TV），分别表示五个不同范围的未来 jiffies 值。
 struct tvec_base {
 	spinlock_t lock;
-	struct timer_list *running_timer;
-	unsigned long timer_jiffies;
+	struct timer_list *running_timer; // 当前正在运行的定时器
+	unsigned long timer_jiffies; //当前正在处理的软件到期时间
 	unsigned long next_timer;
 	unsigned long active_timers;
 	unsigned long all_timers;
 	int cpu;
 	bool migration_enabled;
 	bool nohz_active;
-	struct tvec_root tv1;
-	struct tvec tv2;
-	struct tvec tv3;
+	struct tvec_root tv1; //tv1是转速最快的wheel，所有在256个jiffies内到期的定时器都会挂在tv1的某个链表头中
+	struct tvec tv2;//tv2是转速第二快的wheel，里面挂的定时器超时jiffies在2^8 ~ 2^(8+6)之间。
+	struct tvec tv3; //tv3是转速第三快的wheel，超时jiffies在2^(8+6) ~ 2^(8+2*6)之间。
 	struct tvec tv4;
 	struct tvec tv5;
 } ____cacheline_aligned;
-
 
 static DEFINE_PER_CPU(struct tvec_base, tvec_bases);
 
@@ -374,10 +374,10 @@ static void
 __internal_add_timer(struct tvec_base *base, struct timer_list *timer)
 {
 	unsigned long expires = timer->expires;
-	unsigned long idx = expires - base->timer_jiffies;
+	unsigned long idx = expires - base->timer_jiffies; // idx为定时器距离超时还有多少jiffies
 	struct hlist_head *vec;
-
-	if (idx < TVR_SIZE) {
+	//加入时间轮
+	if (idx < TVR_SIZE) {   // // 如果idx少于TVR_SIZE(256)，把定时器加入tv1
 		int i = expires & TVR_MASK;
 		vec = base->tv1.vec + i;
 	} else if (idx < 1 << (TVR_BITS + TVN_BITS)) {
@@ -961,6 +961,7 @@ EXPORT_SYMBOL(mod_timer_pinned);
  * Timers with an ->expires field in the past will be executed in the next
  * timer tick.
  */
+
 void add_timer(struct timer_list *timer)
 {
 	BUG_ON(timer_pending(timer));
@@ -1202,6 +1203,11 @@ static void call_timer_fn(struct timer_list *timer, void (*fn)(unsigned long),
  * This function cascades all vectors and executes all expired timer
  * vectors.
  */
+ /*这个时间轮的精度为 1 个 jiffy，或者说一个 tick。每个时钟中断中，
+ Linux 处理 TV1 的当前 bucket 中的 Timer。当 TV1 处理完（类似 SECOND ARRAY 处理完时），
+ Linux 需要处理 TV2，TV3 等。这个过程叫做 cascades。TV2 当前 bucket 中的时钟需要从链表中读出，
+ 重新插入 TV2；TV2->bucket[0] 里面的 timer 都被插入 TV1。这个过程和前面描述的时分秒的时间轮时一样的。
+ cascades 操作会引起不确定的延迟，对于高精度时钟来讲，这还是一个致命的缺点*/
 static inline void __run_timers(struct tvec_base *base)
 {
 	struct timer_list *timer;
@@ -1217,9 +1223,8 @@ static inline void __run_timers(struct tvec_base *base)
 			base->timer_jiffies = jiffies;
 			break;
 		}
-
+		/*  计算到期定时器链表在tv1中的索引  */
 		index = base->timer_jiffies & TVR_MASK;
-
 		/*
 		 * Cascade timers:
 		 */
@@ -1415,24 +1420,27 @@ void update_process_times(int user_tick)
 	struct task_struct *p = current;
 
 	/* Note: this timer irq context must be accounted for as well. */
+	 /* 更新当前进程占用CPU的时间 */
 	account_process_tick(p, user_tick);
+	/* 同时触发软中断，处理所有到期的定时器 */
 	run_local_timers();
 	rcu_check_callbacks(user_tick);
 #ifdef CONFIG_IRQ_WORK
 	if (in_irq())
 		irq_work_tick();
 #endif
+	/* 减少当前进程的时间片数 */
 	scheduler_tick();
 	run_posix_cpu_timers(p);
 }
-
 /*
  * This function runs timers and the timer-tq in bottom half context.
  */
+ //软中断。
 static void run_timer_softirq(struct softirq_action *h)
 {
-	struct tvec_base *base = this_cpu_ptr(&tvec_bases);
-
+	struct tvec_base *base = this_cpu_ptr(&tvec_bases); //per cpu的，每个CPU都有一个
+	//如果当前定时器大于定时器到期  base->timer_jiffies，则开始处理timer的回调函数
 	if (time_after_eq(jiffies, base->timer_jiffies))
 		__run_timers(base);
 }
