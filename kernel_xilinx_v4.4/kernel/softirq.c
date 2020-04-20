@@ -321,7 +321,7 @@ restart:
 		if (time_before(jiffies, end) && !need_resched() &&
 		    --max_restart)
 			goto restart;
-		//
+		//唤醒软中断处理线程。
 		wakeup_softirqd();
 	}
 

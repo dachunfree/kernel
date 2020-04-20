@@ -223,9 +223,11 @@ __irq_svc:
 	thread info中的flag成员是否设定了_TIF_NEED_RESCHED这个标记
 	（可能是当前的进程的时间片用完了，也可能是由于中断唤醒了优先级更高的进程）*/
 	teq	r8, #0				@ if preempt count != 0
-	movne	r0, #0				@ force flags to 0
+	movne	r0, #0				@ force flags to 0 //not equal.把r0 == 0；
+	//逻辑处理指令，用于把一个寄存器的内容和另一个寄存器的内容或立即数进行按位的与运算，
+	//并根据运算结果更新CPSR中条件标志位的值。当前运算结果为1，则Z=0；当前运算结果为0，则Z=1
 	tst	r0, #_TIF_NEED_RESCHED
-	blne	svc_preempt
+	blne	svc_preempt  //不为0执行
 #endif
 
 	svc_exit r5, irq = 1			@ return from exception

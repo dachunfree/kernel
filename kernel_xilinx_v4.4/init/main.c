@@ -383,6 +383,7 @@ static void __init setup_command_line(char *command_line)
 
 static __initdata DECLARE_COMPLETION(kthreadd_done);
 
+//系统初始化完成后，将第一个进程（init）变为idle进程。
 static noinline void __init_refok rest_init(void)
 {
 	int pid;
@@ -585,7 +586,7 @@ asmlinkage __visible void __init start_kernel(void)
 	init_IRQ();
 	tick_init();
 	rcu_init_nohz();
-	init_timers();
+	init_timers(); //timer 软中断处理函数
 	hrtimers_init();
 	softirq_init();
 	timekeeping_init();
