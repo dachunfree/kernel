@@ -174,7 +174,7 @@ do { \
 do { \
 	barrier(); \
 	if (unlikely(preempt_count_dec_and_test())) \
-		__preempt_schedule(); \
+		__preempt_schedule(); \//这里提供了一个抢占点__preempt_schedule()，其它高优先级的进程可直接抢占
 } while (0)
 
 #define preempt_enable_notrace() \

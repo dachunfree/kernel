@@ -70,8 +70,8 @@ enum hrtimer_restart {
  *
  * All state transitions are protected by cpu_base->lock.
  */
-#define HRTIMER_STATE_INACTIVE	0x00
-#define HRTIMER_STATE_ENQUEUED	0x01
+#define HRTIMER_STATE_INACTIVE	0x00    //定时器未激活
+#define HRTIMER_STATE_ENQUEUED	0x01    // 定时器已经被排入红黑树中
 
 /**
  * struct hrtimer - the basic hrtimer structure
@@ -137,21 +137,29 @@ struct hrtimer_sleeper {
  * @get_time:		function to retrieve the current time of the clock
  * @offset:		offset of this clock to the monotonic base
  */
+ /*
+ timerqueue_node用于表示一个hrtimer节点，它在标准红黑树节点rb_node的基础上增加了expires字段，
+ 该字段和hrtimer中的_softexpires字段一起，设定了hrtimer的到期时间的一个范围，hrtimer可以在
+ hrtimer._softexpires至timerqueue_node.expires之间的任何时刻到期，我们也称timerqueue_node.expires为
+ 硬过期时间(hard)，意思很明显：到了此时刻，定时器一定会到期，有了这个范围可以选择，定时器系统可以让
+ 范围接近的多个定时器在同一时刻同时到期，这种设计可以降低进程频繁地被hrtimer进行唤醒。
+*/
+
 struct hrtimer_clock_base {
-	struct hrtimer_cpu_base	*cpu_base;
+	struct hrtimer_cpu_base	*cpu_base;    //指向所属cpu的hrtimer_cpu_base结构
 	int			index;
 	clockid_t		clockid;
-	struct timerqueue_head	active;
+	struct timerqueue_head	active;      //红黑树，包含了所有使用该时间基准系统的hrtime
 	ktime_t			(*get_time)(void);
 	ktime_t			offset;
 } __attribute__((__aligned__(HRTIMER_CLOCK_BASE_ALIGN)));
 
 enum  hrtimer_base_type {
-	HRTIMER_BASE_MONOTONIC,
-	HRTIMER_BASE_REALTIME,
-	HRTIMER_BASE_BOOTTIME,
+	HRTIMER_BASE_MONOTONIC,   //单调递增的monotonic时间，不包含休眠时间
+	HRTIMER_BASE_REALTIME,    //平常使用的墙上真实时间
+	HRTIMER_BASE_BOOTTIME,    //单调递增的boottime，包含休眠时间
 	HRTIMER_BASE_TAI,
-	HRTIMER_MAX_CLOCK_BASES,
+	HRTIMER_MAX_CLOCK_BASES,  // 用于后续数组的定义
 };
 
 /*
@@ -201,6 +209,7 @@ struct hrtimer_cpu_base {
 	unsigned int			nr_hangs;
 	unsigned int			max_hang_time;
 #endif
+//4种不同的时间基准系统的hrtimer，分别是：实时时间，启动时间和单调时间；
 	struct hrtimer_clock_base	clock_base[HRTIMER_MAX_CLOCK_BASES];
 } ____cacheline_aligned;
 

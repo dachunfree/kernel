@@ -78,18 +78,18 @@ int tick_is_oneshot_available(void)
  */
 static void tick_periodic(int cpu)
 {
-	if (tick_do_timer_cpu == cpu) {
+	if (tick_do_timer_cpu == cpu) { //选择一个特定的cpu来执行。
 		write_seqlock(&jiffies_lock);
 
 		/* Keep track of the next tick event */
 		tick_next_period = ktime_add(tick_next_period, tick_period);
 
-		do_timer(1);
+		do_timer(1); //更新 jiffies_64
 		write_sequnlock(&jiffies_lock);
 		update_wall_time();
 	}
 
-	update_process_times(user_mode(get_irq_regs()));
+	update_process_times(user_mode(get_irq_regs())); //
 	profile_tick(CPU_PROFILING);
 }
 

@@ -6,13 +6,14 @@
 
 
 struct timerqueue_node {
-	struct rb_node node;
-	ktime_t expires;
+	struct rb_node node;	//红黑树的节点
+	ktime_t expires;        //该节点代表队hrtimer的到期时间，与hrtimer结构中的_softexpires稍有不同
 };
-
+/*next:用于保存树中最先到期的定时器节点，实际上就是树的最左下方的节点，有了next字段，当到期事件到来时，
+系统不必遍历整个红黑树，只要取出next字段对应的节点进行处理即可*/
 struct timerqueue_head {
-	struct rb_root head;
-	struct timerqueue_node *next;
+	struct rb_root head;            //红黑树的根节点
+	struct timerqueue_node *next;	//该红黑树中最早到期的节点，也就是最左下的节点
 };
 
 

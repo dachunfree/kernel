@@ -78,6 +78,18 @@ struct tvec_root {
 };
 //时间轮算法。将 32bit 的 jiffies 值分成了 5 个部分，用来索引五个不同的数组
 //（Linux 术语叫做 Timer Vector，简称 TV），分别表示五个不同范围的未来 jiffies 值。
+/*
+图的最右边的数组（tv1）包含 256 个数组项（在缺省配置下），这 256 个数组项分别对应着最近
+256 个时钟周期时刻上即将到期的定时器事件。每个数组项实现为一个链表。
+对数组的索引和遍历可以直接使用系统变量 jiffies 的低 8 位来完成。当系统时间经过了 256 个时钟周期后，
+正好遍历处理完整个 tv1 数组，此时需要用下一组 256 个时钟周期来 “补充”（cascade） tv1 中的内容
+。“补充”（cascade）的内容来自第二个数组（tv2），tv2 数组的每一项对应的时间范围不再是单个时钟周期，
+而是 256 个时钟周期这么长（译者注 4），通常情况下 tv2 数组的元素个数是 64，可以采用系统变量 jiffies
+的次低 6 位（译者注 5）来索引。具体“补充”（cascade）时会把 tv2 的当前索引项中链表上的的每一个定时器
+事件按照它们各自到期（expiration）时间分别移动到 tv1 数组的对应项中。依次类推，当 tv2 数组也遍历完后，
+继续用 tv3 数组中的内容来逐级“补充”（cascade），这个过程会持续发生，直到最后一级数组 tv5。tv5 数组中
+对应存放着系统可以支持的最大的定时器时间。
+*/
 struct tvec_base {
 	spinlock_t lock;
 	struct timer_list *running_timer; // 当前正在运行的定时器
@@ -408,7 +420,7 @@ __internal_add_timer(struct tvec_base *base, struct timer_list *timer)
 		i = (expires >> (TVR_BITS + 3 * TVN_BITS)) & TVN_MASK;
 		vec = base->tv5.vec + i;
 	}
-
+	//哈希的头结点插法
 	hlist_add_head(&timer->entry, vec);
 }
 
@@ -1136,7 +1148,7 @@ static int cascade(struct tvec_base *base, struct tvec *tv, int index)
 	struct timer_list *timer;
 	struct hlist_node *tmp;
 	struct hlist_head tv_list;
-
+	//将tv->vec[index]哈希桶移到tv_list。然后将tv->vec[index]置空。
 	hlist_move_list(tv->vec + index, &tv_list);
 
 	/*
@@ -1208,13 +1220,15 @@ static void call_timer_fn(struct timer_list *timer, void (*fn)(unsigned long),
  Linux 需要处理 TV2，TV3 等。这个过程叫做 cascades。TV2 当前 bucket 中的时钟需要从链表中读出，
  重新插入 TV2；TV2->bucket[0] 里面的 timer 都被插入 TV1。这个过程和前面描述的时分秒的时间轮时一样的。
  cascades 操作会引起不确定的延迟，对于高精度时钟来讲，这还是一个致命的缺点*/
+ //add_timer(struct timer_list * timer);
+ //init_timer
 static inline void __run_timers(struct tvec_base *base)
 {
 	struct timer_list *timer;
 
 	spin_lock_irq(&base->lock);
 
-	while (time_after_eq(jiffies, base->timer_jiffies)) {
+	while (time_after_eq(jiffies, base->timer_jiffies)) {   //base->timer_jiffies过期了
 		struct hlist_head work_list;
 		struct hlist_head *head = &work_list;
 		int index;
@@ -1226,15 +1240,19 @@ static inline void __run_timers(struct tvec_base *base)
 		/*  计算到期定时器链表在tv1中的索引  */
 		index = base->timer_jiffies & TVR_MASK;
 		/*
-		 * Cascade timers:
+		 * Cascade timers:可以理解为补充。具体“补充”（cascade）时会把 tv2 的当前索引项中链表上的的每一个
+		 定时器事件按照它们各自到期（expiration）时间分别移动到 tv1 数组的对应项中。依次类推，
+		 当 tv2 数组也遍历完后，继续用 tv3 数组中的内容来逐级“补充”（cascade），这个过程会持续发生，
+		 直到最后一级数组 tv5。tv5 数组中对应存放着系统可以支持的最大的定时器时间
 		 */
+		 //第一个为假，后面就不判断了。很巧妙
 		if (!index &&
 			(!cascade(base, &base->tv2, INDEX(0))) &&
 				(!cascade(base, &base->tv3, INDEX(1))) &&
 					!cascade(base, &base->tv4, INDEX(2)))
 			cascade(base, &base->tv5, INDEX(3));
 		++base->timer_jiffies;
-		hlist_move_list(base->tv1.vec + index, head);
+		hlist_move_list(base->tv1.vec + index, head); //开始执行第一个哈希桶
 		while (!hlist_empty(head)) {
 			void (*fn)(unsigned long);
 			unsigned long data;
