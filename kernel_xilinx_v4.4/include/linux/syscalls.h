@@ -825,7 +825,7 @@ asmlinkage long sys_fanotify_mark(int fanotify_fd, unsigned int flags,
 				  const char  __user *pathname);
 asmlinkage long sys_syncfs(int fd);
 
-asmlinkage long sys_fork(void);
+asmlinkage long sys_fork(void); //asmlinkage表示这个c语言可以被汇编调用。
 asmlinkage long sys_vfork(void);
 #ifdef CONFIG_CLONE_BACKWARDS
 asmlinkage long sys_clone(unsigned long, unsigned long, int __user *, unsigned long,

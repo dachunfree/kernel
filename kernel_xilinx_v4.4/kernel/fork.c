@@ -351,7 +351,7 @@ static struct task_struct *dup_task_struct(struct task_struct *orig)
 	if (err)
 		goto free_ti;
 	//设定内核栈和thread_info以及task sturct之间的联系
-	tsk->stack = ti; //ti为内核栈
+	tsk->stack = ti;
 #ifdef CONFIG_SECCOMP
 	/*
 	 * We must handle setting up seccomp filters once we're under
@@ -361,6 +361,7 @@ static struct task_struct *dup_task_struct(struct task_struct *orig)
 	 */
 	tsk->seccomp.filter = NULL;
 #endif
+	//复制内核栈
 	setup_thread_stack(tsk, orig);
 	clear_user_return_notifier(tsk);
 	clear_tsk_need_resched(tsk);
@@ -1346,7 +1347,7 @@ static struct task_struct *copy_process(unsigned long clone_flags,
 	 * to stop root fork bombs.
 	 */
 	retval = -EAGAIN;
-	if (nr_threads >= max_threads)
+	if (nr_threads >= max_threads) //nr_threads是系统当前的线程数目
 		goto bad_fork_cleanup_count;
 
 	delayacct_tsk_init(p);	/* Must remain after dup_task_struct() */
@@ -1446,9 +1447,11 @@ static struct task_struct *copy_process(unsigned long clone_flags,
 		goto bad_fork_cleanup_perf;
 	/* copy all the process information */
 	shm_init_task(p);
+	//信号量共享
 	retval = copy_semundo(clone_flags, p);
 	if (retval)
 		goto bad_fork_cleanup_audit;
+	//只有属于同一线程组之间才会共享打开文件。
 	retval = copy_files(clone_flags, p);
 	if (retval)
 		goto bad_fork_cleanup_semundo;
@@ -1805,6 +1808,8 @@ long do_fork(unsigned long clone_flags,
 /*
  * Create a kernel thread.
  */
+ /*线程是进程中的一个实体，是被系统独立调度和分派的基本单位，线程自己不独立拥有系统资源，
+ 它是与同属一个进程的其它线程共享进程所拥有的全部资源（如地址空间、文件描述符和信号处理）*/
 pid_t kernel_thread(int (*fn)(void *), void *arg, unsigned long flags)
 {
 	return _do_fork(flags|CLONE_VM|CLONE_UNTRACED, (unsigned long)fn,

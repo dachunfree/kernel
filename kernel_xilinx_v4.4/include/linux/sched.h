@@ -2798,7 +2798,7 @@ static inline void threadgroup_change_end(struct task_struct *tsk)
 static inline void setup_thread_stack(struct task_struct *p, struct task_struct *org)
 {
 	*task_thread_info(p) = *task_thread_info(org);
-	task_thread_info(p)->task = p;
+	task_thread_info(p)->task = p; //ti->task = p;
 }
 
 /*
