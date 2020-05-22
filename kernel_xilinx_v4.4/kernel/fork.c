@@ -973,7 +973,7 @@ static int copy_mm(unsigned long clone_flags, struct task_struct *tsk)
 
 	/* initialize the new vmacache entries */
 	vmacache_flush(tsk);
-
+	//如果传入CLONE_VM，表示共享vm，引用计数+1；
 	if (clone_flags & CLONE_VM) {
 		atomic_inc(&oldmm->mm_users);
 		mm = oldmm;
@@ -981,6 +981,7 @@ static int copy_mm(unsigned long clone_flags, struct task_struct *tsk)
 	}
 
 	retval = -ENOMEM;
+	//新进程copy当前进程的虚拟内存。
 	mm = dup_mm(tsk);
 	if (!mm)
 		goto fail_nomem;
@@ -1008,6 +1009,7 @@ static int copy_fs(unsigned long clone_flags, struct task_struct *tsk)
 		spin_unlock(&fs->lock);
 		return 0;
 	}
+	//如果没有传入CLONE_FS（共享文件信息），则copy一份。
 	tsk->fs = copy_fs_struct(fs);
 	if (!tsk->fs)
 		return -ENOMEM;
@@ -1027,10 +1029,10 @@ static int copy_files(unsigned long clone_flags, struct task_struct *tsk)
 		goto out;
 
 	if (clone_flags & CLONE_FILES) {
-		atomic_inc(&oldf->count);
+		atomic_inc(&oldf->count); //引用计数
 		goto out;
 	}
-
+	//新进程把打开的进程复制一份
 	newf = dup_fd(oldf, &error);
 	if (!newf)
 		goto out;
@@ -1120,9 +1122,9 @@ static int copy_signal(unsigned long clone_flags, struct task_struct *tsk)
 {
 	struct signal_struct *sig;
 
-	if (clone_flags & CLONE_THREAD)
+	if (clone_flags & CLONE_THREAD) //只有同一线程组还会共享。
 		return 0;
-
+	//否则重新分配
 	sig = kmem_cache_zalloc(signal_cachep, GFP_KERNEL);
 	tsk->signal = sig;
 	if (!sig)
@@ -1314,7 +1316,7 @@ static struct task_struct *copy_process(unsigned long clone_flags,
 		goto fork_out;
 
 	retval = -ENOMEM;
-	p = dup_task_struct(current); 
+	p = dup_task_struct(current);  //p为新进程的task_struct
 	if (!p)
 		goto fork_out;
 
@@ -1336,7 +1338,7 @@ static struct task_struct *copy_process(unsigned long clone_flags,
 			goto bad_fork_free;
 	}
 	current->flags &= ~PF_NPROC_EXCEEDED;
-
+	//负责复制或共享证书，证书存放进程的用户标识符，组标识符和访问权限。
 	retval = copy_creds(p, clone_flags);
 	if (retval < 0)
 		goto bad_fork_free;
@@ -1434,7 +1436,7 @@ static struct task_struct *copy_process(unsigned long clone_flags,
 #endif
 
 	/* Perform scheduler related setup. Assign this task to a CPU. */
-	//为新进程设置调度器相关参数
+	//为新进程设置调度器相关参数。如实时进程还是普通进程，调度nice值，选择在哪个cpu调度
 	retval = sched_fork(clone_flags, p);
 	if (retval)
 		goto bad_fork_cleanup_policy;
@@ -1451,32 +1453,39 @@ static struct task_struct *copy_process(unsigned long clone_flags,
 	retval = copy_semundo(clone_flags, p);
 	if (retval)
 		goto bad_fork_cleanup_audit;
-	//只有属于同一线程组之间才会共享打开文件。
+	//只有属于同一线程组之间才会共享打开文件表。
 	retval = copy_files(clone_flags, p);
 	if (retval)
 		goto bad_fork_cleanup_semundo;
+	//复制或者共享文件信息。
 	retval = copy_fs(clone_flags, p);
 	if (retval)
 		goto bad_fork_cleanup_files;
+	//信号处理程序。同上，看传入CLONE_SIGHAND标志判断是否共享。
 	retval = copy_sighand(clone_flags, p);
 	if (retval)
 		goto bad_fork_cleanup_fs;
+	//信号结构体。
 	retval = copy_signal(clone_flags, p);
 	if (retval)
 		goto bad_fork_cleanup_sighand;
+	//虚拟内存。只有属于同一线程组之间的线程才会共享虚拟内存。
 	retval = copy_mm(clone_flags, p);
 	if (retval)
 		goto bad_fork_cleanup_signal;
+	//命名空间？？
 	retval = copy_namespaces(clone_flags, p);
 	if (retval)
 		goto bad_fork_cleanup_mm;
+	//io上下文。
 	retval = copy_io(clone_flags, p);
 	if (retval)
 		goto bad_fork_cleanup_namespaces;
+	//复制当前进程的寄存器值。并且修改一部分寄存器值。
 	retval = copy_thread_tls(clone_flags, stack_start, stack_size, p, tls);
 	if (retval)
 		goto bad_fork_cleanup_io;
-
+	//为新进程分配进程号。init_struct_pid每个处理器分配一个空闲进程。进程号0
 	if (pid != &init_struct_pid) {
 		pid = alloc_pid(p->nsproxy->pid_ns_for_children);
 		if (IS_ERR(pid)) {
@@ -1484,7 +1493,7 @@ static struct task_struct *copy_process(unsigned long clone_flags,
 			goto bad_fork_cleanup_io;
 		}
 	}
-
+	//分配情况设置新进程退出时候发送给父进程信号
 	p->set_child_tid = (clone_flags & CLONE_CHILD_SETTID) ? child_tidptr : NULL;
 	/*
 	 * Clear TID on mm_release()?
@@ -1520,15 +1529,16 @@ static struct task_struct *copy_process(unsigned long clone_flags,
 
 	/* ok, now we should be set up.. */
 	p->pid = pid_nr(pid);
-	if (clone_flags & CLONE_THREAD) {
+	if (clone_flags & CLONE_THREAD) {//新线程退出时候不需要发信号给父进程。
 		p->exit_signal = -1;
 		p->group_leader = current->group_leader;
 		p->tgid = current->tgid;
-	} else {
-		if (clone_flags & CLONE_PARENT)
-			p->exit_signal = current->group_leader->exit_signal;
-		else
+	} else { //创建的是进程
+		if (clone_flags & CLONE_PARENT) //兄弟关系
+			p->exit_signal = current->group_leader->exit_signal; //等于当前线程组组长 exit_signal
+		else //父子关系
 			p->exit_signal = (clone_flags & CSIGNAL);
+		//新进程的线程组组长是自己
 		p->group_leader = p;
 		p->tgid = p->pid;
 	}
@@ -1547,6 +1557,7 @@ static struct task_struct *copy_process(unsigned long clone_flags,
 	 * between here and cgroup_post_fork() if an organisation operation is in
 	 * progress.
 	 */
+	 //控制组的进程数控制器检查是否允许创建新进程
 	retval = cgroup_can_fork(p, cgrp_ss_priv);
 	if (retval)
 		goto bad_fork_free_pid;
