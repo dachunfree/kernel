@@ -28,11 +28,13 @@
  * for a fast NMI safe accessors.
  */
 struct tk_read_base {
+/*timekeeper当前使用的clocksource。这个clock应该系统中最优的那个，
+  如果有好过当前clocksource注册入系统，那么clocksource模块会通知timekeeping模块来切换clocksource*/
 	struct clocksource	*clock;
 	cycle_t			(*read)(struct clocksource *cs);
 	cycle_t			mask;
 	cycle_t			cycle_last;
-	u32			mult;
+	u32			mult; //lock source的cycle值和纳秒转换的facotr，概念和clocksource的mult和shift一致
 	u32			shift;
 	u64			xtime_nsec;
 	ktime_t			base;
@@ -83,7 +85,7 @@ struct tk_read_base {
 struct timekeeper {
 	struct tk_read_base	tkr_mono;
 	struct tk_read_base	tkr_raw;
-	u64			xtime_sec;
+	u64			xtime_sec; //CLOCK_REALTIME类型的系统时钟（其实就是墙上时钟）
 	unsigned long		ktime_sec;
 	struct timespec64	wall_to_monotonic;
 	ktime_t			offs_real;

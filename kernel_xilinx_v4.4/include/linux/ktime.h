@@ -37,7 +37,7 @@
 union ktime {
 	s64	tv64;
 };
-
+//ktime_add_ns
 typedef union ktime ktime_t;		/* Kill this */
 
 /**

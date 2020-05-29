@@ -97,13 +97,17 @@ enum clock_event_state {
  * @owner:		module reference
  */
 struct clock_event_device {
+	//event_handler顾名思义就是产生了clock event的时候调用的handler。一般而言，
+	//底层的clock event chip driver会注册中断处理函数，在硬件timer中断到来的时候调
+	//用该timer中断handler，而在这个中断handler中再调用event_handler
 	void			(*event_handler)(struct clock_event_device *);
-	int			(*set_next_event)(unsigned long evt, struct clock_event_device *);
-	int			(*set_next_ktime)(ktime_t expires, struct clock_event_device *);
+	//既然是产生clock event的device，那么总是要控制下一次event产生的时间点
+	int			(*set_next_event)(unsigned long evt, struct clock_event_device *); //set_next_ktime函数可以直接接收ktime作为参数
+	int			(*set_next_ktime)(ktime_t expires, struct clock_event_device *);//et_next_event设定的counter的cycle数值。一般的timer硬件都是用cycle值设定会比较方便
 	ktime_t			next_event;
-	u64			max_delta_ns;
+	u64			max_delta_ns; //当前时间和下一次时间触发的差值。一个最小，一个最大
 	u64			min_delta_ns;
-	u32			mult;
+	u32			mult;              //时钟周期数和ns之间的转换
 	u32			shift;
 	enum clock_event_state	state_use_accessors;
 	unsigned int		features;
@@ -121,11 +125,11 @@ struct clock_event_device {
 	unsigned long		min_delta_ticks;
 	unsigned long		max_delta_ticks;
 
-	const char		*name;
+	const char		*name;  //表示该事件的名称。/proc/timer_list
 	int			rating;
 	int			irq;
 	int			bound_on;
-	const struct cpumask	*cpumask;
+	const struct cpumask	*cpumask; //它可以指示该clock event device为哪一个或者哪几个CPU core工作
 	struct list_head	list;
 	struct module		*owner;
 } ____cacheline_aligned;

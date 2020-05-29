@@ -28,6 +28,7 @@
 /*
  * Tick devices
  */
+ //在多核架构下，系统为每一个cpu建立了一个tick device
 DEFINE_PER_CPU(struct tick_device, tick_cpu_device);
 /*
  * Tick next event: keeps track of the tick time
@@ -49,6 +50,10 @@ ktime_t tick_period;
  *    at it will take over and keep the time keeping alive.  The handover
  *    procedure also covers cpu hotplug.
  */
+ /*有些任务不适合在local tick device中处理，例如更新jiffies，更新系统的wall time，
+ 更新系统的平均负载（不是单一CPU core的负载），这些都是系统级别的任务，只需要在
+ local tick device中选择一个作为global tick device就OK了。tick_do_timer_cpu指明
+ 哪一个cpu上的local tick作为global tick。*/
 int tick_do_timer_cpu __read_mostly = TICK_DO_TIMER_BOOT;
 
 /*
@@ -62,6 +67,7 @@ struct tick_device *tick_get_device(int cpu)
 /**
  * tick_is_oneshot_available - check for a oneshot capable event device
  */
+ //tick_is_oneshot_available函数来检查per cpu的tick device是否适合进入one shot mode：
 int tick_is_oneshot_available(void)
 {
 	struct clock_event_device *dev = __this_cpu_read(tick_cpu_device.evtdev);
@@ -76,6 +82,8 @@ int tick_is_oneshot_available(void)
 /*
  * Periodic tick
  */
+ /*由于每个cpu都有自己的tick device，因此，在每个cpu上，每个tick到了的时候，
+ 都会调用tick_handle_periodic函数进行周期性tick中要处理的task，具体如下：*/
 static void tick_periodic(int cpu)
 {
 	if (tick_do_timer_cpu == cpu) { //选择一个特定的cpu来执行。
@@ -86,10 +94,10 @@ static void tick_periodic(int cpu)
 
 		do_timer(1); //更新 jiffies_64
 		write_sequnlock(&jiffies_lock);
-		update_wall_time();
+		update_wall_time(); //更新walltime。它指定系统已经启动并运行了多长时间。
 	}
-
-	update_process_times(user_mode(get_irq_regs())); //
+	//smp系统每个CPU执行。
+	update_process_times(user_mode(get_irq_regs()));
 	profile_tick(CPU_PROFILING);
 }
 
@@ -264,6 +272,9 @@ static bool tick_check_preferred(struct clock_event_device *curdev,
 				 struct clock_event_device *newdev)
 {
 	/* Prefer oneshot capable device */
+	//如果新的clock event device没有one shot能力而原配有，新欢失败。如果都没有one shot的能力，
+	//那么要看看当前系统是否启用了高精度timer或者tickless。本质上，如果clock event device没有oneshot功能，
+	//那么高精度timer或者tickless都是处于委曲求全的状态，如果这样，还是维持原配的委曲求全的状态，新欢失败
 	if (!(newdev->features & CLOCK_EVT_FEAT_ONESHOT)) {
 		if (curdev && (curdev->features & CLOCK_EVT_FEAT_ONESHOT))
 			return false;

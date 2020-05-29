@@ -4,12 +4,16 @@
 #include <linux/hrtimer.h>
 
 enum tick_device_mode {
-	TICKDEV_MODE_PERIODIC,
-	TICKDEV_MODE_ONESHOT,
+	TICKDEV_MODE_PERIODIC,   //一种是周期性tick模式
+	TICKDEV_MODE_ONESHOT,   //另外一种是one shot模式
 };
 
 struct tick_device {
 	struct clock_event_device *evtdev;
+	/*该clock event device对应的HW timer必须是和该CPU core是有关联的的
+	（也就是说，该hw timer的中断是可以送达到该CPU core的）。struct clock_event_device
+	有一个cpumask成员，它可以指示该clock event device为哪一个或者哪几个CPU core工作。
+	如果采用ARM generic timer的硬件，其HW timer总是为一个CPU core服务的，我们称之为per cpu timer。*/
 	enum tick_device_mode mode;
 };
 

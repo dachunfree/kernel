@@ -303,6 +303,7 @@ static int clockevents_program_min_delta(struct clock_event_device *dev)
  *
  * Returns 0 on success, -ETIME when the event is in the past.
  */
+ //我们先看看该接口函数的参数值：dev指向具体的clock event device，expires参数是设定下一次产生event的时间点，
 int clockevents_program_event(struct clock_event_device *dev, ktime_t expires,
 			      bool force)
 {
@@ -325,18 +326,24 @@ int clockevents_program_event(struct clock_event_device *dev, ktime_t expires,
 		  clockevent_get_state(dev));
 
 	/* Shortcut for clockevent devices that can deal with ktime. */
+	//如果chip driver支持使用ktime的设定（这需要硬件支持，设定了CLOCK_EVT_FEAT_KTIME flag的那些clock event device才支持哦），
+	//事情会比较简单，直接调用set_next_ktime就搞定了。
 	if (dev->features & CLOCK_EVT_FEAT_KTIME)
 		return dev->set_next_ktime(expires, dev);
-
+	//对于一个“正常”的clock event device，需要转换成cycle这样的单位。不过在转换成cycle之前，
+	//需要先将ktime格式的时间（传入的expires参数就是这样的格式）转换成纳秒这样的时间单位
 	delta = ktime_to_ns(ktime_sub(expires, ktime_get()));
 	if (delta <= 0)
 		return force ? clockevents_program_min_delta(dev) : -ETIME;
-
+	//struct clock_event_device的max_delta_ns这个成员就是设定next event触发的最大时间值。
+	//这个最大值是和硬件counter的bit数目有关：如果一个硬件timer最大能表示60秒的时间长度，
+	//那么设定65秒后触发clock event是没有意义的，因为这时候counter会溢出，如果强行设定那么硬件实际会
+	//在5秒后触发event。同样的，max_delta_ns也是在注册clock event device的时候设定了这个参数。
 	delta = min(delta, (int64_t) dev->max_delta_ns);
 	delta = max(delta, (int64_t) dev->min_delta_ns);
 
 	clc = ((unsigned long long) delta * dev->mult) >> dev->shift;
-	rc = dev->set_next_event((unsigned long) clc, dev);
+	rc = dev->set_next_event((unsigned long) clc, dev);//调用底层driver callback函数进行设定
 
 	return (rc && force) ? clockevents_program_min_delta(dev) : rc;
 }

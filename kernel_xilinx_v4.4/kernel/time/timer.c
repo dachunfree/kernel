@@ -1155,6 +1155,7 @@ static int cascade(struct tvec_base *base, struct tvec *tv, int index)
 	 * We are removing _all_ timers from the list, so we
 	 * don't have to detach them individually.
 	 */
+	 //比如将bit[8-13](6bit)的哈希桶，重新进行哈希计算(0-7)8bit 上面去。
 	hlist_for_each_entry_safe(timer, tmp, &tv_list, entry) {
 		/* No accounting, while moving them */
 		__internal_add_timer(base, timer);
@@ -1468,7 +1469,7 @@ static void run_timer_softirq(struct softirq_action *h)
  */
 void run_local_timers(void)
 {
-	hrtimer_run_queues();
+	hrtimer_run_queues(); //检测one-shotmode 还是 period mode
 	raise_softirq(TIMER_SOFTIRQ);
 }
 

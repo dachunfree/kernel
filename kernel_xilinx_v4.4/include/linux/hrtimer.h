@@ -338,6 +338,8 @@ static inline void timerfd_clock_was_set(void) { }
 #endif
 extern void hrtimers_resume(void);
 
+//local tick device。在单核系统中，传统的unix都是在tick驱动下进行任务调度、低精度timer触发等，
+//在多核架构下，系统为每一个cpu建立了一个tick device
 DECLARE_PER_CPU(struct tick_device, tick_cpu_device);
 
 

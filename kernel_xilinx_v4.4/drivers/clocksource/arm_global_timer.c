@@ -159,7 +159,7 @@ static irqreturn_t gt_clockevent_interrupt(int irq, void *dev_id)
 		gt_compare_set(ULONG_MAX, 0);
 
 	writel_relaxed(GT_INT_STATUS_EVENT_FLAG, gt_base + GT_INT_STATUS);
-	evt->event_handler(evt);
+	evt->event_handler(evt);   //tick_periodic
 
 	return IRQ_HANDLED;
 }
@@ -304,8 +304,8 @@ static void __init global_timer_of_register(struct device_node *np)
 	}
 
 	/* Immediately configure the timer on the boot CPU */
-	gt_clocksource_init();
-	gt_clockevents_init(this_cpu_ptr(gt_evt));
+	gt_clocksource_init(); //时钟源初始化
+	gt_clockevents_init(this_cpu_ptr(gt_evt)); //设置时钟事件设备相关操作函数，oneshot，period。。。
 
 	return;
 

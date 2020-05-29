@@ -642,7 +642,7 @@ static inline void hlist_add_head(struct hlist_node *n, struct hlist_head *h)
 	n->next = first;
 	if (first)
 		first->pprev = &n->next;
-	h->first = n;
+	h->first = n;  //此时n是hash的first指针,因此它的pprev指向的是hash的first指针的地址.
 	n->pprev = &h->first;
 }
 

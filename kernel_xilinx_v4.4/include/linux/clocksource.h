@@ -63,16 +63,22 @@ struct module;
  * @resume:		resume function for the clocksource, if necessary
  * @owner:		module reference, must be set by clocksource in modules
  */
+ //__clocksource_register
+ /*所谓clock source就是用来抽象一个在指定输入频率的clock下工作的一个counter。输入频率
+ 可以确定以什么样的精度来划分timeline（假设输入counter的频率是1GHz，那么一个cycle就是1ns，
+ 也就是说timeline是用1ns来划分的，最大的精度就是1ns），counter的bit数确定了组成timeline上
+ 的“线段”的长度
+ */
 struct clocksource {
 	/*
 	 * Hotpath data, fits in a single cache line when the
 	 * clocksource itself is cacheline aligned.
 	 */
-	cycle_t (*read)(struct clocksource *cs);
+	cycle_t (*read)(struct clocksource *cs); //读取当前时钟周期的当前计数值.clock source的read函数获取了cycle数目，
 	cycle_t mask;
 	u32 mult;
-	u32 shift;
-	u64 max_idle_ns;
+	u32 shift;   //return ((u64) cycles * mult) >> shift; 转换成ns
+	u64 max_idle_ns; //保证  cycles * mult 不超过64位限制。保证从cycle到ms不产生溢出的那个最大的纳秒数
 	u32 maxadj;
 #ifdef CONFIG_ARCH_CLOCKSOURCE_DATA
 	struct arch_clocksource_data archdata;
@@ -80,10 +86,10 @@ struct clocksource {
 	u64 max_cycles;
 	const char *name;
 	struct list_head list;
-	int rating;
+	int rating; //表示时钟源的质量
 	int (*enable)(struct clocksource *cs);
 	void (*disable)(struct clocksource *cs);
-	unsigned long flags;
+	unsigned long flags; //标志位。
 	void (*suspend)(struct clocksource *cs);
 	void (*resume)(struct clocksource *cs);
 
@@ -95,7 +101,12 @@ struct clocksource {
 	cycle_t wd_last;
 #endif
 	struct module *owner;
-} ____cacheline_aligned;
+} ____cacheline_aligned; //cacheline 属性。
+/*kernel会频繁的访问这些数据结构，因此最好把它们放到一个cacheline中，struct clocksource这个
+数据结构有cacheline aligned的属性，任何定义的变量都是对齐到cacheline的，而这些计时相关的成员
+被放到clocksource数据结构的前面就是为了提高cache hit。一旦访问了read成员，随后的几个成员也就
+被加载到cacheline中，从而提高的性能。对于clock source抽象的counter而言，其counter value都是针
+对clock计数的，具体一个clock有多少个纳秒是和输入频率相关的。*/
 
 /*
  * Clock source flags bits::
