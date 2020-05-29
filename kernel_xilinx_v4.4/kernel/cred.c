@@ -328,7 +328,7 @@ int copy_creds(struct task_struct *p, unsigned long clone_flags)
 #ifdef CONFIG_KEYS
 		!p->cred->thread_keyring &&
 #endif
-		clone_flags & CLONE_THREAD
+		clone_flags & CLONE_THREAD   //新进程和当前进程属于同一线程组。
 	    ) {
 		p->real_cred = get_cred(p->cred);
 		get_cred(p->cred);

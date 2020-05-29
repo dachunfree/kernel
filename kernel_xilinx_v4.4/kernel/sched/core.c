@@ -2187,6 +2187,7 @@ int sysctl_numa_balancing(struct ctl_table *table, int write,
 int sched_fork(unsigned long clone_flags, struct task_struct *p)
 {
 	unsigned long flags;
+	//关闭抢占
 	int cpu = get_cpu();
 
 	__sched_fork(clone_flags, p);
@@ -2200,17 +2201,17 @@ int sched_fork(unsigned long clone_flags, struct task_struct *p)
 	/*
 	 * Make sure we do not leak PI boosting priority to the child.
 	 */
-	p->prio = current->normal_prio;
+	p->prio = current->normal_prio; //优先级继承，防止优先级反转
 
 	/*
 	 * Revert to default priority/policy on fork if requested.
 	 */
 	if (unlikely(p->sched_reset_on_fork)) {
-		if (task_has_dl_policy(p) || task_has_rt_policy(p)) {
+		if (task_has_dl_policy(p) || task_has_rt_policy(p)) { //限期进程或者实时进程。
 			p->policy = SCHED_NORMAL;
 			p->static_prio = NICE_TO_PRIO(0);
 			p->rt_priority = 0;
-		} else if (PRIO_TO_NICE(p->static_prio) < 0)
+		} else if (PRIO_TO_NICE(p->static_prio) < 0) //普通进程
 			p->static_prio = NICE_TO_PRIO(0);
 
 		p->prio = p->normal_prio = __normal_prio(p);
@@ -2223,10 +2224,10 @@ int sched_fork(unsigned long clone_flags, struct task_struct *p)
 		p->sched_reset_on_fork = 0;
 	}
 
-	if (dl_prio(p->prio)) {
+	if (dl_prio(p->prio)) { //不许限期进程分叉生成新的限期进程
 		put_cpu();
 		return -EAGAIN;
-	} else if (rt_prio(p->prio)) {
+	} else if (rt_prio(p->prio)) { //如果优先级是实时优先级，把调度类设置为实时调度类
 		p->sched_class = &rt_sched_class;
 	} else {
 		p->sched_class = &fair_sched_class;
@@ -2243,6 +2244,7 @@ int sched_fork(unsigned long clone_flags, struct task_struct *p)
 	 * Silence PROVE_RCU.
 	 */
 	raw_spin_lock_irqsave(&p->pi_lock, flags);
+	//设置新的进程运行在哪个cpu上。
 	set_task_cpu(p, cpu);
 	raw_spin_unlock_irqrestore(&p->pi_lock, flags);
 

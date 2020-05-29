@@ -1395,7 +1395,7 @@ struct task_struct {
 
 	int prio, static_prio, normal_prio;
 	unsigned int rt_priority;
-	const struct sched_class *sched_class;
+	const struct sched_class *sched_class; //调度类
 	struct sched_entity se;
 	struct sched_rt_entity rt;
 #ifdef CONFIG_CGROUP_SCHED
@@ -1438,7 +1438,10 @@ struct task_struct {
 	struct plist_node pushable_tasks;
 	struct rb_node pushable_dl_tasks;
 #endif
-
+	/*
+	进程：mm和active_mm指向同一内存描述符。
+	内核线程：mm是空指针;当内核线程运行时候，active_mm指向从进程借用的内存描述符。
+	*/
 	struct mm_struct *mm, *active_mm;
 	/* per-thread vma caching */
 	u32 vmacache_seqnum;
@@ -1478,7 +1481,7 @@ struct task_struct {
 
 	struct restart_block restart_block;
 
-	pid_t pid;
+	pid_t pid; //全局的进程号
 	pid_t tgid; //thread group ID，也就是线程组ID
 
 #ifdef CONFIG_CC_STACKPROTECTOR
@@ -1491,6 +1494,7 @@ struct task_struct {
 	 * p->real_parent->pid)
 	 */
 	struct task_struct __rcu *real_parent; /* real parent process */
+	//如ptrace跟踪，parent指向跟踪者的task_struct
 	struct task_struct __rcu *parent; /* recipient of SIGCHLD, wait4() reports */
 	/*
 	 * children/sibling forms the list of my natural children
@@ -1558,13 +1562,13 @@ struct task_struct {
 	unsigned long last_switch_count;
 #endif
 /* filesystem information */
-	struct fs_struct *fs;
+	struct fs_struct *fs;  //文件系统信息，主要是根目录和当前工作目录。
 /* open file information */
-	struct files_struct *files;
+	struct files_struct *files; //打开文件表
 /* namespaces */
-	struct nsproxy *nsproxy;
+	struct nsproxy *nsproxy; //命名空间
 /* signal handlers */
-	struct signal_struct *signal;
+	struct signal_struct *signal;    //信号处理
 	struct sighand_struct *sighand;
 
 	sigset_t blocked, real_blocked;
@@ -2798,7 +2802,7 @@ static inline void threadgroup_change_end(struct task_struct *tsk)
 static inline void setup_thread_stack(struct task_struct *p, struct task_struct *org)
 {
 	*task_thread_info(p) = *task_thread_info(org);
-	task_thread_info(p)->task = p;
+	task_thread_info(p)->task = p; //ti->task = p;
 }
 
 /*

@@ -226,7 +226,7 @@ copy_thread(unsigned long clone_flags, unsigned long stack_start,
 {
 	struct thread_info *thread = task_thread_info(p);
 	struct pt_regs *childregs = task_pt_regs(p);
-
+	//清空新进程的cpu_context，切换出去的进程使用这个保存通用寄存器
 	memset(&thread->cpu_context, 0, sizeof(struct cpu_context_save));
 
 #ifdef CONFIG_CPU_USE_DOMAINS
@@ -239,7 +239,7 @@ copy_thread(unsigned long clone_flags, unsigned long stack_start,
 	thread->cpu_domain = get_domain();
 #endif
 
-	if (likely(!(p->flags & PF_KTHREAD))) {
+	if (likely(!(p->flags & PF_KTHREAD))) { //用户进程
 		*childregs = *current_pt_regs();
 		childregs->ARM_r0 = 0;
 		if (stack_start)
