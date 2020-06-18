@@ -12,9 +12,9 @@
 # define TICK_DO_TIMER_NONE	-1
 # define TICK_DO_TIMER_BOOT	-2
 
-DECLARE_PER_CPU(struct tick_device, tick_cpu_device);
-extern ktime_t tick_next_period;
-extern ktime_t tick_period;
+DECLARE_PER_CPU(struct tick_device, tick_cpu_device); //per cpu 链表
+extern ktime_t tick_next_period; //下一个全局时钟事件发生的时间。
+extern ktime_t tick_period;   //存储了周期的长度，单位ns
 extern int tick_do_timer_cpu __read_mostly;
 
 extern void tick_setup_periodic(struct clock_event_device *dev, int broadcast);

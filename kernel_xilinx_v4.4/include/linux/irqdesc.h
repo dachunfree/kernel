@@ -45,16 +45,16 @@ struct pt_regs;
  */
 struct irq_desc {
 	struct irq_common_data	irq_common_data;
-	struct irq_data		irq_data;
+	struct irq_data		i1rq_data;
 	unsigned int __percpu	*kstat_irqs;
-	irq_flow_handler_t	handle_irq;
+	irq_flow_handler_t	handle_irq;             //highlevel irq-events handler
 #ifdef CONFIG_IRQ_PREFLOW_FASTEOI
 	irq_preflow_handler_t	preflow_handler;
 #endif
-	struct irqaction	*action;	/* IRQ action list */
-	unsigned int		status_use_accessors;
+	struct irqaction	*action;//action指向一个struct irqaction的链表。如果一个interrupt request line允许共享，那么该链表中的成员可以是多个，否则，该链表只有一个节点。
+	unsigned int		status_use_accessors;   //设置中断标志位 如_IRQ_NO_BALANCING
 	unsigned int		core_internal_state__do_not_mess_with_it;
-	unsigned int		depth;		/* nested irq disables */
+	unsigned int		depth;		/* nested irq disables *///我们可以通过enable和disable一个指定的IRQ来控制内核的并发，从而保护临界区的数据。对一个IRQ进行enable和disable的操作可以嵌套（当然一定要成对使用），depth是描述嵌套深度的信息。
 	unsigned int		wake_depth;	/* nested wake enables */
 	unsigned int		irq_count;	/* For detecting broken IRQs */
 	unsigned long		last_unhandled;	/* Aging timer for unhandled count */
@@ -62,7 +62,7 @@ struct irq_desc {
 	atomic_t		threads_handled;
 	int			threads_handled_last;
 	raw_spinlock_t		lock;
-	struct cpumask		*percpu_enabled;
+	struct cpumask		*percpu_enabled; //一个中断描述符可能会有两种情况，一种是该IRQ是global，一旦disable了该irq，那么对于所有的CPU而言都是disable的。还有一种情况，就是该IRQ是per CPU的，也就是说，在某个CPU上disable了该irq只是disable了本CPU的IRQ而已，其他的CPU仍然是enable的。percpu_enabled是一个描述该IRQ在各个CPU上是否enable成员
 #ifdef CONFIG_SMP
 	const struct cpumask	*affinity_hint;
 	struct irq_affinity_notify *affinity_notify;

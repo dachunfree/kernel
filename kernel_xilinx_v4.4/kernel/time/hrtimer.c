@@ -1138,9 +1138,13 @@ static void __hrtimer_init(struct hrtimer *timer, clockid_t clock_id,
 /**
  * hrtimer_init - initialize a timer to the given clock
  * @timer:	the timer to be initialized
- * @clock_id:	the clock to be used
- * @mode:	timer mode abs/rel
+ * @clock_id:	the clock to be used.
+ * @mode:	timer mode abs/rel.相对时间还是绝对时间
  */
+ /*
+ HRTIMER_MODE_ABS:时间值是绝对的
+HRTIMER_MODE_REL :时间值是相对于当前时间的
+*/
 void hrtimer_init(struct hrtimer *timer, clockid_t clock_id,
 		  enum hrtimer_mode mode)
 {

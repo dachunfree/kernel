@@ -104,7 +104,7 @@ struct clock_event_device {
 	//既然是产生clock event的device，那么总是要控制下一次event产生的时间点
 	int			(*set_next_event)(unsigned long evt, struct clock_event_device *); //set_next_ktime函数可以直接接收ktime作为参数
 	int			(*set_next_ktime)(ktime_t expires, struct clock_event_device *);//et_next_event设定的counter的cycle数值。一般的timer硬件都是用cycle值设定会比较方便
-	ktime_t			next_event;
+	ktime_t			next_event;     //下一次触发时间
 	u64			max_delta_ns; //当前时间和下一次时间触发的差值。一个最小，一个最大
 	u64			min_delta_ns;
 	u32			mult;              //时钟周期数和ns之间的转换

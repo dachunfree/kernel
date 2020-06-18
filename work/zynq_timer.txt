@@ -1,0 +1,105 @@
+分析zynq的global timer，先根据dts研究下中断的组成：
+
+intc: interrupt-controller@f8f01000 {
+      compatible = "arm,cortex-a9-gic";
+
+      #interrupt-cells = <3>;
+      interrupt-controller;
+      reg = <0xF8F01000 0x1000>,
+      			<0xF8F00100 0x100>;
+      };
+ global_timer: timer@f8f00200 {
+     compatible = "arm,cortex-a9-global-timer";
+     reg = <0xf8f00200 0x20>;
+     interrupts = <1 11 0x301>; //ppi 的11号中断。
+     interrupt-parent = <&intc>; 
+     clocks = <&clkc 4>;
+ };
+*第一个cell表示中断类型： 0 for SPI interrupts, 1 for PPI interrupts.
+*the 2nd cell contains the interrupt number for the interrupt type.
+ SPI interrupts are in the range [0-987].  PPI interrupts are in the range [0-15].
+*The 3rd cell is the flags, encoded as follows: bits[3:0] trigger type and level flags.
+		1 = low-to-high edge triggered
+		2 = high-to-low edge triggered (invalid for SPIs)
+		4 = active high level-sensitive
+		8 = active low level-sensitive (invalid for SPIs).
+	bits[15:8] PPI interrupt cpu mask.  Each bit corresponds to each of
+	the 8 possible cpus attached to the GIC.  A bit set to '1' indicated
+	the interrupt is wired to that CPU.  Only valid for PPI interrupts.
+	Also note that the configurability of PPI interrupts is IMPLEMENTATION
+	DEFINED and as such not guaranteed to be present (most SoC available
+	in 2014 seem to ignore the setting of this flag and use the hardware
+	default value).
+	
+https://blog.csdn.net/anonymalias/article/details/52022787?depth_1-utm_source=distribute.pc_relevant.none-task-blog-BlogCommendFromBaidu-19&utm_source=distribute.pc_relevant.none-task-blog-BlogCommendFromBaidu-19
+https://www.ibm.com/developerworks/cn/linux/1308_liuming_linuxtime4/
+
+
+void update_process_times(int user_tick)
+	run_local_timers(); //触发软中断
+		raise_softirq(TIMER_SOFTIRQ); //penging softirq
+		void hrtimer_run_queues(void) //高精度定时器相关。
+	
+gt_clockevents_init(struct clock_event_device *clk)             //设置时钟事件相关
+	clk->set_state_shutdown = gt_clockevent_shutdown;
+	clk->set_state_periodic = gt_clockevent_set_periodic;
+	clk->set_state_oneshot = gt_clockevent_shutdown;
+	clk->set_next_event = gt_clockevent_set_next_event;	
+	
+	
+global_timer_of_register
+	 request_percpu_irq(gt_ppi, gt_clockevent_interrupt,"gt", gt_evt);
+	 	 gt_clockevent_interrupt
+	 			evt->event_handler(evt);----------------------------------------------------------
+																																													|
+event_handler的由来：																																			|
+global_timer_of_register	 																																|
+gt_clockevents_init																																				|
+	clockevents_config_and_register(clk, gt_clk_rate,1, 0xffffffff);											  |
+			clockevents_register_device(dev);																										|
+					tick_check_new_device(dev);																											|
+						 tick_install_broadcast_device(struct clock_event_device *dev)								|
+						 	tick_setup_device(td, newdev, cpu, cpumask_of(cpu));												|
+						 		tick_setup_periodic(bc, 1)//period mode																		|
+						 					if (!broadcast)																											|	
+												dev->event_handler = tick_handle_periodic;<------------------------												
+														tick_periodic(cpu);（看函数，更新jiffies，raise softirq）
+											else
+												dev->event_handler = tick_handle_periodic_broadcast;
+								tick_setup_oneshot(newdev, handler, next_event);// one-shot mode
+									clockevents_program_event(newdev, next_event, true);
+
+multi core的环境下，每一个CPU core都自己的tick device（可以称之local tick device），这些tick device中有一个被选择做global tick device，
+负责维护整个系统的jiffies。如果该tick device的是第一次设定，并且目前系统中没有global tick设备，那么可以考虑选择该tick设备作为global设备，
+进行系统时间和jiffies的更新。更细节的内容请参考timekeeping文档。	
+
+one-shot 解释：
+没有tick怎么办？这时候需要找到所有timer中最近要超期的timer，将其时间值设定到实际的HW timer中就OK了，当然，这时候需要底层
+的HW timer支持one shot，也就是说，该timer的中断就来一次，在该timer的的中断处理中除了处理超期函数之外，还需要scan所有timer，
+找到最近要超期的timer，将其时间值设定到实际的HW timer中就OK了，然后不断的重复上面的过程就OK了。
+假设系统中注册了1200ns, 1870ns, 2980ns, 4500ns, 5000ns和6250ns的timer，在一个HZ=1000的系统上，timer的超期都是在规则的tick时间点
+上，对于tickless的系统，timer的中断不是均匀的，具体如下图所示：	 
+
+周期性tick 和 tickless 并存？
+最后，我们来看调度器怎么适应tickless。我们知道，除非你是一个完全基于优先级的调度器，否则系统都会给进程分配一个时间片（time slice），
+当占用CPU的时间片配额使用完了，该进程会挂入队列，等待调度器分配下一个时间片，并调度运行。有tick当然比较简单，在该tick的timer中断中
+减去当前进程的时间片。没有tick总是比较麻烦，我能想到的方法是：假设我们给进程分配40ms的时间片，那么在调度该进程的时候需要设定一个
+40ms的timer，timer到期后，调度器选择另外一个进程，然后再次设定timer。当然，如果没有进程优先级的概念（或者说优先级仅仅体现在分配
+的时间片比较多的情况下），并且系统中处于runnable状态的进程较少，整体的运作还是OK的。如果有优先级概念怎么办？如果进程执行过程中被
+中断打断，切换到另外的进程怎么办？如果系统内的进程数目很多如何保证调度器的性能？算了，太复杂了，还是有tick比较好，因此实际中，linux
+ kernel在有任务执行的时候还是会启动周期性的tick。
+
+Tick Device： 
+Tick Device模块负责管理系统中的所有的tick设备，在SMP环境下，每一个CPU都自己的tick device，这些tick device中有一个被选择做
+global tick device，该device负责维护整个系统的jiffies以及更新哪些基于jiffies进行的全系统统计信息。
+
+CONFIG_NO_HZ_IDLE是说在系统dile的时候是没有tick的；在系统运行的时候还是有tick的，因此，我们也称之dynamic tick或者NO HZ mode。
+
+如何产生周期性tick
+虽然tick device以及底层的HW timer都工作在one shot mode，看起来系统的HW timer中断都是按需产生，多么美妙。
+但是，由于各种原因（此处省略3000字），在系统运行过程中，那个周期性的tick还需要保持，因此，在切换到one shot mode的同时，
+也会调用tick_setup_sched_timer函数创建一个sched timer（一个普通的hrtimer而已），该timer的特点就是每次超期后还会调用
+hrtimer_forward，不断的将自己挂回hrtimer的红黑树，于是乎，tick_sched_do_timer接口按照tick的周期不断的被调用，从而模拟了周期性的tick
+
+
+高分辨定时器以ns时间戳，独立于周期时钟

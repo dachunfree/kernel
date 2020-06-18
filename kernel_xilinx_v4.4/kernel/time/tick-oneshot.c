@@ -24,6 +24,7 @@
 /**
  * tick_program_event
  */
+ //设定下一次超时时间
 int tick_program_event(ktime_t expires, int force)
 {
 	struct clock_event_device *dev = __this_cpu_read(tick_cpu_device.evtdev);

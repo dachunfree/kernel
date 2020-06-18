@@ -21,7 +21,7 @@
     MA 02110-1301 USA.							     */
 /* ------------------------------------------------------------------------- */
 
-/* With some changes from Kyösti Mälkki <kmalkki@cc.hut.fi> and
+/* With some changes from Ky?sti M?lkki <kmalkki@cc.hut.fi> and
    Frodo Looijaard <frodol@dds.nl> */
 
 #ifndef _UAPI_LINUX_I2C_H
@@ -82,17 +82,17 @@ struct i2c_msg {
 
 /* To determine what functionality is present */
 
-#define I2C_FUNC_I2C			0x00000001
-#define I2C_FUNC_10BIT_ADDR		0x00000002
+#define I2C_FUNC_I2C			0x00000001    //无格式i2c-level命令
+#define I2C_FUNC_10BIT_ADDR		0x00000002		//处理10-bit地址的扩展
 #define I2C_FUNC_PROTOCOL_MANGLING	0x00000004 /* I2C_M_IGNORE_NAK etc. */
 #define I2C_FUNC_SMBUS_PEC		0x00000008
 #define I2C_FUNC_NOSTART		0x00000010 /* I2C_M_NOSTART */
 #define I2C_FUNC_SLAVE			0x00000020
 #define I2C_FUNC_SMBUS_BLOCK_PROC_CALL	0x00008000 /* SMBus 2.0 */
 #define I2C_FUNC_SMBUS_QUICK		0x00010000
-#define I2C_FUNC_SMBUS_READ_BYTE	0x00020000
-#define I2C_FUNC_SMBUS_WRITE_BYTE	0x00040000
-#define I2C_FUNC_SMBUS_READ_BYTE_DATA	0x00080000
+#define I2C_FUNC_SMBUS_READ_BYTE	0x00020000  //处理SMBus read_byte命令
+#define I2C_FUNC_SMBUS_WRITE_BYTE	0x00040000	//处理SMBus write_byte命令
+#define I2C_FUNC_SMBUS_READ_BYTE_DATA	0x00080000 //处理SMBus read_byte_data命令
 #define I2C_FUNC_SMBUS_WRITE_BYTE_DATA	0x00100000
 #define I2C_FUNC_SMBUS_READ_WORD_DATA	0x00200000
 #define I2C_FUNC_SMBUS_WRITE_WORD_DATA	0x00400000

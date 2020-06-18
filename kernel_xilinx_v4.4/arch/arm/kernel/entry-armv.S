@@ -385,13 +385,13 @@ ENDPROC(__fiq_abt)
  UNWIND(.fnstart	)
  UNWIND(.cantunwind	)	//@ don't unwind the user space
 	sub	sp, sp, #S_FRAME_SIZE              //sp_svc,sizeof(struct pt_regs).18 个32位寄存器
- ARM(	stmib	sp, {r1 - r12}	)
+ ARM(	stmib	sp, {r1 - r12}	)       //stmib中的ib表示increment before，因此，在压入R1的时候，stack pointer会先增加4，重要是预留r0的位置
  THUMB(	stmia	sp, {r0 - r12}	)
 
  ATRAP(	mrc	p15, 0, r7, c1, c0, 0)
  ATRAP(	ldr	r8, .LCcralign)
 
-	ldmia	r0, {r3 - r5}
+	ldmia	r0, {r3 - r5}       //这里r0指向了irq stack，因此，r3是中断时候的r0值，r4是中断现场的PC值，r5是中断现场的CPSR值
 	add	r0, sp, #S_PC		@ here for interlock avoidance
 	mov	r6, #-1			@  ""  ""     ""        ""
 
@@ -1045,7 +1045,7 @@ vector_\name:
 	@ (parent CPSR)
 	@
 	//SP_irq在初始化的时候已经设定（12个字节,cpu_init）。
-	//在irq mode的stack上，依次保存了发生中断那一点的r0值、PC值以及CPSR值
+	//在irq mode的stack上，依次保存了发生中断那一点的r0值、PC值(当前lr_irq)以及CPSR值
 	//（具体操作是通过spsr进行的，其实硬件已经帮我们保存了CPSR到SPSR中了）。
 	//为何要保存r0值？因为随后的代码要使用r0寄存器，因此我们要把r0放到栈上，
 	//只有这样才能完完全全恢复硬件现场。

@@ -792,8 +792,8 @@ void __init early_trap_init(void *vectors_base)
 {
 #ifndef CONFIG_CPU_V7M
 	unsigned long vectors = (unsigned long)vectors_base;
-	extern char __stubs_start[], __stubs_end[];
-	extern char __vectors_start[], __vectors_end[];
+	extern char __stubs_start[], __stubs_end[];   //系统调用
+	extern char __vectors_start[], __vectors_end[]; //中断向量表
 	unsigned i;
 
 	vectors_page = vectors_base;

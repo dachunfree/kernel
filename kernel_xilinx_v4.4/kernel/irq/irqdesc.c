@@ -269,16 +269,16 @@ int __init early_irq_init(void)
 	int count, i, node = first_online_node;
 	struct irq_desc *desc;
 
-	init_irq_default_affinity();
+	init_irq_default_affinity(); //设置默认cpu亲和力
 
 	printk(KERN_INFO "NR_IRQS:%d\n", NR_IRQS);
 
-	desc = irq_desc;
+	desc = irq_desc; //上面全局变量
 	count = ARRAY_SIZE(irq_desc);
 
-	for (i = 0; i < count; i++) {
-		desc[i].kstat_irqs = alloc_percpu(unsigned int);
-		alloc_masks(&desc[i], GFP_KERNEL, node);
+	for (i = 0; i < count; i++) {                   ////遍历整个lookup table，对每一个entry进行初始化
+		desc[i].kstat_irqs = alloc_percpu(unsigned int); //分配per cpu的irq统计信息需要的内存
+		alloc_masks(&desc[i], GFP_KERNEL, node);//分配中断描述符中需要的cpu mask内存
 		raw_spin_lock_init(&desc[i].lock);
 		lockdep_set_class(&desc[i].lock, &irq_desc_lock_class);
 		desc_set_defaults(i, &desc[i], node, NULL);
@@ -347,7 +347,7 @@ int generic_handle_irq(unsigned int irq)
 
 	if (!desc)
 		return -EINVAL;
-	generic_handle_irq_desc(desc);
+	generic_handle_irq_desc(desc); //调用high level的irq handler来处理该IRQ
 	return 0;
 }
 EXPORT_SYMBOL_GPL(generic_handle_irq);

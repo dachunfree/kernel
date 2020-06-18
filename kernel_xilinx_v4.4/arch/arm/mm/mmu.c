@@ -915,8 +915,8 @@ static void __init create_mapping(struct map_desc *md)
 	}
 #endif
 
-	addr = md->virtual & PAGE_MASK;
-	phys = __pfn_to_phys(md->pfn);
+	addr = md->virtual & PAGE_MASK;  //虚拟地址
+	phys = __pfn_to_phys(md->pfn);   //页帧号转换为物理地址
 	length = PAGE_ALIGN(md->length + (md->virtual & ~PAGE_MASK));
 
 	if (type->prot_l1 == 0 && ((addr | phys | length) & ~SECTION_MASK)) {
@@ -925,10 +925,10 @@ static void __init create_mapping(struct map_desc *md)
 		return;
 	}
 
-	pgd = pgd_offset_k(addr);
-	end = addr + length;
+	pgd = pgd_offset_k(addr);  //swapper进程的页表基地址 pgd+(addr >>PGDIR_SHIFT)
+	end = addr + length;       //虚拟地址映射end点
 	do {
-		unsigned long next = pgd_addr_end(addr, end);
+		unsigned long next = pgd_addr_end(addr, end); //遍历pgd --->pgd+len
 
 		alloc_init_pud(pgd, addr, next, phys, type);
 
