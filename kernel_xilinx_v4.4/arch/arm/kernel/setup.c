@@ -479,6 +479,10 @@ void notrace cpu_init(void)
 #define PLC	"I"
 #endif
 
+/*嵌入式汇编的语法格式是：asm(code : output operand list : input operand list : clobber list);
+大家对着上面的code就可以分开各段内容了。在input operand list中，有两种限制符（constraint），
+"r"或者"I"，"I"表示立即数（Immediate operands），"r"表示用通用寄存器传递参数。clobber list中有
+一个r14，表示在汇编代码中修改了r14的值，这些信息是编译器需要的内容。*/
 	/*
 	 * setup stacks for re-entrant exception handlers
 	 */

@@ -341,7 +341,13 @@ static struct task_struct *dup_task_struct(struct task_struct *orig)
 	tsk = alloc_task_struct_node(node);
 	if (!tsk)
 		return NULL;
-
+	/**
+	 * alloc_thread_info宏获取一块空闲内存区，用来存放新进程的thread_info结构和内核栈。
+	 * 这块内存区字段的大小是8KB或者4KB。
+	 */
+	 //union thread_union联合体表示内核栈
+	 /*当进程从用户态切换到内核态时，进程的内核栈总是空的，所以ARM的sp寄存器指向这个栈的
+	   顶端。因此，内核能够轻易地通过sp寄存器获得当前正在CPU上运行的进程*/
 	ti = alloc_thread_info_node(tsk, node); //分配 thread_info，每个进程都有自己的内核栈
 	if (!ti)
 		goto free_tsk;
@@ -361,7 +367,7 @@ static struct task_struct *dup_task_struct(struct task_struct *orig)
 	 */
 	tsk->seccomp.filter = NULL;
 #endif
-	//复制内核栈
+	//这里只是复制thread_info，而非复制内核堆栈
 	setup_thread_stack(tsk, orig);
 	clear_user_return_notifier(tsk);
 	clear_tsk_need_resched(tsk);
@@ -1617,7 +1623,7 @@ static struct task_struct *copy_process(unsigned long clone_flags,
 			p->signal->leader_pid = pid;
 			p->signal->tty = tty_kref_get(current->signal->tty);
 			list_add_tail(&p->sibling, &p->real_parent->children);
-			list_add_tail_rcu(&p->tasks, &init_task.tasks);
+			list_add_tail_rcu(&p->tasks, &init_task.tasks);//把新进程添加到进程组进程链表
 			attach_pid(p, PIDTYPE_PGID);
 			attach_pid(p, PIDTYPE_SID);
 			__this_cpu_inc(process_counts);

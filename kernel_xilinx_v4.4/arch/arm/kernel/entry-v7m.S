@@ -70,7 +70,7 @@ __irq_entry:
 2:
 	@ registers r0-r3 and r12 are automatically restored on exception
 	@ return. r4-r7 were not clobbered in v7m_exception_entry so for
-	@ correctness they don't need to be restored. So only r8-r11 must be
+	@ correctness they don t need to be restored. So only r8-r11 must be
 	@ restored here. The easiest way to do so is to restore r0-r7, too.
 	ldmia	sp!, {r0-r11}
 	add	sp, #S_FRAME_SIZE-S_IP

@@ -1374,7 +1374,7 @@ struct tlbflush_unmap_batch {
 	 */
 	bool writable;
 };
-
+struct thread_info;
 struct task_struct {
 	volatile long state;	/* -1 unrunnable, 0 runnable, >0 stopped */
 	void *stack; //Ö¸ÏòÄÚºËÕ».dup_task_struct

@@ -127,7 +127,7 @@ ENTRY(ret_from_fork)
 	badrne	lr, 1f
 	retne	r5
 1:	get_thread_info tsk
-	b	ret_slow_syscall
+	b	ret_slow_syscall //ret_to_user用户线程
 ENDPROC(ret_from_fork)
 
 	.equ NR_syscalls,0
