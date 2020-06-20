@@ -139,11 +139,11 @@ struct irq_domain;
 struct irq_common_data {
 	unsigned int		state_use_accessors;
 #ifdef CONFIG_NUMA
-	unsigned int		node;
+	unsigned int		node;  //如果一个IRQ大部分（或者固定）由某一个CPU处理，那么在动态分配中断描述符的时候，应该考虑将内存分配在该CPU访问速度比较快的memory node上。
 #endif
 	void			*handler_data;
 	struct msi_desc		*msi_desc;
-	cpumask_var_t		affinity;
+	cpumask_var_t		affinity;  //和irq affinity相关
 };
 
 /**
@@ -162,15 +162,15 @@ struct irq_common_data {
  */
 struct irq_data {
 	u32			mask;
-	unsigned int		irq;
-	unsigned long		hwirq;
+	unsigned int		irq;            //IRQ number
+	unsigned long		hwirq;			//HW interrupt ID
 	struct irq_common_data	*common;
 	struct irq_chip		*chip;
-	struct irq_domain	*domain;
+	struct irq_domain	*domain;       //该中断描述符对应的irq domain数据结构
 #ifdef	CONFIG_IRQ_DOMAIN_HIERARCHY
 	struct irq_data		*parent_data;
 #endif
-	void			*chip_data;
+	void			*chip_data;   //和中断控制器相关的私有数据
 };
 
 /*
@@ -344,22 +344,22 @@ static inline irq_hw_number_t irqd_to_hwirq(struct irq_data *d)
  * @flags:		chip specific flags
  */
 struct irq_chip {
-	const char	*name;
-	unsigned int	(*irq_startup)(struct irq_data *data);
-	void		(*irq_shutdown)(struct irq_data *data);
-	void		(*irq_enable)(struct irq_data *data);
-	void		(*irq_disable)(struct irq_data *data);
+	const char	*name;                                //	该中断控制器的名字，用于/proc/interrupts中的显示
+	unsigned int	(*irq_startup)(struct irq_data *data); //start up 指定的irq domain上的HW interrupt ID。如果不设定的话，default会被设定为enable函数
+	void		(*irq_shutdown)(struct irq_data *data);//shutdown 指定的irq domain上的HW interrupt ID。如果不设定的话，default会被设定为disable函数
+	void		(*irq_enable)(struct irq_data *data);//	enable指定的irq domain上的HW interrupt ID。如果不设定的话，default会被设定为unmask函数
+	void		(*irq_disable)(struct irq_data *data);//	disable指定的irq domain上的HW interrupt ID。
 
-	void		(*irq_ack)(struct irq_data *data);
-	void		(*irq_mask)(struct irq_data *data);
-	void		(*irq_mask_ack)(struct irq_data *data);
-	void		(*irq_unmask)(struct irq_data *data);
+	void		(*irq_ack)(struct irq_data *data);//	和具体的硬件相关，有些中断控制器必须在Ack之后（清除pending的状态）才能接受到新的中断。
+	void		(*irq_mask)(struct irq_data *data);//mask指定的irq domain上的HW interrupt ID
+	void		(*irq_mask_ack)(struct irq_data *data);//mask并ack指定的irq domain上的HW interrupt ID。
+	void		(*irq_unmask)(struct irq_data *data);//
 	void		(*irq_eoi)(struct irq_data *data);
 
-	int		(*irq_set_affinity)(struct irq_data *data, const struct cpumask *dest, bool force);
-	int		(*irq_retrigger)(struct irq_data *data);
-	int		(*irq_set_type)(struct irq_data *data, unsigned int flow_type);
-	int		(*irq_set_wake)(struct irq_data *data, unsigned int on);
+	int		(*irq_set_affinity)(struct irq_data *data, const struct cpumask *dest, bool force); //在SMP的情况下，可以通过该callback函数设定CPU affinity
+	int		(*irq_retrigger)(struct irq_data *data);//重新触发一次中断，一般用在中断丢失的场景下。如果硬件不支持retrigger，可以使用软件的方法。
+	int		(*irq_set_type)(struct irq_data *data, unsigned int flow_type);//设定指定的irq domain上的HW interrupt ID的触发方式，电平触发还是边缘触发
+	int		(*irq_set_wake)(struct irq_data *data, unsigned int on);//和电源管理相关，用来enable/disable指定的interrupt source作为唤醒的条件。
 
 	void		(*irq_bus_lock)(struct irq_data *data);
 	void		(*irq_bus_sync_unlock)(struct irq_data *data);

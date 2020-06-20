@@ -454,7 +454,7 @@ void notrace cpu_init(void)
 {
 #ifndef CONFIG_CPU_V7M
 	unsigned int cpu = smp_processor_id();
-	struct stack *stk = &stacks[cpu];
+	struct stack *stk = &stacks[cpu];  //获取当前cpu的fiq，irq，undefine，abt的栈
 
 	if (cpu >= NR_CPUS) {
 		pr_crit("CPU%u: bad primary CPU number\n", cpu);

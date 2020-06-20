@@ -11,4 +11,19 @@
 irq_of_parse_and_map(struct device_node *dev, int index)
 	of_irq_parse_one(dev, index, &oirq) //分析device node中的interrupt相关属性
 	irq_create_of_mapping(&oirq);//创建映射，并返回对应的IRQ number 
-	
+
+学习一些中断总结：
+
+SPI：
+在GIC中，SPI使用1-N模型，而PPI和SGI使用N-N模型。对于SPI，由于采用了1-N模型，系统（硬件加上软件）必须保证
+一个中断被一个CPU处理。对于GIC，一个SPI的中断可以trigger多个CPU的interrupt line（如果Distributor中的Interrupt
+ Processor Targets Registers有多个bit被设定），但是，该interrupt source和CPU的接口寄存器（例如ack register）只有一套，
+ 也就是说，这些寄存器接口是全局的，是global的，一旦一个CPU ack（读Interrupt Acknowledge Register，获取interrupt ID）
+ 了该中断，那么其他的CPU看到的该interupt source的状态也是已经ack的状态。在这种情况下，如果第二个CPU ack该中断的时候，
+ 将获取一个spurious interrupt ID。
+ 
+PPI：
+ 对于PPI或者SGI，使用N-N mode，其interrupt source的寄存器是per CPU的，也就是每个CPU都有自己的、针对该interrupt source的寄存器接口
+ （这些寄存器叫做banked register）。一个CPU 清除了该interrupt source的pending状态，其他的CPU感知不到这个变化，它们仍然认为该中断
+ 是pending的。对于irq_set_irq_type这个接口函数，它是for 1-N mode的interrupt source使用的。如果底层设定该interrupt是per CPU的，
+ 那么irq_set_irq_type要返回错误。

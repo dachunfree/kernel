@@ -208,6 +208,7 @@ EXPORT_SYMBOL_GPL(driver_unregister);
  * from being unregistered or unloaded while the caller is using it.
  * The caller is responsible for preventing this.
  */
+ //遍历链表查看是否已经注册过driver
 struct device_driver *driver_find(const char *name, struct bus_type *bus)
 {
 	struct kobject *k = kset_find_obj(bus->p->drivers_kset, name);

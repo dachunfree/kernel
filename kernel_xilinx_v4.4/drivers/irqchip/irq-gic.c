@@ -340,20 +340,20 @@ EXPORT_SYMBOL(gic_set_cpu);
 static void __exception_irq_entry gic_handle_irq(struct pt_regs *regs)
 {
 	u32 irqstat, irqnr;
-	struct gic_chip_data *gic = &gic_data[0];
-	void __iomem *cpu_base = gic_data_cpu_base(gic);
+	struct gic_chip_data *gic = &gic_data[0];  //获取root GIC的硬件描述符
+	void __iomem *cpu_base = gic_data_cpu_base(gic); //获取root GIC mapping到CPU地址空间的信息
 
 	do {
-		irqstat = readl_relaxed(cpu_base + GIC_CPU_INTACK);
+		irqstat = readl_relaxed(cpu_base + GIC_CPU_INTACK); //获取HW interrupt ID
 		irqnr = irqstat & GICC_IAR_INT_ID_MASK;
 
-		if (likely(irqnr > 15 && irqnr < 1021)) {
+		if (likely(irqnr > 15 && irqnr < 1021)) {   //获取HW interrupt ID
 			if (static_key_true(&supports_deactivate))
 				writel_relaxed(irqstat, cpu_base + GIC_CPU_EOI);
-			handle_domain_irq(gic->domain, irqnr, regs);
+			handle_domain_irq(gic->domain, irqnr, regs);//将HW interrupt ID转成IRQ number,并处理
 			continue;
 		}
-		if (irqnr < 16) {
+		if (irqnr < 16) {    //IPI类型的中断处理
 			writel_relaxed(irqstat, cpu_base + GIC_CPU_EOI);
 			if (static_key_true(&supports_deactivate))
 				writel_relaxed(irqstat, cpu_base + GIC_CPU_DEACTIVATE);

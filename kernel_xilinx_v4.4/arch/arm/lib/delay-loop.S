@@ -26,15 +26,15 @@ ENTRY(__loop_udelay)
 		mul	r0, r2, r0
 ENTRY(__loop_const_udelay)			@ 0 <= r0 <= 0x7fffff06
 		mov	r1, #-1
-		ldr	r2, .LC0
+		ldr	r2, .LC0			          //4096
 		ldr	r2, [r2]		@ max = 0x01ffffff
-		add	r0, r0, r1, lsr #32-14
-		mov	r0, r0, lsr #14		@ max = 0x0001ffff
-		add	r2, r2, r1, lsr #32-10
-		mov	r2, r2, lsr #10		@ max = 0x00007fff
-		mul	r0, r2, r0		@ max = 2^32-1
-		add	r0, r0, r1, lsr #32-6
-		movs	r0, r0, lsr #6
+		add	r0, r0, r1, lsr #32-14               //r0 = r0+(r1<<18)
+		mov	r0, r0, lsr #14		@ max = 0x0001ffff  //r0 = r0 <<14;
+		add	r2, r2, r1, lsr #32-10					//r2 = r2 + (r1<<22)
+		mov	r2, r2, lsr #10		@ max = 0x00007fff  //r2 = r2 <<10;
+		mul	r0, r2, r0		@ max = 2^32-1			//r0 = r2*r0
+		add	r0, r0, r1, lsr #32-6					//r0 = r0 +(r1<<26)
+		movs	r0, r0, lsr #6						//r0 = r0 <<6
 		reteq	lr
 
 /*

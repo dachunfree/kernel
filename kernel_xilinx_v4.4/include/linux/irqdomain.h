@@ -140,10 +140,12 @@ struct irq_domain_chip_generic;
  * @revmap_tree: Radix map tree for hwirqs that don't fit in the linear map
  * @linear_revmap: Linear table of hwirq->virq reverse mappings
  */
+//linux内核中，所有的irq domain被挂入一个全局链表，链表头定义如下：
+//static LIST_HEAD(irq_domain_list);
 struct irq_domain {
 	struct list_head link;
 	const char *name;
-	const struct irq_domain_ops *ops;
+	const struct irq_domain_ops *ops;  // －－－－callback函数
 	void *host_data;
 	unsigned int flags;
 
@@ -156,11 +158,11 @@ struct irq_domain {
 #endif
 
 	/* reverse map data. The linear map gets appended to the irq_domain */
-	irq_hw_number_t hwirq_max;
+	irq_hw_number_t hwirq_max;   //该domain中最大的那个HW interrupt ID
 	unsigned int revmap_direct_max_irq;
-	unsigned int revmap_size;
-	struct radix_tree_root revmap_tree;
-	unsigned int linear_revmap[];
+	unsigned int revmap_size;    //线性映射的size，for Radix Tree map和no map，该值等于0
+	struct radix_tree_root revmap_tree;   //Radix Tree map使用到的radix tree root node
+	unsigned int linear_revmap[];        //线性映射使用的lookup table
 };
 
 /* Irq domain flags */

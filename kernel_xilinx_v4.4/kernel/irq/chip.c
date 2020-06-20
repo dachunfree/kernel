@@ -40,10 +40,11 @@ struct irqaction chained_action = {
  *	@irq:	irq number
  *	@chip:	pointer to irq chip description structure
  */
+ //这个接口函数用来设定中断描述符中desc->irq_data.chip成
 int irq_set_chip(unsigned int irq, struct irq_chip *chip)
 {
 	unsigned long flags;
-	struct irq_desc *desc = irq_get_desc_lock(irq, &flags, 0);
+	struct irq_desc *desc = irq_get_desc_lock(irq, &flags, 0);//获取irq number对应的中断描述符。这里用关闭中断＋spin lock来保护中断描述符，flag中就是保存的关闭中断之前的状态flag，
 
 	if (!desc)
 		return -EINVAL;

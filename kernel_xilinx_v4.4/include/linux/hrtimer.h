@@ -150,8 +150,8 @@ struct hrtimer_clock_base {
 	int			index;
 	clockid_t		clockid;
 	struct timerqueue_head	active;      //红黑树，包含了所有使用该时间基准系统的hrtime
-	ktime_t			(*get_time)(void);
-	ktime_t			offset;
+	ktime_t			(*get_time)(void);  //读取细粒度时间
+	ktime_t			offset;            //
 } __attribute__((__aligned__(HRTIMER_CLOCK_BASE_ALIGN)));
 
 enum  hrtimer_base_type {
@@ -200,11 +200,11 @@ struct hrtimer_cpu_base {
 	bool				nohz_active;
 #ifdef CONFIG_HIGH_RES_TIMERS
 	unsigned int			in_hrtirq	: 1,
-					hres_active	: 1,
+					hres_active	: 1,           //bool 变量。表示高精度定时器是否开启
 					hang_detected	: 1;
-	ktime_t				expires_next;
+	ktime_t				expires_next;           //将要到期的下一个时间的绝对时间
 	struct hrtimer			*next_timer;
-	unsigned int			nr_events;
+	unsigned int			nr_events;			//用于记录时钟中断的总数
 	unsigned int			nr_retries;
 	unsigned int			nr_hangs;
 	unsigned int			max_hang_time;

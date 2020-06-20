@@ -311,7 +311,7 @@ static int really_probe(struct device *dev, struct device_driver *drv)
 	 * should always go first
 	 */
 	devices_kset_move_last(dev);
-
+	//调用i2c总线 i2c_bus_type 的probe函数
 	if (dev->bus->probe) {
 		ret = dev->bus->probe(dev);
 		if (ret)
@@ -658,6 +658,8 @@ static int __driver_attach(struct device *dev, void *data)
  */
 int driver_attach(struct device_driver *drv)
 {
+	//对i2c总线上的每一个i2c设备i2c_client都会调用__driver_attach，
+	//这里的dev即i2c_client，drv即i2c_driver
 	return bus_for_each_dev(drv->bus, NULL, drv, __driver_attach);
 }
 EXPORT_SYMBOL_GPL(driver_attach);

@@ -13,7 +13,7 @@
     GNU General Public License for more details.			     */
 /* ------------------------------------------------------------------------- */
 
-/* With some changes from Kyösti Mälkki <kmalkki@cc.hut.fi>.
+/* With some changes from Ky?sti M?lkki <kmalkki@cc.hut.fi>.
    All SMBus-related things are written by Frodo Looijaard <frodol@dds.nl>
    SMBus 2.0 support by Mark Studebaker <mdsxyz123@yahoo.com> and
    Jean Delvare <jdelvare@suse.de>
@@ -732,7 +732,7 @@ static int i2c_device_probe(struct device *dev)
 	status = dev_pm_domain_attach(&client->dev, true);
 	if (status == -EPROBE_DEFER)
 		goto err_clear_wakeup_irq;
-
+	//调用到i2c_driver的probe()函数
 	status = driver->probe(client, i2c_match_id(driver->id_table, client));
 	if (status)
 		goto err_detach_pm_domain;
