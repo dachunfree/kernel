@@ -69,8 +69,8 @@ union gic_base {
 };
 
 struct gic_chip_data {
-	union gic_base dist_base;
-	union gic_base cpu_base;
+	union gic_base dist_base; //GIC Distributor的基地址空间
+	union gic_base cpu_base; //GIC CPU interface的基地址空间 
 #ifdef CONFIG_CPU_PM
 	u32 saved_spi_enable[DIV_ROUND_UP(1020, 32)];
 	u32 saved_spi_active[DIV_ROUND_UP(1020, 32)];
@@ -81,7 +81,7 @@ struct gic_chip_data {
 	u32 __percpu *saved_ppi_conf;
 #endif
 	struct irq_domain *domain;
-	unsigned int gic_irqs;
+	unsigned int gic_irqs;  //GIC支持的IRQ的数目
 #ifdef CONFIG_GIC_NON_BANKED
 	void __iomem *(*get_base)(union gic_base *);
 #endif
@@ -476,9 +476,10 @@ static void __init gic_dist_init(struct gic_chip_data *gic)
 {
 	unsigned int i;
 	u32 cpumask;
-	unsigned int gic_irqs = gic->gic_irqs;
-	void __iomem *base = gic_data_dist_base(gic);
-
+	unsigned int gic_irqs = gic->gic_irqs; //获取该GIC支持的IRQ的数目
+	void __iomem *base = gic_data_dist_base(gic);  //获取该GIC对应的Distributor基地址
+	/*写入0表示Distributor不向CPU interface发送中断请求信号，也就disable了全部的中断请求（group 0和group 1），
+	CPU interace再也收不到中断请求信号了。*/
 	writel_relaxed(GICD_DISABLE, base + GIC_DIST_CTRL);
 
 	/*
@@ -1044,7 +1045,15 @@ static const struct irq_domain_ops gic_irq_domain_ops = {
 	.map = gic_irq_domain_map,
 	.unmap = gic_irq_domain_unmap,
 };
+/*
+对于GIC而言，其中断状态有四种：
 
+中断状态	描述
+Inactive	中断未触发状态，该中断即没有Pending也没有Active
+Pending	由于外设硬件产生了中断事件（或者软件触发）该中断事件已经通过硬件信号通知到GIC，等待GIC分配的那个CPU进行处理
+Active	CPU已经应答（acknowledge）了该interrupt请求，并且正在处理中
+Active and Pending	当一个中断源处于Active状态的时候，同一中断源又触发了中断，进入pending状态
+*/
 static void __init __gic_init_bases(unsigned int gic_nr, int irq_start,
 			   void __iomem *dist_base, void __iomem *cpu_base,
 			   u32 percpu_offset, struct fwnode_handle *handle)
@@ -1110,6 +1119,11 @@ static void __init __gic_init_bases(unsigned int gic_nr, int irq_start,
 		 * For primary GICs, skip over SGIs.
 		 * For secondary GICs, skip over PPIs, too.
 		 */
+		 /*gic_nr标识GIC number，等于0就是root GIC。hwirq的意思就是GIC上的HW interrupt ID，
+		 并不是GIC上的每个interrupt ID都有map到linux IRQ framework中的一个IRQ number，对于SGI，
+		 是属于软件中断，用于CPU之间通信，没有必要进行HW interrupt ID到IRQ number的mapping。
+		 变量hwirq_base表示该GIC上要进行map的base ID，hwirq_base = 16也就意味着忽略掉16个SGI。
+		 对于系统中其他的GIC，其PPI也没有必要mapping，因此hwirq_base = 32。*/
 		if (gic_nr == 0 && (irq_start & 31) > 0) {
 			hwirq_base = 16;
 			if (irq_start != -1)
@@ -1118,7 +1132,7 @@ static void __init __gic_init_bases(unsigned int gic_nr, int irq_start,
 			hwirq_base = 32;
 		}
 
-		gic_irqs -= hwirq_base; /* calculate # of irqs to allocate */
+		gic_irqs -= hwirq_base; /* calculate # of irqs to allocate */ //减去不需要map（不需要分配IRQ）的那些interrupt ID
 
 		irq_base = irq_alloc_descs(irq_start, 16, gic_irqs,
 					   numa_node_id());
@@ -1144,7 +1158,12 @@ static void __init __gic_init_bases(unsigned int gic_nr, int irq_start,
 		for (i = 0; i < NR_GIC_CPU_IF; i++)
 			gic_cpu_map[i] = 0xff;
 #ifdef CONFIG_SMP
-		set_smp_cross_call(gic_raise_softirq);
+/*set_smp_cross_call这个函数看名字也知道它的含义，就是设定一个多个CPU直接通信的callback函数。
+当一个CPU core上的软件控制行为需要传递到其他的CPU上的时候（例如在某一个CPU上运行的进程调用了系统调用进行reboot），
+就会调用这个callback函数*/
+		set_smp_cross_call(gic_raise_softirq);  //是触发了IPI中断
+/*在multi processor环境下，当processor状态发送变化的时候（例如online，offline），需要把这些事件通知到GIC。
+而GIC driver在收到来自CPU的事件后会对cpu interface进行相应的设定*/
 		register_cpu_notifier(&gic_cpu_notifier);
 #endif
 		set_handle_irq(gic_handle_irq);
@@ -1220,10 +1239,10 @@ gic_of_init(struct device_node *node, struct device_node *parent)
 	if (WARN_ON(!node))
 		return -ENODEV;
 
-	dist_base = of_iomap(node, 0);
+	dist_base = of_iomap(node, 0); //-映射GIC Distributor的寄存器地址空间
 	WARN(!dist_base, "unable to map gic dist registers\n");
 
-	cpu_base = of_iomap(node, 1);
+	cpu_base = of_iomap(node, 1); //映射GIC CPU interface的寄存器地址空间
 	WARN(!cpu_base, "unable to map gic cpu registers\n");
 
 	/*
@@ -1232,8 +1251,12 @@ gic_of_init(struct device_node *node, struct device_node *parent)
 	 */
 	if (gic_cnt == 0 && !gic_check_eoimode(node, &cpu_base))
 		static_key_slow_dec(&supports_deactivate);
-
-	if (of_property_read_u32(node, "cpu-offset", &percpu_offset))
+	/*要了解cpu-offset属性，首先要了解什么是banked register。所谓banked register就是
+	在一个地址上提供多个寄存器副本。比如说系统中有四个CPU，这些CPU访问某个寄存器的时候
+	地址是一样的，但是对于banked register，实际上，不同的CPU访问的是不同的寄存器，虽然
+	它们的地址是一样的。如果GIC没有banked register，那么需要提供根据CPU index给出一系列
+	地址偏移，而地址偏移=cpu-offset * cpu-nr*/
+	if (of_property_read_u32(node, "cpu-offset", &percpu_offset))  //处理cpu-offset属性
 		percpu_offset = 0;
 
 	__gic_init_bases(gic_cnt, -1, dist_base, cpu_base, percpu_offset,
@@ -1241,8 +1264,8 @@ gic_of_init(struct device_node *node, struct device_node *parent)
 	if (!gic_cnt)
 		gic_init_physaddr(node);
 
-	if (parent) {
-		irq = irq_of_parse_and_map(node, 0);
+	if (parent) {   //处理interrupt级联
+		irq = irq_of_parse_and_map(node, 0); //解析second GIC的interrupts属性，并进行mapping，返回IRQ number 
 		gic_cascade_irq(gic_cnt, irq);
 	}
 

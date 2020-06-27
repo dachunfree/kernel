@@ -230,11 +230,14 @@ struct hda_device_id {
 /*
  * Struct used for matching a device
  */
+ /*这个数据结构主要被用来进行Device node和driver模块进行匹配用的。
+ 从该数据结构的定义可以看出，在匹配过程中，device name、device type
+ 和DT compatible string都是考虑的因素*/
 struct of_device_id {
-	char	name[32];
-	char	type[32];
-	char	compatible[128];
-	const void *data;
+	char	name[32];   //要匹配的device node的名字
+	char	type[32];   //要匹配的device node的类型
+	char	compatible[128]; //匹配字符串（DT compatible string），用来匹配适合的device node
+	const void *data; //对于GIC，这里是初始化函数指针 
 };
 
 /* VIO */

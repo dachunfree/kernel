@@ -476,7 +476,7 @@ unsigned int irq_create_mapping(struct irq_domain *domain,
 	of_node = irq_domain_get_of_node(domain);
 
 	/* Check if mapping already exists */
-	virq = irq_find_mapping(domain, hwirq);
+	virq = irq_find_mapping(domain, hwirq); //创建HW interrupt ID和IRQ number的映射关系
 	if (virq) {
 		pr_debug("-> existing mapping on virq %d\n", virq);
 		return virq;
@@ -541,6 +541,9 @@ static int irq_domain_translate(struct irq_domain *d,
 				irq_hw_number_t *hwirq, unsigned int *type)
 {
 #ifdef CONFIG_IRQ_DOMAIN_HIERARCHY
+/*interrupts属性最好由interrupt controller（也就是irq domain）解释。
+如果xlate函数能够完成属性解析，那么将输出参数hwirq和type，分别表示HW 
+interrupt ID和interupt type（触发方式等）*/
 	if (d->ops->translate)
 		return d->ops->translate(d, fwspec, hwirq, type);
 #endif
@@ -609,7 +612,7 @@ unsigned int irq_create_fwspec_mapping(struct irq_fwspec *fwspec)
 	/* Set type if specified and different than the current one */
 	if (type != IRQ_TYPE_NONE &&
 	    type != irq_get_trigger_type(virq))
-		irq_set_irq_type(virq, type);
+		irq_set_irq_type(virq, type);  //设置trigger type
 	return virq;
 }
 EXPORT_SYMBOL_GPL(irq_create_fwspec_mapping);
