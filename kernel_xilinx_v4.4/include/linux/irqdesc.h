@@ -45,7 +45,7 @@ struct pt_regs;
  */
 struct irq_desc {
 	struct irq_common_data	irq_common_data;
-	struct irq_data		i1rq_data;
+	struct irq_data		irq_data;
 	unsigned int __percpu	*kstat_irqs;
 	irq_flow_handler_t	handle_irq;             //highlevel irq-events handler
 #ifdef CONFIG_IRQ_PREFLOW_FASTEOI

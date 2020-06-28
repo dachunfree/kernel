@@ -1601,6 +1601,13 @@ EXPORT_SYMBOL(free_irq);
  *	IRQF_TRIGGER_*		Specify active edge(s) or level
  *
  */
+ /*
+handler		threaded handler	描述
+NULL		NULL				函数出错，返回-EINVAL
+设定		设定				正常流程。中断处理被合理的分配到primary handler和threaded handler中。
+设定		NULL				中断处理都是在primary handler中完成
+NULL		设定				这种情况下，系统会帮忙设定一个default的primary handler：irq_default_primary_handler，协助唤醒threaded handler线程
+*/
 int request_threaded_irq(unsigned int irq, irq_handler_t handler,
 			 irq_handler_t thread_fn, unsigned long irqflags,
 			 const char *devname, void *dev_id)
@@ -1618,16 +1625,32 @@ int request_threaded_irq(unsigned int irq, irq_handler_t handler,
 	 * Also IRQF_COND_SUSPEND only makes sense for shared interrupts and
 	 * it cannot be set along with IRQF_NO_SUSPEND.
 	 */
+	 /*对于那些需要共享的中断，在request irq的时候需要给出dev id，否则会出错退出。
+	 在共享的情况下，一个IRQ number对应若干个irqaction，当操作irqaction的时候，
+	 仅仅给出IRQ number就不是非常的足够了，这时候，需要一个ID表示具体的irqaction，
+	 这里就是dev_id的作用了(free_irq(unsigned int irq, void *dev_id))*/
+	 /*为了让系统的performance不受影响，irqaction的callback函数必须在函数的最开始进行判断，
+	 是否是自己的硬件设备产生了中断（读取硬件的寄存器），如果不是，尽快的退出。需要注意的是，
+	 这里dev_id并不能在中断触发的时候用来标识需要调用哪一个irqaction的callback函数，通过上面的
+	 代码也可以看出，dev_id有些类似一个参数传递的过程，可以把具体driver的一些硬件信息，组合成
+	 一个structure，在触发中断的时候可以把这个structure传递给中断处理函数。*/
 	if (((irqflags & IRQF_SHARED) && !dev_id) ||
 	    (!(irqflags & IRQF_SHARED) && (irqflags & IRQF_COND_SUSPEND)) ||
 	    ((irqflags & IRQF_NO_SUSPEND) && (irqflags & IRQF_COND_SUSPEND)))
 		return -EINVAL;
-
+	/*通过IRQ number获取对应的中断描述符。在引入CONFIG_SPARSE_IRQ选项后，这个转换变得不是那么简单了。
+	在过去，我们会以IRQ number为index，从irq_desc这个全局数组中直接获取中断描述符。如果配置CONFIG_SPARSE_IRQ选项，
+	则需要从radix tree中搜索*/
 	desc = irq_to_desc(irq);
 	if (!desc)
 		return -EINVAL;
-
+	/*并非系统中所有的IRQ number都可以request，有些中断描述符被标记为IRQ_NOREQUEST，标识该IRQ number不能
+	被其他的驱动request。一般而言，这些IRQ number有特殊的作用，例如用于级联的那个IRQ number是不能request。
+	irq_settings_can_request函数就是判断一个IRQ是否可以被request*/
 	if (!irq_settings_can_request(desc) ||
+		/*如果一个中断描述符对应的中断 ID是per cpu的，那么在申请其handler的时候就有两种情况，一种是传递统一
+		的dev_id参数（传入request_threaded_irq的最后一个参数），另外一种情况是针对每个CPU，传递不同的dev_id
+		参数。在这种情况下，我们需要调用request_percpu_irq接口函数而不是request_threaded_irq。*/
 	    WARN_ON(irq_settings_is_per_cpu_devid(desc)))
 		return -EINVAL;
 
@@ -1648,6 +1671,8 @@ int request_threaded_irq(unsigned int irq, irq_handler_t handler,
 	action->dev_id = dev_id;
 
 	chip_bus_lock(desc);
+	//分配struct irqaction，赋值，调用__setup_irq进行实际的注册过程
+	//基本函数名字是一样的，只不过需要调用者自己加锁保护的那个函数需要增加__的前缀
 	retval = __setup_irq(irq, desc, action);
 	chip_bus_sync_unlock(desc);
 

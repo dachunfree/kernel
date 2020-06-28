@@ -39,7 +39,7 @@
  * Interrupt handling.
  */
 	.macro	irq_handler
-#ifdef CONFIG_MULTI_IRQ_HANDLER
+#ifdef CONFIG_MULTI_IRQ_HANDLER    //系统中有多个irq handler
 	ldr	r1, =handle_arch_irq
 	mov	r0, sp
 	badr	lr, 9997f

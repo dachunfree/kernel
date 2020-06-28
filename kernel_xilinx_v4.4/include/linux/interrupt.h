@@ -62,16 +62,42 @@
  *                wakeup devices users need to implement wakeup detection in
  *                their interrupt handlers.
  */
+ /*在新的内核中，该flag没有任何的作用了.新的内核已经不区分slow handler和fast handle，都是fast handler，都是需要关闭CPU中断的，*/
 #define IRQF_DISABLED 0x00000020
+/*
+这是flag用来描述一个interrupt line是否允许在多个设备中共享。如果中断控制器可以支持足够多的interrupt source，
+那么在两个外设间共享一个interrupt request line是不推荐的，毕竟有一些额外的开销（发生中断的时候要逐个询问是不
+是你的中断，软件上就是遍历action list），因此外设的irq handler中最好是一开始就启动判断，看看是否是自己的中断，
+如果不是，返回IRQ_NONE,表示这个中断不归我管*/
 #define IRQF_SHARED		0x00000080
+
 #define IRQF_PROBE_SHARED	0x00000100
 #define __IRQF_TIMER		0x00000200
+/*
+    在SMP的架构下，中断有两种mode，一种中断是在所有processor之间共享的，也就是global的，一旦中断产生，
+interrupt controller可以把这个中断送达多个处理器。当然，在具体实现的时候不会同时将中断送达多个CPU，
+一般是软件和硬件协同处理，将中断送达一个CPU处理。但是一段时间内产生的中断可以平均（或者按照既定的策略）
+分配到一组CPU上。这种interrupt mode下，interrupt controller针对该中断的operational register是global的，
+所有的CPU看到的都是一套寄存器，一旦一个CPU ack了该中断，那么其他的CPU看到的该interupt source的状态也是已经ack的状态。
+   和global对应的就是per cpu interrupt了，对于这种interrupt，不是processor之间共享的，而是特定属于一个CPU的。
+例如GIC中interrupt ID等于30的中断就是per cpu的（这个中断event被用于各个CPU的local timer），这个中断号虽然只有一个，但是，
+实际上控制该interrupt ID的寄存器有n组（如果系统中有n个processor），每个CPU看到的是不同的控制寄存器。在具体实现中，
+这些寄存器组有两种形态，一种是banked，所有CPU操作同样的寄存器地址，硬件系统会根据访问的cpu定向到不同的寄存器，
+另外一种是non banked，也就是说，对于该interrupt source，每个cpu都有自己独特的访问地址。*/
 #define IRQF_PERCPU		0x00000400
+/*
+这也是和multi-processor相关的一个flag。对于那些可以在多个CPU之间共享的中断，具体送达哪一个processor是有策略的，
+我们可以在多个CPU之间进行平衡。如果你不想让你的中断参与到irq balancing的过程中那么就设定这个flag
+*/
 #define IRQF_NOBALANCING	0x00000800
 #define IRQF_IRQPOLL		0x00001000
 #define IRQF_ONESHOT		0x00002000
+/*就是说在系统suspend的时候，不用disable这个中断，如果disable，可能会导致系统不能正常的resume。*/
 #define IRQF_NO_SUSPEND		0x00004000
 #define IRQF_FORCE_RESUME	0x00008000
+/*有些low level的interrupt是不能线程化的（例如系统timer的中断），这个flag就是起这个作用的。另外，
+有些级联的interrupt controller对应的IRQ也是不能线程化的（例如secondary GIC对应的IRQ），它的线程化可
+能会影响一大批附属于该interrupt controller的外设的中断响应延迟。*/
 #define IRQF_NO_THREAD		0x00010000
 #define IRQF_EARLY_RESUME	0x00020000
 #define IRQF_COND_SUSPEND	0x00040000

@@ -21,7 +21,7 @@
     MA 02110-1301 USA.							     */
 /* ------------------------------------------------------------------------- */
 
-/* With some changes from Kyösti Mälkki <kmalkki@cc.hut.fi> and
+/* With some changes from Ky?sti M?lkki <kmalkki@cc.hut.fi> and
    Frodo Looijaard <frodol@dds.nl> */
 #ifndef _LINUX_I2C_H
 #define _LINUX_I2C_H
@@ -217,12 +217,13 @@ struct i2c_driver {
  * i2c bus. The behaviour exposed to Linux is defined by the driver
  * managing the device.
  */
+ //用来描述一个i2c次设备
 struct i2c_client {
-	unsigned short flags;		/* div., see below		*/
+	unsigned short flags;	//描述i2c次设备特性的标志位 I2C_CLIENT_TEN
 	unsigned short addr;		/* chip address - NOTE: 7bit	*/
 					/* addresses are stored in the	*/
 					/* _LOWER_ 7 bits		*/
-	char name[I2C_NAME_SIZE];
+	char name[I2C_NAME_SIZE];             //i2c次设备的名字
 	struct i2c_adapter *adapter;	/* the adapter we sit on	*/
 	struct device dev;		/* the device structure		*/
 	int irq;			/* irq issued by device		*/

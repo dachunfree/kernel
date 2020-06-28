@@ -389,7 +389,7 @@ static int sht31_probe(struct i2c_client *client,
 	unsigned int chip_id;
 	const struct of_device_id *match;
 
-	if (!i2c_check_functionality(client->adapter,
+	if (!i2c_check_functionality(client->adapter,  //用来判定设配器的能力.是否支持word读
 				     I2C_FUNC_SMBUS_WORD_DATA)) {
 		dev_err(&client->dev,
 			"adapter does not support SMBus word transactions\n");

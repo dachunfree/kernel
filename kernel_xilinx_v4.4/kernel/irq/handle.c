@@ -186,13 +186,13 @@ irqreturn_t handle_irq_event(struct irq_desc *desc)
 {
 	irqreturn_t ret;
 
-	desc->istate &= ~IRQS_PENDING;
-	irqd_set(&desc->irq_data, IRQD_IRQ_INPROGRESS);
+	desc->istate &= ~IRQS_PENDING;  //CPU已经准备处理该中断了，因此，清除pending状态
+	irqd_set(&desc->irq_data, IRQD_IRQ_INPROGRESS); //设定INPROGRESS的flag
 	raw_spin_unlock(&desc->lock);
 
-	ret = handle_irq_event_percpu(desc);
+	ret = handle_irq_event_percpu(desc); //遍历action list，调用specific handler
 
 	raw_spin_lock(&desc->lock);
-	irqd_clear(&desc->irq_data, IRQD_IRQ_INPROGRESS);
+	irqd_clear(&desc->irq_data, IRQD_IRQ_INPROGRESS);//处理完成，清除INPROGRESS标记
 	return ret;
 }

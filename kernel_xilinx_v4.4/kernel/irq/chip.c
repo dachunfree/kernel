@@ -579,7 +579,7 @@ EXPORT_SYMBOL_GPL(handle_fasteoi_irq);
  */
 void handle_edge_irq(struct irq_desc *desc)
 {
-	raw_spin_lock(&desc->lock);
+	raw_spin_lock(&desc->lock);  //中断仍然是关闭的，因此不会有来自本CPU的并发.防止其他CPU上对该IRQ的中断描述符的访问
 
 	desc->istate &= ~(IRQS_REPLAY | IRQS_WAITING);
 
@@ -600,7 +600,7 @@ void handle_edge_irq(struct irq_desc *desc)
 	}
 
 	kstat_incr_irqs_this_cpu(desc);
-
+	/*对于中断控制器，一旦被ack，表示该外设的中断被enable，硬件上已经准备好触发下一次中断了。再次触发的中断会被调度到其他的CPU上*/
 	/* Start handling the irq */
 	desc->irq_data.chip->irq_ack(&desc->irq_data);
 
@@ -615,17 +615,22 @@ void handle_edge_irq(struct irq_desc *desc)
 		 * one, we could have masked the irq.
 		 * Renable it, if it was not disabled in meantime.
 		 */
+		 /*如果中断描述符处于pending状态，那么一定是其他CPU上又触发了该interrupt source的中断，
+		 并设定了pending状态，“委托”本CPU进行处理，这时候，需要把之前mask住的中断进行unmask的操作。
+		 一旦unmask了该interrupt source，后续的中断可以继续触发，由其他的CPU处理（仍然是设定中断描述符的
+		 pending状态，委托当前正在处理该中断请求的那个CPU进行处理）。*/
 		if (unlikely(desc->istate & IRQS_PENDING)) {
 			if (!irqd_irq_disabled(&desc->irq_data) &&
 			    irqd_irq_masked(&desc->irq_data))
 				unmask_irq(desc);
 		}
 
-		handle_irq_event(desc);
+		handle_irq_event(desc); //
 
 	} while ((desc->istate & IRQS_PENDING) &&
 		 !irqd_irq_disabled(&desc->irq_data));
-
+	/*只要有pending标记，就说明该中断还在pending状态，需要继续处理。当然，如果有其他的CPU disable了
+	该interrupt source，那么本次中断结束处理*/
 out_unlock:
 	raw_spin_unlock(&desc->lock);
 }
