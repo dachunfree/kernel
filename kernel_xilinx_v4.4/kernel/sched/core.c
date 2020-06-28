@@ -1292,7 +1292,7 @@ void set_task_cpu(struct task_struct *p, unsigned int new_cpu)
 
 	trace_sched_migrate_task(p, new_cpu);
 
-	if (task_cpu(p) != new_cpu) {
+	if (task_cpu(p) != new_cpu) { //cpu迁移
 		if (p->sched_class->migrate_task_rq)
 			p->sched_class->migrate_task_rq(p);
 		p->se.nr_migrations++;
@@ -2201,7 +2201,7 @@ int sched_fork(unsigned long clone_flags, struct task_struct *p)
 	/*
 	 * Make sure we do not leak PI boosting priority to the child.
 	 */
-	p->prio = current->normal_prio; //优先级继承，防止优先级反转
+	p->prio = current->normal_prio; //当前进程可能占有实时互斥锁而被提高了优先级
 
 	/*
 	 * Revert to default priority/policy on fork if requested.
@@ -2385,6 +2385,7 @@ void wake_up_new_task(struct task_struct *p)
 	 *  - cpus_allowed can change in the fork path
 	 *  - any previously selected cpu might disappear through hotplug
 	 */
+	 //负载均衡
 	set_task_cpu(p, select_task_rq(p, task_cpu(p), SD_BALANCE_FORK, 0));
 #endif
 

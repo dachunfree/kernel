@@ -1032,20 +1032,27 @@ __kuser_helper_end:
  * SP points to a minimal amount of processor-private memory, the address
  * of which is copied into r0 for the mode specific abort handler.
  */
+ //vector_stub	irq, IRQ_MODE, 4 为例。
+	
 	.macro	vector_stub, name, mode, correction=0
 	.align	5
 
 vector_\name:
 	.if \correction
-	sub	lr, lr, #\correction
+	sub	lr, lr, #\correction //lr中保存了发生中断的PC＋4，如果减去4的话，得到的就是发生中断那一点的PC值。
 	.endif
 
 	@
 	@ Save r0, lr_<exception> (parent PC) and spsr_<exception>
 	@ (parent CPSR)
 	@
+<<<<<<< HEAD
+	//SP_irq在初始化的时候已经设定（12个字节,cpu_init ）。
+	//在irq mode的stack上，依次保存了发生中断那一点的r0值、PC值以及CPSR值
+=======
 	//SP_irq在初始化的时候已经设定（12个字节,cpu_init）。
 	//在irq mode的stack上，依次保存了发生中断那一点的r0值、PC值(当前lr_irq)以及CPSR值
+>>>>>>> 7c4924e0a4e80ad573a32e750de1985d0722cb68
 	//（具体操作是通过spsr进行的，其实硬件已经帮我们保存了CPSR到SPSR中了）。
 	//为何要保存r0值？因为随后的代码要使用r0寄存器，因此我们要把r0放到栈上，
 	//只有这样才能完完全全恢复硬件现场。
@@ -1056,13 +1063,13 @@ vector_\name:
 	 * 4. 跳到0x18的地方执行程序
 	 */
 	stmia	sp, {r0, lr}		@ save r0, lr  //r0和lr_irq到sp_irq中
-	mrs	lr, spsr
+	mrs	lr, spsr				@ 读spsr到lr中
 	str	lr, [sp, #8]		@ save spsr  //保存cpsr_被中断mode到sp_irq中
 
 	@
 	@ Prepare for SVC32 mode.  IRQs remain disabled.
 	@
-	mrs	r0, cpsr	//实际是spsr_irq.这里只是准备工作、
+	mrs	r0, cpsr	//实际是spsr_irq.这里只是准备工作、不会引起processor mode的切换
 	eor	r0, r0, #(\mode ^ SVC_MODE | PSR_ISETSTATE)
 	msr	spsr_cxsf, r0
 
@@ -1070,11 +1077,11 @@ vector_\name:
 	@ the branch table must immediately follow this code
 	@
 	and	lr, lr, #0x0f    //lr保存了发生IRQ时候的CPSR，通过and操作，可以获取CPSR.M[3:0]的值
- THUMB(	adr	r0, 1f			)
+ THUMB(	adr	r0, 1f			)  //根据当前PC值，获取lable 1的地址
  THUMB(	ldr	lr, [r0, lr, lsl #2]	)
 	mov	r0, sp                     		//将irq mode的stack point通过r0传递给即将跳转的函数
  ARM(	ldr	lr, [pc, lr, lsl #2]	)   //根据mode，给lr赋值，__irq_usr或者__irq_svc.下面table查表跳转用
-	movs	pc, lr			@ branch to handler in SVC mode.//把spsr拷贝到cpsr切换
+	movs	pc, lr			@ branch to handler in SVC mode.//指令除了字面上意思（把lr的值付给pc），还有一个隐含的操作（movs中‘s’的含义）：把SPSR copy到CPSR，从而实现了模式的切换
 ENDPROC(vector_\name)
 
 	.align	2
