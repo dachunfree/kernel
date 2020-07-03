@@ -40,7 +40,7 @@
  */
 	.macro	irq_handler
 #ifdef CONFIG_MULTI_IRQ_HANDLER    //系统中有多个irq handler
-	ldr	r1, =handle_arch_irq
+	ldr	r1, =handle_arch_irq       //通过gic中断控制器注册函数进行注册。set_handle_irq(gic_handle_irq);
 	mov	r0, sp
 	badr	lr, 9997f
 	ldr	pc, [r1]
@@ -1033,7 +1033,7 @@ __kuser_helper_end:
  * of which is copied into r0 for the mode specific abort handler.
  */
  //vector_stub	irq, IRQ_MODE, 4 为例。
-	
+
 	.macro	vector_stub, name, mode, correction=0
 	.align	5
 

@@ -494,6 +494,7 @@ void __init of_irq_init(const struct of_device_id *matches)
 	INIT_LIST_HEAD(&intc_parent_list);
 
 	for_each_matching_node(np, matches) {
+		//如果节点没有interrupt-controller属性，说明不是中断控制器，忽略
 		if (!of_find_property(np, "interrupt-controller", NULL) ||
 				!of_device_is_available(np))
 			continue;
@@ -511,6 +512,7 @@ void __init of_irq_init(const struct of_device_id *matches)
 		desc->interrupt_parent = of_irq_find_parent(np);
 		if (desc->interrupt_parent == np)
 			desc->interrupt_parent = NULL;
+		//中断控制器加入到 intc_desc_list 链表中。
 		list_add_tail(&desc->list, &intc_desc_list);
 	}
 
@@ -519,6 +521,7 @@ void __init of_irq_init(const struct of_device_id *matches)
 	 * That one goes first, followed by the controllers that reference it,
 	 * followed by the ones that reference the 2nd level controllers, etc.
 	 */
+	 /*遍历intc_desc_list，从根设备开始，先执行父设备的初始化函数*/
 	while (!list_empty(&intc_desc_list)) {
 		/*
 		 * Process all controllers with the current 'parent'.

@@ -542,7 +542,7 @@ static int irq_domain_translate(struct irq_domain *d,
 {
 #ifdef CONFIG_IRQ_DOMAIN_HIERARCHY
 /*interrupts属性最好由interrupt controller（也就是irq domain）解释。
-如果xlate函数能够完成属性解析，那么将输出参数hwirq和type，分别表示HW 
+如果xlate函数能够完成属性解析，那么将输出参数hwirq和type，分别表示HW
 interrupt ID和interupt type（触发方式等）*/
 	if (d->ops->translate)
 		return d->ops->translate(d, fwspec, hwirq, type);
@@ -1364,6 +1364,7 @@ void irq_domain_set_info(struct irq_domain *domain, unsigned int virq,
 			 void *handler_data, const char *handler_name)
 {
 	irq_set_chip_and_handler_name(virq, chip, handler, handler_name);
+	//设定irq chip的私有数据
 	irq_set_chip_data(virq, chip_data);
 	irq_set_handler_data(virq, handler_data);
 }
