@@ -1441,7 +1441,7 @@ void update_process_times(int user_tick)
 	/* Note: this timer irq context must be accounted for as well. */
 	 /* 更新当前进程占用CPU的时间 */
 	account_process_tick(p, user_tick);
-	/* 同时触发软中断，处理所有到期的定时器 */
+	/* 同时触发软中断，处理所有到期的定时器。利用高精度定时器处理下一个tick */
 	run_local_timers();
 	rcu_check_callbacks(user_tick);
 #ifdef CONFIG_IRQ_WORK
@@ -1469,8 +1469,8 @@ static void run_timer_softirq(struct softirq_action *h)
  */
 void run_local_timers(void)
 {
-	hrtimer_run_queues(); //检测one-shotmode 还是 period mode
-	raise_softirq(TIMER_SOFTIRQ);
+	hrtimer_run_queues(); //检测one-shotmode 还是 period mode。开始global timer初始化是低精度的。里面如果开了高精度，转换成高精度定时器。
+	raise_softirq(TIMER_SOFTIRQ);  //时间轮处理普通定时器时间。
 }
 
 #ifdef __ARCH_WANT_SYS_ALARM

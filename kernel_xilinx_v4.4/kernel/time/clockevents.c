@@ -343,7 +343,7 @@ int clockevents_program_event(struct clock_event_device *dev, ktime_t expires,
 	delta = max(delta, (int64_t) dev->min_delta_ns);
 
 	clc = ((unsigned long long) delta * dev->mult) >> dev->shift;
-	rc = dev->set_next_event((unsigned long) clc, dev);//调用底层driver callback函数进行设定
+	rc = dev->set_next_event((unsigned long) clc, dev);//调用底层driver callback函数进行设定下一次触发时间
 
 	return (rc && force) ? clockevents_program_min_delta(dev) : rc;
 }

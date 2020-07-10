@@ -66,11 +66,11 @@ static u64 notrace _gt_counter_read(void)
 	u32 lower;
 	u32 upper, old_upper;
 
-	upper = readl_relaxed(gt_base + GT_COUNTER1);
+	upper = readl_relaxed(gt_base + GT_COUNTER1); //read upper 32bit
 	do {
 		old_upper = upper;
-		lower = readl_relaxed(gt_base + GT_COUNTER0);
-		upper = readl_relaxed(gt_base + GT_COUNTER1);
+		lower = readl_relaxed(gt_base + GT_COUNTER0);  //read lower 32bit
+		upper = readl_relaxed(gt_base + GT_COUNTER1);  //read upper 32bit
 	} while (upper != old_upper);
 
 	counter = upper;
@@ -94,9 +94,10 @@ static u64 gt_counter_read(void)
  */
 static void gt_compare_set(unsigned long delta, int periodic)
 {
+	//读出当前counter的计数器。
 	u64 counter = gt_counter_read();
 	unsigned long ctrl;
-
+	//counter的计数器+delta(目标时间后)，写入到cmp寄存器。
 	counter += delta;
 	ctrl = GT_CONTROL_TIMER_ENABLE;
 	writel(ctrl, gt_base + GT_CONTROL);
@@ -104,6 +105,7 @@ static void gt_compare_set(unsigned long delta, int periodic)
 	writel(upper_32_bits(counter), gt_base + GT_COMP1);
 
 	if (periodic) {
+		//将delta写入到autoload寄存器，每次都会自动load当前delta值
 		writel(delta, gt_base + GT_AUTO_INC);
 		ctrl |= GT_CONTROL_AUTO_INC;
 	}
@@ -156,10 +158,10 @@ static irqreturn_t gt_clockevent_interrupt(int irq, void *dev_id)
 	 *	the Comparator register	value to a higher value.
 	 */
 	if (clockevent_state_oneshot(evt))
-		gt_compare_set(ULONG_MAX, 0);
+		gt_compare_set(ULONG_MAX, 0); //0xffffffff。oneshot mode
 
 	writel_relaxed(GT_INT_STATUS_EVENT_FLAG, gt_base + GT_INT_STATUS);
-	evt->event_handler(evt);   //tick_periodic
+	evt->event_handler(evt);   //tick_handle_periodic
 
 	return IRQ_HANDLED;
 }
@@ -282,7 +284,7 @@ static void __init global_timer_of_register(struct device_node *np)
 	}
 
 	gt_clk_rate = clk_get_rate(gt_clk);
-	gt_evt = alloc_percpu(struct clock_event_device);
+	gt_evt = alloc_percpu(struct clock_event_device); //ppi 靠clock_event_device区分处理函数的呀，一个中断。
 	if (!gt_evt) {
 		pr_warn("global-timer: can't allocate memory\n");
 		err = -ENOMEM;
@@ -305,7 +307,7 @@ static void __init global_timer_of_register(struct device_node *np)
 
 	/* Immediately configure the timer on the boot CPU */
 	gt_clocksource_init(); //时钟源初始化
-	gt_clockevents_init(this_cpu_ptr(gt_evt)); //设置时钟事件设备相关操作函数，oneshot，period。。。
+	gt_clockevents_init(this_cpu_ptr(gt_evt)); //per-cpu。设置时钟事件设备相关操作函数，oneshot，period。。。
 
 	return;
 
