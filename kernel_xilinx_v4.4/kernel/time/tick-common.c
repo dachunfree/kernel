@@ -86,7 +86,7 @@ int tick_is_oneshot_available(void)
  都会调用tick_handle_periodic函数进行周期性tick中要处理的task，具体如下：*/
 static void tick_periodic(int cpu)
 {
-	if (tick_do_timer_cpu == cpu) { //选择一个特定的cpu来执行。
+	if (tick_do_timer_cpu == cpu) { //选择一个全局时钟负责运行
 		write_seqlock(&jiffies_lock);
 
 		/* Keep track of the next tick event */
@@ -129,7 +129,7 @@ void tick_handle_periodic(struct clock_event_device *dev)
 		 * periodic mode:
 		 */
 		next = ktime_add(next, tick_period);
-
+		//next设置下一次触发时间 tick_period
 		if (!clockevents_program_event(dev, next, false))
 			return;
 		/*
@@ -149,18 +149,20 @@ void tick_handle_periodic(struct clock_event_device *dev)
 /*
  * Setup the device for a periodic tick
  */
+ //period中断处理函数。per-cpu的 clock_event_device
 void tick_setup_periodic(struct clock_event_device *dev, int broadcast)
 {
-	tick_set_periodic_handler(dev, broadcast);
+	tick_set_periodic_handler(dev, broadcast); //设置dev->event_handler，即时钟中断处理函数
 
 	/* Broadcast setup ? */
 	if (!tick_device_is_functional(dev))
 		return;
-
+	//判断时钟是否支持周期性时间，如果支持:
 	if ((dev->features & CLOCK_EVT_FEAT_PERIODIC) &&
 	    !tick_broadcast_oneshot_active()) {
-		clockevents_switch_state(dev, CLOCK_EVT_STATE_PERIODIC);
+		clockevents_switch_state(dev, CLOCK_EVT_STATE_PERIODIC); //设置状态机
 	} else {
+	//如果不支持需要设置下一次触发时间(one-shot 模仿period模式)
 		unsigned long seq;
 		ktime_t next;
 
@@ -169,12 +171,12 @@ void tick_setup_periodic(struct clock_event_device *dev, int broadcast)
 			next = tick_next_period;
 		} while (read_seqretry(&jiffies_lock, seq));
 
-		clockevents_switch_state(dev, CLOCK_EVT_STATE_ONESHOT);
+		clockevents_switch_state(dev, CLOCK_EVT_STATE_ONESHOT);//将时钟事件设置为one-shot mode。
 
 		for (;;) {
 			if (!clockevents_program_event(dev, next, false))
 				return;
-			next = ktime_add(next, tick_period);
+			next = ktime_add(next, tick_period);//tick_period 就是制定的时间长度。算出来的HZ转换成ns
 		}
 	}
 }
@@ -203,7 +205,7 @@ static void tick_setup_device(struct tick_device *td,
 			else
 				tick_do_timer_cpu = TICK_DO_TIMER_NONE;
 			tick_next_period = ktime_get();
-			tick_period = ktime_set(0, NSEC_PER_SEC / HZ);
+			tick_period = ktime_set(0, NSEC_PER_SEC / HZ);   //设置触发周期 period模式的
 		}
 
 		/*
@@ -223,7 +225,7 @@ static void tick_setup_device(struct tick_device *td,
 	 * current cpu:
 	 */
 	if (!cpumask_equal(newdev->cpumask, cpumask))
-		irq_set_affinity(newdev->irq, cpumask);
+		irq_set_affinity(newdev->irq, cpumask); //适合spi的ttc，绑定到当前cpu
 
 	/*
 	 * When global broadcasting is active, check if the current
@@ -236,9 +238,9 @@ static void tick_setup_device(struct tick_device *td,
 		return;
 
 	if (td->mode == TICKDEV_MODE_PERIODIC)
-		tick_setup_periodic(newdev, 0);
+		tick_setup_periodic(newdev, 0);  //设置时钟中断处理函数为低分辨率时钟。
 	else
-		tick_setup_oneshot(newdev, handler, next_event);
+		tick_setup_oneshot(newdev, handler, next_event); //
 }
 
 void tick_install_replacement(struct clock_event_device *newdev)

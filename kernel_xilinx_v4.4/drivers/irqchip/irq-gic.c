@@ -968,7 +968,7 @@ static int gic_irq_domain_map(struct irq_domain *d, unsigned int irq,
 		irq_set_percpu_devid(irq);
 		//设定该中断描述符的irq chip和high level的handle
 		irq_domain_set_info(d, irq, hw, chip, d->host_data,
-				    handle_percpu_devid_irq, NULL, NULL);
+				    handle_percpu_devid_irq, NULL, NULL);  //handle_percpu_devid_irq  ->>>>>>>irq_desc->irq_flow_handler_t
 		//设定irq flag是有效的（因为已经设定好了chip和handler了），并且request后不是auto enable的
 		irq_set_status_flags(irq, IRQ_NOAUTOEN);
 	} else {

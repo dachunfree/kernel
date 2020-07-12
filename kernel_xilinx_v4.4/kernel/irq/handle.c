@@ -149,7 +149,7 @@ irqreturn_t handle_irq_event_percpu(struct irq_desc *desc)
 			      irq, action->handler))
 			local_irq_disable();
 
-		switch (res) {
+		switch (res) {   //中断线程化。
 		case IRQ_WAKE_THREAD:
 			/*
 			 * Catch drivers which return WAKE_THREAD but

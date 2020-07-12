@@ -109,7 +109,7 @@ struct clock_event_device {
 	u64			min_delta_ns;
 	u32			mult;              //时钟周期数和ns之间的转换
 	u32			shift;
-	enum clock_event_state	state_use_accessors;
+	enum clock_event_state	state_use_accessors;  //event下的几种模式
 	unsigned int		features;
 	unsigned long		retries;
 

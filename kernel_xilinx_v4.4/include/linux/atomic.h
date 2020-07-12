@@ -52,6 +52,7 @@
 ({									\
 	typeof(op##_relaxed(args)) __ret;				\
 	smp_mb__before_atomic();					\
+	//atomic_add_return_relaxed
 	__ret = op##_relaxed(args);					\
 	smp_mb__after_atomic();						\
 	__ret;								\

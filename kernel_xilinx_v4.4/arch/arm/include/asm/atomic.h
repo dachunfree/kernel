@@ -56,6 +56,20 @@ static inline void atomic_##op(int i, atomic_t *v)			\
 	: "cc");							\
 }									\
 
+/*
+LDREX  <Rt>, [<Rn>]
+<Rn>是base register，保存memory的address，LDREX指令从base register中获取memory address，
+并且将memory的内容加载到<Rt>(destination register)中。这些操作和ldr的操作是一样的，那么如何
+体现exclusive呢？其实，在执行这条指令的时候，还放出两条“狗”来负责观察特定地址的访问（就是保存在[<Rn>]中的地址了），
+这两条狗一条叫做local monitor，一条叫做global monitor。
+
+STREX <Rd>, <Rt>, [<Rn>]
+和LDREX指令类似，<Rn>是base register，保存memory的address，STREX指令从base register中获取memory address，
+并且将<Rt> (source register)中的内容加载到该memory中。这里的<Rd>保存了memeory 更新成功或者失败的结果，0表示memory更新成功，
+1表示失败。STREX指令是否能成功执行是和local monitor和global monitor的状态相关的。对于Non-shareable memory
+（该memory不是多个CPU之间共享的，只会被一个CPU访问），只需要放出该CPU的local monitor这条狗就OK了
+*/
+
 #define ATOMIC_OP_RETURN(op, c_op, asm_op)				\
 static inline int atomic_##op##_return_relaxed(int i, atomic_t *v)	\
 {									\
@@ -68,7 +82,7 @@ static inline int atomic_##op##_return_relaxed(int i, atomic_t *v)	\
 "1:	ldrex	%0, [%3]\n"						\
 "	" #asm_op "	%0, %0, %4\n"					\
 "	strex	%1, %0, [%3]\n"						\
-"	teq	%1, #0\n"						\
+"	teq	%1, #0\n"	//判断是否读写成功。					\
 "	bne	1b"							\
 	: "=&r" (result), "=&r" (tmp), "+Qo" (v->counter)		\
 	: "r" (&v->counter), "Ir" (i)					\
