@@ -141,7 +141,7 @@ struct irqaction {
 	struct irqaction	*next;
 	irq_handler_t		thread_fn;
 	struct task_struct	*thread;
-	struct irqaction	*secondary;
+	struct irqaction	*secondary;   //强制线程化
 	unsigned int		irq;
 	unsigned int		flags;
 	unsigned long		thread_flags;

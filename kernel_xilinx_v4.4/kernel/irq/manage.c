@@ -1007,8 +1007,13 @@ EXPORT_SYMBOL_GPL(irq_wake_thread);
 
 static int irq_setup_forced_threading(struct irqaction *new)
 {
+	/*系统中有一个强制线程化的选项：CONFIG_IRQ_FORCED_THREADING，如果没有打开该选项，
+	 force_irqthreads总是0*/
 	if (!force_irqthreads)
 		return 0;
+	/*PER CPU的中断都是一些较为特殊的中断，不是一般意义上的外设中断，因此对PER CPU的中断不强
+	制进行线程化。IRQF_ONESHOT选项说明该中断已经被线程化了（而且是特殊的one shot类型的），因此也
+	是直接返回了*/
 	if (new->flags & (IRQF_NO_THREAD | IRQF_PERCPU | IRQF_ONESHOT))
 		return 0;
 
@@ -1019,6 +1024,12 @@ static int irq_setup_forced_threading(struct irqaction *new)
 	 * thread handler. We force thread them as well by creating a
 	 * secondary action.
 	 */
+	 /*强制线程化只对那些没有设定thread_fn的中断进行处理，这种中断将全部的处理放在了
+	 primary interrupt handler中（当然，如果中断处理比较耗时，那么也可能会采用bottom half的机制），
+	 由于primary interrupt handler是全程关闭CPU中断的，因此可能对系统的实时性造成影响，因此考虑将
+	 其强制线程化。struct irqaction中的thread_flags是和线程相关的flag，我们给它打上IRQTF_FORCED_THREAD的
+	 标签，表明该threaded handler是被强制threaded的。new->thread_fn = new->handler这段代码表示将原
+	 来primary handler中的内容全部放到threaded handler中处理，新的primary handler被设定为default handler*/
 	if (new->handler != irq_default_primary_handler && new->thread_fn) {
 		/* Allocate the secondary action */
 		new->secondary = kzalloc(sizeof(struct irqaction), GFP_KERNEL);
@@ -1061,7 +1072,8 @@ setup_irq_thread(struct irqaction *new, unsigned int irq, bool secondary)
 	struct sched_param param = {
 		.sched_priority = MAX_USER_RT_PRIO/2,
 	};
-
+	/*调用kthread_create来创建一个内核线程，并调用sched_setscheduler_nocheck来设定这个中断线程的
+	调度策略和调度优先级。*/
 	if (!secondary) {
 		t = kthread_create(irq_thread, new, "irq/%d-%s", irq,
 				   new->name);
@@ -1081,6 +1093,10 @@ setup_irq_thread(struct irqaction *new, unsigned int irq, bool secondary)
 	 * the thread dies to avoid that the interrupt code
 	 * references an already freed task_struct.
 	 */
+	 /*调用get_task_struct可以为这个threaded handler的task struct增加一次reference count，
+	 这样，即便是该thread异常退出也可以保证它的task struct不会被释放掉。这可以保证中断系统
+	 的代码不会访问到一些被释放的内存。irqaction的thread 成员被设定为刚刚创建的task，这样，
+	 primary handler就知道唤醒哪一个中断线程了*/
 	get_task_struct(t);
 	new->thread = t;
 	/*
@@ -1092,6 +1108,7 @@ setup_irq_thread(struct irqaction *new, unsigned int irq, bool secondary)
 	 * correct as we want the thread to move to the cpu(s)
 	 * on which the requesting code placed the interrupt.
 	 */
+	 /*设定IRQTF_AFFINITY的标志，在threaded handler中会检查该标志并进行IRQ affinity的设定*/
 	set_bit(IRQTF_AFFINITY, &new->thread_flags);
 	return 0;
 }
@@ -1135,6 +1152,8 @@ __setup_irq(unsigned int irq, struct irq_desc *desc, struct irqaction *new)
 		 */
 		new->handler = irq_nested_primary_handler;
 	} else {
+		/*forced irq threading其实就是将系统中所有可以被线程化的中断handler全部线程化，
+		即便你在request irq的时候，设定的是primary handler，而不是threaded handle*/
 		if (irq_settings_can_thread(desc)) {
 			ret = irq_setup_forced_threading(new);
 			if (ret)
@@ -1157,7 +1176,7 @@ __setup_irq(unsigned int irq, struct irq_desc *desc, struct irqaction *new)
 				goto out_thread;
 		}
 	}
-
+	/*分配一个cpu mask的变量的内存，后面会使用到*/
 	if (!alloc_cpumask_var(&mask, GFP_KERNEL)) {
 		ret = -ENOMEM;
 		goto out_thread;
@@ -1604,9 +1623,9 @@ EXPORT_SYMBOL(free_irq);
  /*
 handler		threaded handler	描述
 NULL		NULL				函数出错，返回-EINVAL
-设定		设定				正常流程。中断处理被合理的分配到primary handler和threaded handler中。
-设定		NULL				中断处理都是在primary handler中完成
-NULL		设定				这种情况下，系统会帮忙设定一个default的primary handler：irq_default_primary_handler，协助唤醒threaded handler线程
+设定			设定					正常流程。中断处理被合理的分配到primary handler和threaded handler中。
+设定			NULL				中断处理都是在primary handler中完成
+NULL		设定					这种情况下，系统会帮忙设定一个default的primary handler：irq_default_primary_handler，协助唤醒threaded handler线程
 */
 int request_threaded_irq(unsigned int irq, irq_handler_t handler,
 			 irq_handler_t thread_fn, unsigned long irqflags,
