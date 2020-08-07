@@ -96,20 +96,21 @@ ENDPROC(__pendsv_entry)
  * r0 = previous task_struct, r1 = previous thread_info, r2 = next thread_info
  * previous and next are guaranteed not to be the same.
  */
+ //last = __switch_to(prev,task_thread_info(prev), task_thread_info(next));
 ENTRY(__switch_to)
 	.fnstart
 	.cantunwind
-	add	ip, r1, #TI_CPU_SAVE
+	add	ip, r1, #TI_CPU_SAVE	//把当前的寄存器值保存到thread_info中
 	stmia	ip!, {r4 - r11}		@ Store most regs on stack
 	str	sp, [ip], #4
 	str	lr, [ip], #4
 	mov	r5, r0
-	add	r4, r2, #TI_CPU_SAVE
+	add	r4, r2, #TI_CPU_SAVE           //更改当前进程的栈指针指向下一个进程的栈指针
 	ldr	r0, =thread_notify_head
 	mov	r1, #THREAD_NOTIFY_SWITCH
 	bl	atomic_notifier_call_chain
 	mov	ip, r4
-	mov	r0, r5
+	mov	r0, r5                   //r0是汇编的返回值。返回previous task_struct
 	ldmia	ip!, {r4 - r11}		@ Load all regs saved previously
 	ldr	sp, [ip]
 	ldr	pc, [ip, #4]!

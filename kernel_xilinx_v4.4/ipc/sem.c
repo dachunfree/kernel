@@ -2039,7 +2039,7 @@ int copy_semundo(unsigned long clone_flags, struct task_struct *tsk)
 	struct sem_undo_list *undo_list;
 	int error;
 
-	if (clone_flags & CLONE_SYSVSEM) { //表示共享5个信号量
+	if (clone_flags & CLONE_SYSVSEM) { //表示共享5信号量
 		error = get_undo_list(&undo_list);
 		if (error)
 			return error;

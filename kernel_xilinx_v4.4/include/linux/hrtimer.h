@@ -99,7 +99,7 @@ enum hrtimer_restart {
 struct hrtimer {
 	struct timerqueue_node		node;
 	ktime_t				_softexpires;
-	enum hrtimer_restart		(*function)(struct hrtimer *);
+	enum hrtimer_restart		(*function)(struct hrtimer *); //时间处理回调函数
 	struct hrtimer_clock_base	*base;
 	unsigned long			state;
 #ifdef CONFIG_TIMER_STATS
@@ -147,7 +147,7 @@ struct hrtimer_sleeper {
 
 struct hrtimer_clock_base {
 	struct hrtimer_cpu_base	*cpu_base;    //指向所属cpu的hrtimer_cpu_base结构
-	int			index;
+	int			index;  //区分HRTIMER_BASE_MONOTONIC和HRTIMER_BASE_REALTIME
 	clockid_t		clockid;
 	struct timerqueue_head	active;      //红黑树，包含了所有使用该时间基准系统的hrtime
 	ktime_t			(*get_time)(void);  //读取细粒度时间
@@ -189,6 +189,7 @@ enum  hrtimer_base_type {
  *	 Do not dereference the pointer because it is not reliable on
  *	 cross cpu removals.
  */
+ //per-cpu.
 struct hrtimer_cpu_base {
 	raw_spinlock_t			lock;
 	seqcount_t			seq;

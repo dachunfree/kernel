@@ -1060,14 +1060,14 @@ static enum hrtimer_restart tick_sched_timer(struct hrtimer *timer)
 	struct pt_regs *regs = get_irq_regs();
 	ktime_t now = ktime_get();
 
-	tick_sched_do_timer(now);
+	tick_sched_do_timer(now); //更新墙上时间，jiffies
 
 	/*
 	 * Do not call, when we are not in irq context and have
 	 * no valid regs pointer
 	 */
 	if (regs)
-		tick_sched_handle(ts, regs);
+		tick_sched_handle(ts, regs); //软中断处理低精度的时间轮
 
 	/* No need to reprogram if we are in idle or full dynticks mode */
 	if (unlikely(ts->tick_stopped))

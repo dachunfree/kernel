@@ -1182,7 +1182,7 @@ struct uts_namespace;
 
 struct load_weight {
 	unsigned long weight;
-	u32 inv_weight;
+	u32 inv_weight; //inv_weight等于2^32/weight
 };
 
 /*
@@ -1242,14 +1242,14 @@ struct sched_statistics {
 #endif
 
 struct sched_entity {
-	struct load_weight	load;		/* for load-balancing */
-	struct rb_node		run_node;
+	struct load_weight	load;		/* for load-balancing 用来记录权重信息，权重信息，在计算虚拟时间的时候会用到inv_weight成员*/
+	struct rb_node		run_node; /*CFS调度器的每个就绪队列维护了一颗红黑树，上面挂满了就绪等待执行的task，run_node就是挂载点*/
 	struct list_head	group_node;
-	unsigned int		on_rq;
+	unsigned int		on_rq;/*调度实体se加入就绪队列后，on_rq置1。从就绪队列删除后，on_rq置0*/
 
-	u64			exec_start;
-	u64			sum_exec_runtime;
-	u64			vruntime;
+	u64			exec_start; //前进程最近一次执行的时间点
+	u64			sum_exec_runtime; /*调度实体已经运行实际时间总合*/
+	u64			vruntime;/*调度实体已经运行的虚拟时间总合*/
 	u64			prev_sum_exec_runtime;
 
 	u64			nr_migrations;
@@ -1391,17 +1391,19 @@ struct task_struct {
 
 	int wake_cpu;
 #endif
-	int on_rq;
-
-	int prio, static_prio, normal_prio;
-	unsigned int rt_priority;
+	int on_rq; //是否再rq就绪队列中
+	/*
+	prio:调度优先级，数值越小，优先级越高。限期进程:-1;实时进程:99-rt_priority;普通进程:120+nice
+	*/
+	int prio, static_prio, normal_prio; //static for 普通进程(120+nice);normal 归一化，rt=99-nice;cfs=120+nice.整体就是nice越低优先级越高
+	unsigned int rt_priority; //只是实时进程有意义。
 	const struct sched_class *sched_class; //调度类
-	struct sched_entity se;
-	struct sched_rt_entity rt;
+	struct sched_entity se; //cfs调度器调度实体
+	struct sched_rt_entity rt; //RT调度器调度实体
 #ifdef CONFIG_CGROUP_SCHED
 	struct task_group *sched_task_group;
 #endif
-	struct sched_dl_entity dl;
+	struct sched_dl_entity dl; //Deadline调度器调度实体
 
 #ifdef CONFIG_PREEMPT_NOTIFIERS
 	/* list of struct preempt_notifier: */
@@ -1412,7 +1414,7 @@ struct task_struct {
 	unsigned int btrace_seq;
 #endif
 
-	unsigned int policy;
+	unsigned int policy; //调度策略
 	int nr_cpus_allowed;
 	cpumask_t cpus_allowed;
 

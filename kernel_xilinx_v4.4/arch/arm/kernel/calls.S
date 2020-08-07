@@ -9,6 +9,7 @@
  *
  *  This file is included thrice in entry-common.S
  */
+ //È¥ËÑË÷:SYSCALL_DEFINE0 . sys_##sname
 /* 0 */		CALL(sys_restart_syscall)
 		CALL(sys_exit)
 		CALL(sys_fork)

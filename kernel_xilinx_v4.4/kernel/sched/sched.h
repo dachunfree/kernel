@@ -344,23 +344,27 @@ struct cfs_bandwidth { };
 #endif	/* CONFIG_CGROUP_SCHED */
 
 /* CFS-related fields in a runqueue */
+/*系统中每个CPU都会有一个全局的就绪队列（cpu runqueue），使用struct rq结构体描述，
+它是per-cpu类型，即每个cpu上都会有一个struct rq结构体。每一个调度类也有属于自己管理的就绪队列*/
+//struct rq
 struct cfs_rq {
-	struct load_weight load;
-	unsigned int nr_running, h_nr_running;
+	struct load_weight load;  /*就绪队列权重，就绪队列管理的所有调度实体权重之和*/
+	unsigned int nr_running, h_nr_running;  //nr_running:就绪队列上调度实体的个数
 
 	u64 exec_clock;
-	u64 min_vruntime;
+	u64 min_vruntime; //跟踪就绪队列上所有调度实体的最小虚拟时间.用于在睡眠进程被唤醒后以及新进程被创建好时，进行虚拟时间补偿或者惩罚
 #ifndef CONFIG_64BIT
 	u64 min_vruntime_copy;
 #endif
 
-	struct rb_root tasks_timeline;
+	struct rb_root tasks_timeline; //用于跟踪调度实体按虚拟时间大小排序的红黑树的信息（包含红黑树的根以及红黑树中最左边节点）。
 	struct rb_node *rb_leftmost;
 
 	/*
 	 * 'curr' points to currently running entity on this cfs_rq.
 	 * It is set to NULL otherwise (i.e when none are currently running).
 	 */
+	 /*curr指向当前正运行的实体，next指向将被唤醒的进程，last指向唤醒next进程的进程*/
 	struct sched_entity *curr, *next, *last, *skip;
 
 #ifdef	CONFIG_SCHED_DEBUG
@@ -396,7 +400,7 @@ struct cfs_rq {
 #endif /* CONFIG_SMP */
 
 #ifdef CONFIG_FAIR_GROUP_SCHED
-	struct rq *rq;	/* cpu runqueue to which this cfs_rq is attached */
+	struct rq *rq;	/* cpu runqueue to which this cfs_rq is attached 该cfs_rq就绪队列所属的rq队列*/
 
 	/*
 	 * leaf cfs_rqs are those that hold tasks (lowest schedulable entity in
@@ -556,6 +560,14 @@ extern struct root_domain def_root_domain;
  * (such as the load balancing or the thread migration code), lock
  * acquire operations must be ordered by ascending &runqueue.
  */
+ /*
+ 系统中每个CPU都会有一个全局的就绪队列（cpu runqueue），使用struct rq结构体描述，
+ 它是per-cpu类型，即每个cpu上都会有一个struct rq结构体。每一个调度类也有属于自己管理的就绪队列。
+ struct cfs_rq是CFS调度类的就绪队列，管理就绪态的struct sched_entity调度实体，
+ 			  后续通过pick_next_task接口从就绪队列中选择最适合运行的调度实体（虚拟时间最小的调度实体）。
+ struct rt_rq是实时调度器就绪队列。
+ struct dl_rq是Deadline调度器就绪队列。
+*/
 struct rq {
 	/* runqueue lock: */
 	raw_spinlock_t lock;
@@ -571,7 +583,7 @@ struct rq {
 #endif
 	#define CPU_LOAD_IDX_MAX 5
 	unsigned long cpu_load[CPU_LOAD_IDX_MAX];
-	unsigned long last_load_update_tick;
+	unsigned long last_load_update_tick; //最近的jiffies
 #ifdef CONFIG_NO_HZ_COMMON
 	u64 nohz_stamp;
 	unsigned long nohz_flags;
@@ -584,9 +596,9 @@ struct rq {
 	unsigned long nr_load_updates;
 	u64 nr_switches;
 
-	struct cfs_rq cfs;
-	struct rt_rq rt;
-	struct dl_rq dl;
+	struct cfs_rq cfs;  //cfs调度序列
+	struct rt_rq rt;    //实时调度序列
+	struct dl_rq dl;	//dead line 调度序列
 
 #ifdef CONFIG_FAIR_GROUP_SCHED
 	/* list of leaf cfs_rq on this cpu: */
@@ -606,7 +618,7 @@ struct rq {
 	struct mm_struct *prev_mm;
 
 	unsigned int clock_skip_update;
-	u64 clock;
+	u64 clock;  //scheduler_tick中更新
 	u64 clock_task;
 
 	atomic_t nr_iowait;
@@ -659,7 +671,7 @@ struct rq {
 	int hrtick_csd_pending;
 	struct call_single_data hrtick_csd;
 #endif
-	struct hrtimer hrtick_timer;
+	struct hrtimer hrtick_timer; //高精度定时器回调函数
 #endif
 
 #ifdef CONFIG_SCHEDSTATS

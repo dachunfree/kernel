@@ -1046,13 +1046,10 @@ vector_\name:
 	@ Save r0, lr_<exception> (parent PC) and spsr_<exception>
 	@ (parent CPSR)
 	@
-<<<<<<< HEAD
 	//SP_irq在初始化的时候已经设定（12个字节,cpu_init ）。
 	//在irq mode的stack上，依次保存了发生中断那一点的r0值、PC值以及CPSR值
-=======
 	//SP_irq在初始化的时候已经设定（12个字节,cpu_init）。
 	//在irq mode的stack上，依次保存了发生中断那一点的r0值、PC值(当前lr_irq)以及CPSR值
->>>>>>> 7c4924e0a4e80ad573a32e750de1985d0722cb68
 	//（具体操作是通过spsr进行的，其实硬件已经帮我们保存了CPSR到SPSR中了）。
 	//为何要保存r0值？因为随后的代码要使用r0寄存器，因此我们要把r0放到栈上，
 	//只有这样才能完完全全恢复硬件现场。

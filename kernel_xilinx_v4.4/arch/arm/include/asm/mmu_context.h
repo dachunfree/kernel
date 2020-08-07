@@ -112,6 +112,7 @@ enter_lazy_tlb(struct mm_struct *mm, struct task_struct *tsk)
  * calling the CPU specific function when the mm hasn't
  * actually changed.
  */
+ /*prev是要切出的地址空间，next是要切入的地址空间，tsk是将要切入的进程*/
 static inline void
 switch_mm(struct mm_struct *prev, struct mm_struct *next,
 	  struct task_struct *tsk)
@@ -129,7 +130,7 @@ switch_mm(struct mm_struct *prev, struct mm_struct *next,
 	    !cpumask_test_cpu(cpu, mm_cpumask(next)))
 		__flush_icache_all();
 
-	if (!cpumask_test_and_set_cpu(cpu, mm_cpumask(next)) || prev != next) {
+	if (!cpumask_test_and_set_cpu(cpu, mm_cpumask(next)) || prev != next) {       //pre == next没意义不用切换
 		check_and_switch_context(next, tsk);
 		if (cache_is_vivt())
 			cpumask_clear_cpu(cpu, mm_cpumask(prev));

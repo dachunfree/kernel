@@ -47,9 +47,9 @@ struct cpu_context_save {
  * __switch_to() assumes cpu_context follows immediately after cpu_domain.
  */
 struct thread_info {
-	unsigned long		flags;		/* low level flags */
+	unsigned long		flags;		/* low level flags */  //常用_TIF_SIGPENDING和_TIF_NEED_RESCHED
 	int			preempt_count;	/* 0 => preemptable, <0 => bug */
-	mm_segment_t		addr_limit;	/* address limit */
+	mm_segment_t		addr_limit;	/* address limit */ //进程可以访问地址空间的上限(用户进程和内核进程各种的)
 	struct task_struct	*task;		/* main task structure */
 	__u32			cpu;		/* cpu */
 	__u32			cpu_domain;	/* cpu domain */

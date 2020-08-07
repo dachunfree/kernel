@@ -1357,7 +1357,19 @@ static struct task_struct *copy_process(unsigned long clone_flags,
 	retval = -EAGAIN;
 	if (nr_threads >= max_threads) //nr_threads是系统当前的线程数目
 		goto bad_fork_cleanup_count;
+	/*
+	这个feature是统计每一个task的等待系统资源的时间（例如等待CPU、memeory或者IO）
+	一个进程/线程可能会因为下面的原因而delay：
+	1、该进程/线程处于runnable，但是等待调度器调度执行
+	2、该进程/线程发起synchronous block I/O，进程/线程处于阻塞状态，直到I/O的完成
+	3、进程/线程在执行过程中等待page swapping in。由于内存有限，系统不可能把进程的各个段（正文段、数据段等）都保存在物理内存中，当访问那些没有在物理内存的段的地址的时候，就会有磁盘操作，导致进程delay，这里有个专业的术语叫做capacity misses
+	4、进程/线程申请内存，但是由于资源受限而导致page frame reclaim的动作。
 
+	系统为何对这些delay信息进行统计呢？主要让系统确定下列的优先级的时候更有针对性：
+	1、task priority。如果该进程/线程长时间的等待CPU，那么调度器可以调高该任务的优先级。
+	2、IO priority。如果该进程/线程长时间的等待I/O，那么I/O调度器可以调高该任务的I/O优先级。
+	3、rss limit value。引入虚拟内存后，每个进程都拥有4G的地址空间。系统中有那么多进程，而物理内存就那么多，不可能让每一个进程虚拟地址（page）都对应一个物理地址（page frame）。没有对应物理地址的那部分虚拟地址的实际内容应该保存在文件或者swap设备上，一旦要访问该地址，系统会产生异常，并处理好分配page frame，页表映射，copy磁盘内容到page frame等一系列动作。rss的全称是resident set size，表示有物理内存对应的虚拟地址空间。由于物理内存资源有限，各个进程要合理使用。rss limit value定义了各个进程rss的上限。
+	*/
 	delayacct_tsk_init(p);	/* Must remain after dup_task_struct() */
 	p->flags &= ~(PF_SUPERPRIV | PF_WQ_WORKER);
 	p->flags |= PF_FORKNOEXEC;
@@ -1575,7 +1587,7 @@ static struct task_struct *copy_process(unsigned long clone_flags,
 	write_lock_irq(&tasklist_lock);
 
 	/* CLONE_PARENT re-uses the old parent */
-	if (clone_flags & (CLONE_PARENT|CLONE_THREAD)) {
+	if (clone_flags & (CLONE_PARENT|CLONE_THREAD)) { //同一个父亲
 		p->real_parent = current->real_parent;
 		p->parent_exec_id = current->parent_exec_id;
 	} else {
@@ -1615,7 +1627,7 @@ static struct task_struct *copy_process(unsigned long clone_flags,
 			init_task_pid(p, PIDTYPE_PGID, task_pgrp(current));
 			init_task_pid(p, PIDTYPE_SID, task_session(current));
 
-			if (is_child_reaper(pid)) {
+			if (is_child_reaper(pid)) {          // 1号进程不能被杀死
 				ns_of_pid(pid)->child_reaper = p;
 				p->signal->flags |= SIGNAL_UNKILLABLE;
 			}

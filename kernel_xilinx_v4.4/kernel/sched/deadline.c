@@ -742,7 +742,7 @@ static void update_curr_dl(struct rq *rq)
 	cpuacct_charge(curr, delta_exec);
 
 	sched_rt_avg_update(rq, delta_exec);
-
+	//计算限期进程的剩余运行时间。
 	dl_se->runtime -= dl_se->dl_yielded ? 0 : delta_exec;
 	if (dl_runtime_exceeded(dl_se)) {
 		dl_se->dl_throttled = 1;

@@ -942,7 +942,7 @@ static void update_curr_rt(struct rq *rq)
 	struct sched_rt_entity *rt_se = &curr->rt;
 	u64 delta_exec;
 
-	if (curr->sched_class != &rt_sched_class)
+	if (curr->sched_class != &rt_sched_class)     //如果不是rt直接返回
 		return;
 
 	delta_exec = rq_clock_task(rq) - curr->se.exec_start;
@@ -2218,22 +2218,22 @@ static void task_tick_rt(struct rq *rq, struct task_struct *p, int queued)
 	 * RR tasks need a special form of timeslice management.
 	 * FIFO tasks have no timeslices.
 	 */
-	if (p->policy != SCHED_RR)
+	if (p->policy != SCHED_RR)       //调度策略不是轮流调度，直接返回
 		return;
 
-	if (--p->rt.time_slice)
+	if (--p->rt.time_slice)  //把时间片减1，如果没用完时间片直接返回。
 		return;
-
-	p->rt.time_slice = sched_rr_timeslice;
+	/*****************************时间片用完了怎么办呢?******************************/
+	p->rt.time_slice = sched_rr_timeslice; //如果用完了时间片，那么重新分配时间
 
 	/*
 	 * Requeue to the end of queue if we (and all of our ancestors) are not
 	 * the only element on the queue
 	 */
 	for_each_sched_rt_entity(rt_se) {
-		if (rt_se->run_list.prev != rt_se->run_list.next) {
-			requeue_task_rt(rq, p, 0);
-			resched_curr(rq);
+		if (rt_se->run_list.prev != rt_se->run_list.next) {   //如果实时进程不是实时运行队列的唯一进程 。
+			requeue_task_rt(rq, p, 0);  //把当前进程重新添加到实时运行队列的队尾
+			resched_curr(rq); //设置需要重新调度的标志位
 			return;
 		}
 	}
