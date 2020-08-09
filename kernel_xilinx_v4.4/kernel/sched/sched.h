@@ -582,7 +582,7 @@ struct rq {
 	unsigned int nr_preferred_running;
 #endif
 	#define CPU_LOAD_IDX_MAX 5
-	unsigned long cpu_load[CPU_LOAD_IDX_MAX];
+	unsigned long cpu_load[CPU_LOAD_IDX_MAX]; //跟踪此前的负荷状态。
 	unsigned long last_load_update_tick; //最近的jiffies
 #ifdef CONFIG_NO_HZ_COMMON
 	u64 nohz_stamp;
@@ -1244,7 +1244,7 @@ struct sched_class {
 
 static inline void put_prev_task(struct rq *rq, struct task_struct *prev)
 {
-	prev->sched_class->put_prev_task(rq, prev);
+	prev->sched_class->put_prev_task(rq, prev); //put_prev_task_fair
 }
 
 #define sched_class_highest (&stop_sched_class)

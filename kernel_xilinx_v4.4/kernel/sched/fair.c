@@ -744,7 +744,7 @@ static void update_curr(struct cfs_rq *cfs_rq)
 		      max(delta_exec, curr->statistics.exec_max));
 
 	curr->sum_exec_runtime += delta_exec; ///*调度实体已经运行实际时间总合*/
-	schedstat_add(cfs_rq, exec_clock, delta_exec);
+	schedstat_add(cfs_rq, exec_clock, delta_exec); //cfs_rq->exec_clock += delta_exec;
 	/*更新当前调度实体虚拟时间，calc_delta_fair()函数根据上面说的虚拟时间的计算公式计算虚拟时间（也就是调用__calc_delta()函数）*/
 	curr->vruntime += calc_delta_fair(delta_exec, curr);
 	/*
@@ -3141,10 +3141,10 @@ dequeue_entity(struct cfs_rq *cfs_rq, struct sched_entity *se, int flags)
 	}
 
 	clear_buddies(cfs_rq, se);
-
-	if (se != cfs_rq->curr)
+	//se：rq->curr->se
+	if (se != cfs_rq->curr) //se不是当前正在运行的调度实体？？？
 		__dequeue_entity(cfs_rq, se);
-	se->on_rq = 0;
+	se->on_rq = 0; //表示不在此运行队列中了
 	account_entity_dequeue(cfs_rq, se);
 
 	/*
@@ -5359,10 +5359,11 @@ simple:
 
 	if (!cfs_rq->nr_running)
 		goto idle;
-
-	put_prev_task(rq, prev);
+	//将当前调度实体放回就绪队列
+	put_prev_task(rq, prev);//put_prev_task_fair
 
 	do {
+		//将下一个被调度实体从就绪队列中取出
 		se = pick_next_entity(cfs_rq, NULL);
 		set_next_entity(cfs_rq, se);
 		cfs_rq = group_cfs_rq(se);

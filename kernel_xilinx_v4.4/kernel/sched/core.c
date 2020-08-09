@@ -3201,7 +3201,7 @@ static void __sched notrace __schedule(bool preempt)
 	rq->clock_skip_update <<= 1; /* promote REQ to ACT */
 
 	switch_count = &prev->nivcsw;
-	if (!preempt && prev->state) {   //主动调度
+	if (!preempt && prev->state) {   //主动调度且不在运行队列中(可中断睡眠等等)
 		if (unlikely(signal_pending_state(prev->state, prev))) {
 			prev->state = TASK_RUNNING;
 		} else {
