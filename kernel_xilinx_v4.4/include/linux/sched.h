@@ -1200,8 +1200,14 @@ struct load_weight {
  * 2) for entity, support any load.weight always runnable
  */
 struct sched_avg {
+	/*last_update_time: 上一次负载更新时间。用于计算时间间隔;*/
+	/*load_sum：基于可运行（runnable）时间的负载贡献总和。runnable时间包含两部分：一是在rq中等待cpu调度运行的时间，二是正在cpu上运行的时间*/
 	u64 last_update_time, load_sum;
+	/*util_sum:基于正在运行（running）时间的负载贡献总和。running时间是指调度实体se正在cpu上执行时间*/
+	//period_contrib:上一周期剩余的(小于1024)的负载
 	u32 util_sum, period_contrib;
+	//load_avg：基于可运行（runnable）时间的平均负载贡献
+	//util_avg：基于正在运行（running）时间的平均负载贡献
 	unsigned long load_avg, util_avg;
 };
 
@@ -1264,7 +1270,7 @@ struct sched_entity {
 	/* rq on which this entity is (to be) queued: */
 	struct cfs_rq		*cfs_rq;
 	/* rq "owned" by this entity/group: */
-	struct cfs_rq		*my_q;
+	struct cfs_rq		*my_q; //group se的my_q成员指向自己的cfs(孩子)就绪队列.
 #endif
 
 #ifdef CONFIG_SMP

@@ -96,24 +96,27 @@ ENDPROC(__pendsv_entry)
  * r0 = previous task_struct, r1 = previous thread_info, r2 = next thread_info
  * previous and next are guaranteed not to be the same.
  */
- //last = __switch_to(prev,task_thread_info(prev), task_thread_info(next));
+ //last(r0) = __switch_to(task_thread_info(prev)(r1), task_thread_info(next)(r2));
 ENTRY(__switch_to)
 	.fnstart
 	.cantunwind
-	add	ip, r1, #TI_CPU_SAVE	//°Ñµ±Ç°µÄ¼Ä´æÆ÷Öµ±£´æµ½thread_infoÖĞ
+	//ä¿å­˜ä¸Šä¸€è¿›ç¨‹çš„å¯„å­˜å™¨åˆ°å†…æ ¸æ ˆçš„spä¸­
+	add	ip, r1, #TI_CPU_SAVE	//r1:task_thread_info(prev).offsetof(struct thread_info, cpu_context))
 	stmia	ip!, {r4 - r11}		@ Store most regs on stack
 	str	sp, [ip], #4
 	str	lr, [ip], #4
-	mov	r5, r0
-	add	r4, r2, #TI_CPU_SAVE           //¸ü¸Äµ±Ç°½ø³ÌµÄÕ»Ö¸ÕëÖ¸ÏòÏÂÒ»¸ö½ø³ÌµÄÕ»Ö¸Õë
+	mov	r5, r0			//r5 = r0
+	add	r4, r2, #TI_CPU_SAVE           //r2 = task_thread_info(next).ä¸‹ä¸€ä¸ªè¿›ç¨‹çš„å†…æ ¸æ ˆä¸­çš„cpu_context
+
 	ldr	r0, =thread_notify_head
 	mov	r1, #THREAD_NOTIFY_SWITCH
 	bl	atomic_notifier_call_chain
-	mov	ip, r4
-	mov	r0, r5                   //r0ÊÇ»ã±àµÄ·µ»ØÖµ¡£·µ»Øprevious task_struct
+	//æŠŠæ–°çš„è¿›ç¨‹çš„å¯„å­˜å™¨ä»æ ˆä¸­è°ƒç”¨å‡ºæ¥ï¼Œæ¢å¤åˆ°svcæ¨¡å¼çš„å¯„å­˜å™¨ä¸­ã€‚å¹¶æŠŠlrç»™pcå¼€å§‹æ‰§è¡Œæ–°çš„è¿›ç¨‹ã€‚
+	mov	ip, r4					//ip = r4
+	mov	r0, r5                   //r0 = r5.è¿”å›å€¼r0
 	ldmia	ip!, {r4 - r11}		@ Load all regs saved previously
 	ldr	sp, [ip]
-	ldr	pc, [ip, #4]!
+	ldr	pc, [ip, #4]! //pc = lr
 	.fnend
 ENDPROC(__switch_to)
 

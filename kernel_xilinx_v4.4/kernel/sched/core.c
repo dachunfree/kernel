@@ -2582,7 +2582,7 @@ static struct rq *finish_task_switch(struct task_struct *prev)
 	prev_state = prev->state;
 	vtime_task_switch(prev);   //计算进程pre的时间统计
 	perf_event_task_sched_in(prev, current);
-	/*把pre->oncpu设置为0，表示进程pre没有再处理器上运气；释放运行队列的锁，开启硬中断*/
+	/*把pre->oncpu设置为0，表示进程pre没有再处理器上运xing；释放运行队列的锁，开启硬中断*/
 	finish_lock_switch(rq, prev);
 	finish_arch_post_lock_switch();
 
@@ -2685,7 +2685,7 @@ context_switch(struct rq *rq, struct task_struct *prev,
 	struct mm_struct *mm, *oldmm;
 
 	prepare_task_switch(rq, prev, next);
-
+	//A进程切换到B进程
 	mm = next->mm;    //B进程
 	oldmm = prev->active_mm;//A进程
 	/*
@@ -2721,7 +2721,7 @@ context_switch(struct rq *rq, struct task_struct *prev,
 	*/
 	if (!prev->mm) {
 		prev->active_mm = NULL;
-		rq->prev_mm = oldmm;
+		rq->prev_mm = oldmm; //借用的用户空间的mm。一会finish_task_switch用
 	}
 	/*
 	 * Since the runqueue lock will be released by the next
@@ -2739,7 +2739,7 @@ context_switch(struct rq *rq, struct task_struct *prev,
 	（我们称之CPUx）完成从X进程（就是last进程）到A进程切换的时候，switch_to返回到A进程的现场。
 	switch_to完成了具体prev到next进程的切换，当switch_to返回的时候，说明A进程再次被调度执行了。
 	*/
-	switch_to(prev, next, prev);
+	switch_to(prev, next, prev); //返回值pre。上一进程。
 	barrier();
 
 	return finish_task_switch(prev); //现在已经在进程B(next)中了，pre是上一个切换走的进程A了
@@ -3201,7 +3201,7 @@ static void __sched notrace __schedule(bool preempt)
 	rq->clock_skip_update <<= 1; /* promote REQ to ACT */
 
 	switch_count = &prev->nivcsw;
-	if (!preempt && prev->state) {   //主动调度且不在运行队列中(可中断睡眠等等)
+	if (!preempt && prev->state) {   //主动调度且不在运行队列中(可中断睡眠等等)。 state:TASK_INTERRUPTIBLE:1;TASK_UNINTERRUPTIBLE:2;
 		if (unlikely(signal_pending_state(prev->state, prev))) {
 			prev->state = TASK_RUNNING;
 		} else {

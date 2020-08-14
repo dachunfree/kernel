@@ -649,7 +649,7 @@ static u64 sched_slice(struct cfs_rq *cfs_rq, struct sched_entity *se)
 {
 	//计算最小调度周期
 	u64 slice = __sched_period(cfs_rq->nr_running + !se->on_rq);
-	//for (; se; se = NULL),本质就是执行1次
+	//非组调度:for (; se; se = NULL),本质就是执行1次.组调度的话:for循环根据se->parent链表往上计算比例
 	for_each_sched_entity(se) {
 		struct load_weight *load;
 		struct load_weight lw;
@@ -665,6 +665,7 @@ static u64 sched_slice(struct cfs_rq *cfs_rq, struct sched_entity *se)
 		}
 		//计算该调度实体实际运行时间。
 		/*slice:周期；se->load.weight:当前进程的权重；load:运行队列的权重*/
+		//slice = slice * se->load.weight / cfs_rq->load.weight
 		slice = __calc_delta(slice, se->load.weight, load);
 	}
 	return slice;
@@ -2517,6 +2518,8 @@ static __always_inline u64 decay_load(u64 val, u64 n)
 	 *
 	 * To achieve constant time decay_load.
 	 */
+	 /*当n大于等于32的时候，就需要根据y32=0.5条件计算yn的值。
+	 yn*2^32 = 1/2n/32 * yn%32*232=1/2n/32 * runnable_avg_yN_inv[n%32]。*/
 	if (unlikely(local_n >= LOAD_AVG_PERIOD)) {
 		val >>= local_n / LOAD_AVG_PERIOD;
 		local_n %= LOAD_AVG_PERIOD;
@@ -2611,16 +2614,17 @@ __update_load_avg(u64 now, int cpu, struct sched_avg *sa,
 	 * Use 1024ns as the unit of measurement since it's a reasonable
 	 * approximation of 1us and fast to compute.
 	 */
-	delta >>= 10;
+	delta >>= 10; //将ns转化为us，确认delta >= 1024ns（单位时间period），才可以更新
 	if (!delta)
 		return 0;
 	sa->last_update_time = now;
 
-	scale_freq = arch_scale_freq_capacity(NULL, cpu);
-	scale_cpu = arch_scale_cpu_capacity(NULL, cpu);
+	scale_freq = arch_scale_freq_capacity(NULL, cpu); //获取不同freq影响因子
+	scale_cpu = arch_scale_cpu_capacity(NULL, cpu); //获取不同CPU影响因子
 
 	/* delta_w is the amount already accumulated against our next period */
-	delta_w = sa->period_contrib;
+	delta_w = sa->period_contrib; //上一周期不足1024的??
+	/*如果出现时间长度超过period（1ms），那么在计算当前load的时候，上一个period中的load需要乘上衰减系数*/
 	if (delta + delta_w >= 1024) {
 		decayed = 1;
 
@@ -2632,61 +2636,67 @@ __update_load_avg(u64 now, int cpu, struct sched_avg *sa,
 		 * out how much from delta we need to complete the current
 		 * period and accrue it.
 		 */
-		delta_w = 1024 - delta_w;
-		scaled_delta_w = cap_scale(delta_w, scale_freq);
+		delta_w = 1024 - delta_w; //补齐上一个period的剩余部分
+		scaled_delta_w = cap_scale(delta_w, scale_freq); // (delta_w * scale_freq) >> 10， 计算该部分的load * freq
 		if (weight) {
-			sa->load_sum += weight * scaled_delta_w;
+			sa->load_sum += weight * scaled_delta_w; //weight * load * freq , 将结果累计到sa->load_sum中
 			if (cfs_rq) {
-				cfs_rq->runnable_load_sum +=
+				cfs_rq->runnable_load_sum +=  //同时也累计到cfs_rq->runnable_load_sum中
 						weight * scaled_delta_w;
 			}
 		}
-		if (running)
+		if (running) ////如果进程当前状态是running，那么也累计到sa->util_sum中
 			sa->util_sum += scaled_delta_w * scale_cpu;
 
-		delta -= delta_w;
+		delta -= delta_w; //去掉补齐部分,剩下需要计算的load: current time-T2
 
 		/* Figure out how many additional periods this update spans */
-		periods = delta / 1024;
-		delta %= 1024;
-
+		periods = delta / 1024; //计算n的值
+		delta %= 1024; //计算T0-T1
+		/*计算T2以前load到当前perdiod时影响：以前的load * 衰减y^（period+1）,
+		将结果累计到sa->load_sum中。当period+1> 64*63时，load为0,*/
 		sa->load_sum = decay_load(sa->load_sum, periods + 1);
 		if (cfs_rq) {
+		//统计cfs_rq->runnable_load_sum中
 			cfs_rq->runnable_load_sum =
 				decay_load(cfs_rq->runnable_load_sum, periods + 1);
 		}
+		//如果进程当前状态是running，那么也累计到sa->util_sum中
 		sa->util_sum = decay_load((u64)(sa->util_sum), periods + 1);
 
 		/* Efficiently calculate \sum (1..n_period) 1024*y^i */
-		contrib = __compute_runnable_contrib(periods);
-		contrib = cap_scale(contrib, scale_freq);
+		contrib = __compute_runnable_contrib(periods);//计算n个period的load
+		contrib = cap_scale(contrib, scale_freq); //(delta_w * scale_freq) >> 10， 计算该部分的load * freq
 		if (weight) {
-			sa->load_sum += weight * contrib;
+			sa->load_sum += weight * contrib; //weight * load * freq , 将结果累计到sa->load_sum中
 			if (cfs_rq)
-				cfs_rq->runnable_load_sum += weight * contrib;
+				cfs_rq->runnable_load_sum += weight * contrib; //同时也累计到cfs_rq->runnable_load_sum中
 		}
 		if (running)
-			sa->util_sum += contrib * scale_cpu;
+			sa->util_sum += contrib * scale_cpu; //如果进程当前状态是running，那么也累计到sa->util_sum中
 	}
 
 	/* Remainder of delta accrued against u_0` */
-	scaled_delta = cap_scale(delta, scale_freq);
+	scaled_delta = cap_scale(delta, scale_freq); //计算T0-T1的load，并考虑cpu freq影响
 	if (weight) {
-		sa->load_sum += weight * scaled_delta;
-		if (cfs_rq)
+		sa->load_sum += weight * scaled_delta; ////考虑weight的影响，结果统计到sa->load_sum中
+		if (cfs_rq) //将结果统计到cfs->runnable_load_sum中，并考虑weight影响
 			cfs_rq->runnable_load_sum += weight * scaled_delta;
 	}
-	if (running)
+	if (running) //如果是runnable进程，同时将结果统计到sa->util_sum中
 		sa->util_sum += scaled_delta * scale_cpu;
 
-	sa->period_contrib += delta;
+	sa->period_contrib += delta; //将未满1个period的时间，暂存起来.见代码delta_w = sa->period_contrib就明白了
 
-	if (decayed) {
+	if (decayed) {//至少计算时，包好一个完整period
+		//计算load_avg，用当前load/load_max，计算得出一个百分比结果，表示当前的平均load
 		sa->load_avg = div_u64(sa->load_sum, LOAD_AVG_MAX);
 		if (cfs_rq) {
+		//同样方法计算cfs_rq->runnable_load_sum的平均load
 			cfs_rq->runnable_load_avg =
 				div_u64(cfs_rq->runnable_load_sum, LOAD_AVG_MAX);
 		}
+		//同样方法计算sa->util_sum的平均load
 		sa->util_avg = sa->util_sum / LOAD_AVG_MAX;
 	}
 
@@ -3153,7 +3163,7 @@ dequeue_entity(struct cfs_rq *cfs_rq, struct sched_entity *se, int flags)
 	 * movement in our normalized position.
 	 */
 	if (!(flags & DEQUEUE_SLEEP))
-		se->vruntime -= cfs_rq->min_vruntime;
+		se->vruntime -= cfs_rq->min_vruntime; //下次再加回来。现在是相对时间(相对最小时间)
 
 	/* return excess runtime on last dequeue */
 	return_cfs_rq_runtime(cfs_rq);
@@ -5266,7 +5276,7 @@ preempt:
 static struct task_struct *
 pick_next_task_fair(struct rq *rq, struct task_struct *prev)
 {
-	struct cfs_rq *cfs_rq = &rq->cfs;
+	struct cfs_rq *cfs_rq = &rq->cfs; //从红黑树cfs就绪队列开始遍历
 	struct sched_entity *se;
 	struct task_struct *p;
 	int new_tasks;
@@ -5366,6 +5376,8 @@ simple:
 		//将下一个被调度实体从就绪队列中取出
 		se = pick_next_entity(cfs_rq, NULL);
 		set_next_entity(cfs_rq, se);
+		/*group_cfs_rq()返回se->my_q成员。如果是task se，那么group_cfs_rq()返回NULL。
+		如果是group se，那么group_cfs_rq()返回group se对应的group cfs_rq*/
 		cfs_rq = group_cfs_rq(se);
 	} while (cfs_rq);
 
@@ -7952,6 +7964,7 @@ static void task_tick_fair(struct rq *rq, struct task_struct *curr, int queued)
 	struct cfs_rq *cfs_rq;
 	struct sched_entity *se = &curr->se; //cfs调度器调度实体
 	//从当前进程到根任务组的每级公平调度实体，调用entity_tick.for循环是针对组调度，组调度未打开的情况下，这里就是一层循环
+	//组调度打开的话，顺着se->parent这条链表遍历下去，如果有一个se运行时间超过分配限额时间就需要重新调度。
 	for_each_sched_entity(se) {
 		cfs_rq = cfs_rq_of(se);
 		entity_tick(cfs_rq, se, queued);
