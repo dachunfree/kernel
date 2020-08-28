@@ -2505,7 +2505,7 @@ static __always_inline u64 decay_load(u64 val, u64 n)
 
 	if (!n)
 		return val;
-	else if (unlikely(n > LOAD_AVG_PERIOD * 63))
+	else if (unlikely(n > LOAD_AVG_PERIOD * 63)) //32*63是最大周期数
 		return 0;
 
 	/* after bounds checking we can collapse to 32-bit */
@@ -2519,12 +2519,12 @@ static __always_inline u64 decay_load(u64 val, u64 n)
 	 * To achieve constant time decay_load.
 	 */
 	 /*当n大于等于32的时候，就需要根据y32=0.5条件计算yn的值。
-	 yn*2^32 = 1/2n/32 * yn%32*232=1/2n/32 * runnable_avg_yN_inv[n%32]。*/
+	 y^n*2^32 = (1/2^ (n/32)) * (y^(n%32))*2^32=(1/2^(n/32)) * runnable_avg_yN_inv[n%32]。*/
 	if (unlikely(local_n >= LOAD_AVG_PERIOD)) {
 		val >>= local_n / LOAD_AVG_PERIOD;
 		local_n %= LOAD_AVG_PERIOD;
 	}
-
+	//(val * runnable_avg_yN_inv[local_n])>>32
 	val = mul_u64_u32_shr(val, runnable_avg_yN_inv[local_n], 32);
 	return val;
 }
@@ -2591,6 +2591,43 @@ static u32 __compute_runnable_contrib(u64 n)
  *   load_avg = u_0` + y*(u_0 + u_1*y + u_2*y^2 + ... )
  *            = u_0 + u_1*y + u_2*y^2 + ... [re-labeling u_i --> u_{i+1}]
  */
+ /*
+
+ [<-不足1024us(补充上一周期)->|<- 1024us*n  ->|<- not enough 1024us ->|
+		Phase1					 Phase2	              Phase3
+
+ #####Phase1阶段怎么计算load
+
+计算delta1的period:
+delta1 = 1024 - Period_contrib1 （< 1024us）
+load_sum被刻度化通过当前cpu频率和se的权重:
+delta1 = delta1 * scale_freq
+load_sum += weight*delta1
+load_util被cpu的capacity刻度化
+util_sum += scale_cpu *delta1;
+
+#####Phase2阶段怎么计算load的:
+
+计算delta2的period
+periods = delta2 / 1024(即存在有多少个1ms)
+衰减phase1的load
+load_sum += decay_load(load_sum , periods + 1)
+util_sum += decay_load(util_sum , periods + 1)
+衰减阶段phase2的load
+load_sum += __contrib(periods) * scale_freq
+util_sum += __contrib(periods) * scale_freq * scale_cpu
+
+#####Phase3计算怎么计算load:
+
+计算剩余周期(<1ms,<1024us)
+period_contrid2 = delta3 % 1024
+load_sum被当前权重和频率刻度化
+load_sum += weight * scale_freq * period_contrib2
+util_sum被当前频率和当前cpu capacity刻度化
+util_sum += scale_cpu * scale_freq * period_contrib2
+
+*/
+//一个周期的加权负载 load = 周期长度*处理器频率*公平运行队列的权重
 static __always_inline int
 __update_load_avg(u64 now, int cpu, struct sched_avg *sa,
 		  unsigned long weight, int running, struct cfs_rq *cfs_rq)
@@ -2639,7 +2676,7 @@ __update_load_avg(u64 now, int cpu, struct sched_avg *sa,
 		delta_w = 1024 - delta_w; //补齐上一个period的剩余部分
 		scaled_delta_w = cap_scale(delta_w, scale_freq); // (delta_w * scale_freq) >> 10， 计算该部分的load * freq
 		if (weight) {
-			sa->load_sum += weight * scaled_delta_w; //weight * load * freq , 将结果累计到sa->load_sum中
+			sa->load_sum += weight * scaled_delta_w; //weight * load * freq , 将结果累计到sa->load_sum中。周期加权负载
 			if (cfs_rq) {
 				cfs_rq->runnable_load_sum +=  //同时也累计到cfs_rq->runnable_load_sum中
 						weight * scaled_delta_w;
@@ -2652,9 +2689,9 @@ __update_load_avg(u64 now, int cpu, struct sched_avg *sa,
 
 		/* Figure out how many additional periods this update spans */
 		periods = delta / 1024; //计算n的值
-		delta %= 1024; //计算T0-T1
+		delta %= 1024; //多少剩余不足1024us
 		/*计算T2以前load到当前perdiod时影响：以前的load * 衰减y^（period+1）,
-		将结果累计到sa->load_sum中。当period+1> 64*63时，load为0,*/
+		将结果累计到sa->load_sum中。当period+1> 32*63时，load为0,*/
 		sa->load_sum = decay_load(sa->load_sum, periods + 1);
 		if (cfs_rq) {
 		//统计cfs_rq->runnable_load_sum中
@@ -2693,7 +2730,7 @@ __update_load_avg(u64 now, int cpu, struct sched_avg *sa,
 		sa->load_avg = div_u64(sa->load_sum, LOAD_AVG_MAX);
 		if (cfs_rq) {
 		//同样方法计算cfs_rq->runnable_load_sum的平均load
-			cfs_rq->runnable_load_avg =
+			cfs_rq->runnable_load_avg =   //load_sum / time_sum
 				div_u64(cfs_rq->runnable_load_sum, LOAD_AVG_MAX);
 		}
 		//同样方法计算sa->util_sum的平均load
@@ -2765,10 +2802,11 @@ static inline void update_load_avg(struct sched_entity *se, int update_tg)
 	 * Track task load average for carrying it to new CPU after migrated, and
 	 * track group sched_entity load average for task_h_load calc in migration
 	 */
+	 //最后那个NULL 来判断是不是计算cfs负载。
 	__update_load_avg(now, cpu, &se->avg,
 			  se->on_rq * scale_load_down(se->load.weight),
 			  cfs_rq->curr == se, NULL);
-
+	/*在更新se负载后，顺便更新se attach的cfs就绪队列的负载信息。runqueue的负载就是该runqueue下所有的se负载总和*/
 	if (update_cfs_rq_load_avg(now, cfs_rq) && update_tg)
 		update_tg_load_avg(cfs_rq, 0);
 }
@@ -4389,16 +4427,17 @@ static void __update_cpu_load(struct rq *this_rq, unsigned long this_load,
 			      unsigned long pending_updates)
 {
 	int i, scale;
-
+	 /*统计数据使用*/
 	this_rq->nr_load_updates++;
-
+	 /*将当前最新的load,更新在cpu_load[0]中,this_load就是run_queue实时的load值 */
 	/* Update our load: */
 	this_rq->cpu_load[0] = this_load; /* Fasttrack for idx 0 */
 	for (i = 1, scale = 2; i < CPU_LOAD_IDX_MAX; i++, scale += scale) {
 		unsigned long old_load, new_load;
 
 		/* scale is effectively 1 << i now, and >> i divides by scale */
-
+		  /*对old_load进行衰减.果因为进入noHZ模式，有pending_updates个tick没有
+         更新，先老化原有负载*/
 		old_load = this_rq->cpu_load[i];
 		old_load = decay_load_missed(old_load, pending_updates - 1, i);
 		new_load = this_load;
@@ -4409,10 +4448,14 @@ static void __update_cpu_load(struct rq *this_rq, unsigned long this_load,
 		 */
 		if (new_load > old_load)
 			new_load += scale - 1;
-
+		/*i值越大，cpu_load[i]受load的实时值的影响越小，代表着越长时间内的平均负载情况。
+		  而cpu_load[0]就是实时的load。*/
 		this_rq->cpu_load[i] = (old_load * (scale - 1) + new_load) >> i;
+		/*					  = (cpu_load[i] *(2^i -1)+new_load)*1/2^i  = (1-1/2^i)*cpu_load[i]+new_load*1/2^i*/
+		/*有此公式可见，i越大，受新的平均负载影响越小*/
 	}
-
+	 /*更新rq的age_stamp时间戳,即rq从cpu启动到现在存在的时间(包括idle和running时间)
+    ,同时更新rq里面rt_avg负载,即每个周期(500ms)衰减一半*/
 	sched_avg_update(this_rq);
 }
 
@@ -4488,7 +4531,8 @@ void update_cpu_load_nohz(void)
  * Called from scheduler_tick()
  */
 void update_cpu_load_active(struct rq *this_rq)
-{
+{
+	/*获取cfs_rq的runnable_load_avg的数值*/
 	unsigned long load = weighted_cpuload(cpu_of(this_rq));
 	/*
 	 * See the mess around update_idle_cpu_load() / update_cpu_load_nohz().
@@ -6806,6 +6850,9 @@ static struct sched_group *find_busiest_group(struct lb_env *env)
 	 * Compute the various statistics relavent for load balancing at
 	 * this level.
 	 */
+
+	//更新sched_domain,sched_group的状态，同时找到了domain内最busy的group
+	//接下来要检查这个group是否是真正最busy的group
 	update_sd_lb_stats(env, &sds);
 	local = &sds.local_stat;
 	busiest = &sds.busiest_stat;
@@ -6872,6 +6919,7 @@ static struct sched_group *find_busiest_group(struct lb_env *env)
 
 force_balance:
 	/* Looks like there is an imbalance. Compute it */
+	 //计算domain内group的imbalance程度
 	calculate_imbalance(env, &sds);
 	return sds.busiest;
 
@@ -7033,6 +7081,13 @@ static int should_we_balance(struct lb_env *env)
  * Check this_cpu to ensure it is balanced within domain. Attempt to move
  * tasks if there is an imbalance.
  */
+
+/*
+该函数在同一个调度域的各个调度组之间进行负载均衡，执行过程如下：
+1、找出最busy的组。
+2、在最busy的组中找出最busy的cpu。
+3.迁移最busy的cpu上的进程到本cpu，并返回迁移的进程数量
+*/
 static int load_balance(int this_cpu, struct rq *this_rq,
 			struct sched_domain *sd, enum cpu_idle_type idle,
 			int *continue_balancing)
@@ -7060,6 +7115,7 @@ static int load_balance(int this_cpu, struct rq *this_rq,
 	 * For NEWLY_IDLE load_balancing, we don't need to consider
 	 * other cpus in our group
 	 */
+	 //当前cpu处于idle状态，不需要考虑group内其他cpu load
 	if (idle == CPU_NEWLY_IDLE)
 		env.dst_grpmask = NULL;
 
@@ -7072,13 +7128,13 @@ redo:
 		*continue_balancing = 0;
 		goto out_balanced;
 	}
-
+	//找到domain内最忙的group
 	group = find_busiest_group(&env);
 	if (!group) {
 		schedstat_inc(sd, lb_nobusyg[idle]);
 		goto out_balanced;
 	}
-
+	//group内找到最忙的rq，从而获取最忙的cpu
 	busiest = find_busiest_queue(&env, group);
 	if (!busiest) {
 		schedstat_inc(sd, lb_nobusyq[idle]);
@@ -7093,6 +7149,7 @@ redo:
 	env.src_rq = busiest;
 
 	ld_moved = 0;
+	//最busy的rq可运行task少于等于1，不需要移动，这步之前可能有task停止
 	if (busiest->nr_running > 1) {
 		/*
 		 * Attempt to move tasks. If find_busiest_group has found
@@ -7110,6 +7167,7 @@ more_balance:
 		 * cur_ld_moved - load moved in current iteration
 		 * ld_moved     - cumulative load moved across iterations
 		 */
+		 //进行task迁移
 		cur_ld_moved = detach_tasks(&env);
 
 		/*
@@ -7657,6 +7715,11 @@ void update_max_interval(void)
  *
  * Balancing parameters are set up in init_sched_domains.
  */
+ /*
+ rebalance_domains()，根据 domain 的级别，从下往上扫描每一级 Scheduling Domain 。如果发现这个
+ domain 的 balance 之间的间隔时间到了，则进一步进行 task 的移动。不同级别的 domain 是会有不同的
+ 间隔时间的。而且级别越高值越大，因为移动 task 的代价越大。
+*/
 static void rebalance_domains(struct rq *rq, enum cpu_idle_type idle)
 {
 	int continue_balancing = 1;
@@ -7664,7 +7727,7 @@ static void rebalance_domains(struct rq *rq, enum cpu_idle_type idle)
 	unsigned long interval;
 	struct sched_domain *sd;
 	/* Earliest time when we have to do rebalance again */
-	unsigned long next_balance = jiffies + 60*HZ;
+	unsigned long next_balance = jiffies + 60*HZ; //6s后接着进行负载均衡。
 	int update_next_balance = 0;
 	int need_serialize, need_decay = 0;
 	u64 max_cost = 0;
@@ -7672,6 +7735,7 @@ static void rebalance_domains(struct rq *rq, enum cpu_idle_type idle)
 	update_blocked_averages(cpu);
 
 	rcu_read_lock();
+	//从下往上检查domain是否进行负载均衡
 	for_each_domain(cpu, sd) {
 		/*
 		 * Decay the newidle max times here because this is a regular
@@ -7698,7 +7762,7 @@ static void rebalance_domains(struct rq *rq, enum cpu_idle_type idle)
 				continue;
 			break;
 		}
-
+		//每级domain有自己的balance 间隔
 		interval = get_sd_balance_interval(sd, idle != CPU_IDLE);
 
 		need_serialize = sd->flags & SD_SERIALIZE;
@@ -7706,7 +7770,7 @@ static void rebalance_domains(struct rq *rq, enum cpu_idle_type idle)
 			if (!spin_trylock(&balancing))
 				goto out;
 		}
-
+		//jiffies>=sd->last_balance + interval 需要重新做balance
 		if (time_after_eq(jiffies, sd->last_balance + interval)) {
 			if (load_balance(cpu, rq, sd, idle, &continue_balancing)) {
 				/*
@@ -7716,6 +7780,7 @@ static void rebalance_domains(struct rq *rq, enum cpu_idle_type idle)
 				 */
 				idle = idle_cpu(cpu) ? CPU_IDLE : CPU_NOT_IDLE;
 			}
+			//更新last_balance
 			sd->last_balance = jiffies;
 			interval = get_sd_balance_interval(sd, idle != CPU_IDLE);
 		}
@@ -7907,7 +7972,7 @@ static void nohz_idle_balance(struct rq *this_rq, enum cpu_idle_type idle) { }
 static void run_rebalance_domains(struct softirq_action *h)
 {
 	struct rq *this_rq = this_rq();
-	enum cpu_idle_type idle = this_rq->idle_balance ?
+	enum cpu_idle_type idle = this_rq->idle_balance ?   //判断是否idle
 						CPU_IDLE : CPU_NOT_IDLE;
 
 	/*
@@ -7932,7 +7997,7 @@ void trigger_load_balance(struct rq *rq)
 		return;
 
 	if (time_after_eq(jiffies, rq->next_balance))
-		raise_softirq(SCHED_SOFTIRQ);
+		raise_softirq(SCHED_SOFTIRQ); //软中断处理函数。run_rebalance_domains
 #ifdef CONFIG_NO_HZ_COMMON
 	if (nohz_kick_needed(rq))
 		nohz_balancer_kick();
@@ -8376,7 +8441,7 @@ const struct sched_class fair_sched_class = {
 
 #ifdef CONFIG_SMP
 	.select_task_rq		= select_task_rq_fair, //调用调度类中select_task_rq方法选择调度类中最空闲的cpu
-	.migrate_task_rq	= migrate_task_rq_fair,
+	.migrate_task_rq	= migrate_task_rq_fair,//进程迁移到新的处理器之前调用
 
 	.rq_online		= rq_online_fair,
 	.rq_offline		= rq_offline_fair,

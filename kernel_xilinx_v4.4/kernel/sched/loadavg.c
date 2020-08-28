@@ -349,7 +349,10 @@ static inline void calc_global_nohz(void) { }
 void calc_global_load(unsigned long ticks)
 {
 	long active, delta;
-
+	/* (1) 计算的间隔时间为5s + 10tick，
+        加10tick的目的就是让所有cpu都更新完calc_load_tasks，
+        tick_do_timer_cpu再来计算
+    */
 	if (time_before(jiffies, calc_load_update + 10))
 		return;
 
@@ -357,12 +360,13 @@ void calc_global_load(unsigned long ticks)
 	 * Fold the 'old' idle-delta to include all NO_HZ cpus.
 	 */
 	delta = calc_load_fold_idle();
+	 /* (2) 读取全局统计变量 */
 	if (delta)
 		atomic_long_add(delta, &calc_load_tasks);
 
 	active = atomic_long_read(&calc_load_tasks);
 	active = active > 0 ? active * FIXED_1 : 0;
-
+	/* (3) 计算1分钟、5分钟、15分钟的负载 */
 	avenrun[0] = calc_load(avenrun[0], EXP_1, active);
 	avenrun[1] = calc_load(avenrun[1], EXP_5, active);
 	avenrun[2] = calc_load(avenrun[2], EXP_15, active);
@@ -382,13 +386,13 @@ void calc_global_load(unsigned long ticks)
 void calc_global_load_tick(struct rq *this_rq)
 {
 	long delta;
-
+	/*判断5s更新周期是否到达*/
 	if (time_before(jiffies, this_rq->calc_load_update))
 		return;
-
+	 /*计算本cpu的负载变化到全局变量calc_load_tasks中*/
 	delta  = calc_load_fold_active(this_rq);
 	if (delta)
 		atomic_long_add(delta, &calc_load_tasks);
-
+	/*更新calc_load_update时间.LOAD_FREQ:(5*HZ+1),5s*/
 	this_rq->calc_load_update += LOAD_FREQ;
 }

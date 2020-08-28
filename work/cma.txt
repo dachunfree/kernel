@@ -1,0 +1,8 @@
+参考：https://www.cnblogs.com/LoyenWang/p/12182594.ht
+
+Contiguous Memory Allocator, CMA，连续内存分配器，用于分配连续的大块内存。
+CMA分配器，会Reserve一片物理内存区域：
+
+设备驱动不用时，内存管理系统将该区域用于分配和管理可移动类型页面；
+设备驱动使用时，用于连续内存分配，此时已经分配的页面需要进行迁移；
+此外，CMA分配器还可以与DMA子系统集成在一起，使用DMA的设备驱动程序无需使用单独的CMA API。

@@ -1022,7 +1022,11 @@ struct sched_domain_attr {
 extern int sched_domain_level_max;
 
 struct sched_group;
-
+/*
+代表一个 Scheduling Domain，也就是一个 CPU 集合，这个集合里所有的 CPU 都具有相同的属性和调度策略。
+Load Balance 是针对每个 domain 里的 CPU 进行的。这里要注意 Scheduling Domains 是分级的。像上节所讲
+的复杂系统就分为 Allnuma_domain,Numa_domain, Phy_domain, Core_domain, Smt_domain(Cpu_domain) 五个等级
+*/
 struct sched_domain {
 	/* These fields must be setup */
 	struct sched_domain *parent;	/* top domain must be null terminated */
