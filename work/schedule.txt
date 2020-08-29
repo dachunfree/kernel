@@ -1,0 +1,93 @@
+1.调度函数。
+__schedule(bool preempt) //false:主动调度，true：抢占
+	rq = cpu_rq(cpu); //rq per-cpu变量
+	prev = rq->curr; //获取当前运行的调度实体
+	/*****************主动调度处理流程************************************/
+	if (!preempt && prev->state) //如果是主动调度且已经进程改变了状态（非运行状态）
+		deactivate_task(rq, prev, DEQUEUE_SLEEP);//针对主动放弃cpu进入睡眠的进程，我们需要从对应的就绪队列上删除该进程
+			dequeue_task(rq, p, flags);
+				dequeue_task_fair //分析cfs出队
+					struct sched_entity *se = &p->se; //p是rq->curr
+					dequeue_entity(cfs_rq, se, flags);
+						update_curr(cfs_rq); //更新实际运行时间，虚拟运行时间，最小虚拟时间
+						__dequeue_entity(cfs_rq, se); //从rb-tree移除掉当前实体
+						se->on_rq = 0; //表示不在此运行队列中了
+						account_entity_dequeue(cfs_rq, se);//重新计算权重
+						update_min_vruntime(cfs_rq);//更新最小虚拟时间
+		prev->on_rq = 0; //当前运行实体不在运行队列上。
+	/*******************选择下一个要运行的进程********************************/
+	next = pick_next_task(rq, prev); //选择下一个要运行的进程
+		pick_next_task_fair(rq, prev) //还是从cfs分析。
+			put_prev_task(rq, prev); //将当前调度实体放回就绪队列
+				put_prev_entity(cfs_rq, se);
+						if (prev->on_rq) //如果当前实体仍然在就绪队列上（主要主动调度时候dequeue,不在就绪队列上了）
+							update_curr(cfs_rq);//更新实际运行时间，虚拟运行时间，最小虚拟时间
+							__enqueue_entity(cfs_rq, prev);//重新放入就绪队列的RB-tree.
+							cfs_rq->curr = NULL; //后事已经处理完毕，就绪队列的curr指针也应该指向NULL，代表当前就绪队列上没有正在运行的进程。
+			se = pick_next_entity(cfs_rq, NULL);//将下一个被调度实体从就绪队列中取出
+				left = __pick_first_entity(cfs_rq);//从rb-tree最左边结点取出
+			set_next_entity(cfs_rq, se);
+				if (se->on_rq)
+					__dequeue_entity(cfs_rq, se); //将调度实体从红黑树中删除，针对即将运行的进程，我们都会从红黑树中删除当前进程
+				update_stats_curr_start(cfs_rq, se);//更新当前选出来的心进程的exec_start时间
+				cfs_rq->curr = se; //更新就绪队列curr成员，当前进程正在运行的进程
+				se->prev_sum_exec_runtime = se->sum_exec_runtime;//统计当前进程运行时间.check_preempt_tick比较用。
+		p = task_of(se);//返回挑选出来的新进程
+	clear_tsk_need_resched(prev);//清除重新调度标志位
+	/************************准备进程的上下文切换********************************/
+	rq = context_switch(rq, prev, next);//上面准备工作(旧的进程处理结束，新的进程准备运行)，开始上下文切换
+		/*A----->B*/
+		mm = next->mm;    //B进程（新进程）
+		oldmm = prev->active_mm;//A进程（老进程）
+		if (!mm) { //B进程是内核线程（都是靠mm是否为空区分是否为内核线程）
+			next->active_mm = oldmm; //借用上一个的mm
+			atomic_inc(&oldmm->mm_count); //注意switch_to完成后回收资源。
+			enter_lazy_tlb(oldmm, next); //为了防止TLB频繁切换的一些处理.如内核部分代码共用不用切换。用户进程用ASID区分。
+		else：（新进程是用户线程）
+			switch_mm(oldmm, mm, next); //切换用户空间的mm。
+		switch_to(prev, next, prev);//汇编代码__switch_to(prev,task_thread_info(prev), task_thread_info(next));
+		finish_task_switch(prev); //现在已经在进程B(next)中了，pre是上一个切换走的进程A了
+			vtime_task_switch(prev);   //计算进程pre的时间统计
+			
+2.schedule_tick		
+	update_rq_clock(rq); //更新 clock_task
+	fair_sched_class.task_tick_fair(rq, curr, 0)
+		cfs_rq = cfs_rq_of(se);
+		entity_tick(cfs_rq, se, queued);
+			update_curr(cfs_rq); //更新当前运行的调度实体的虚拟时间等信息
+			if (cfs_rq->nr_running > 1) //cfs就绪队列的进程数量大于1
+				check_preempt_tick(cfs_rq, curr);
+					a.计算理想真实运行时间和当前进程已经运行时间，如果当前进程已经超时，置位TIF_NEED_RESCHED。
+					b.如果当前进程运行时间小于最小粒度时间，不用调度。
+					c.选出RB-tree中最小虚拟时间大于当前进程虚拟时间，不用调度。
+	update_cpu_load_active(rq);//跟新per-cpu中的rq的负载信息
+	calc_global_load_tick(rq); //per-cpu每隔5s更新本cpu rq的(nr_running+nr_uninterruptible)任务数量到系统全局变量calc_load_tasks
+3.高精度定时器应用于调度器
+3.1 初始化高精度定时器
+sched_init
+	init_rq_hrtick(rq);
+			hrtimer_init(&rq->hrtick_timer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
+			rq->hrtick_timer.function = hrtick;
+3.2回调函数	hrtick
+enum hrtimer_restart hrtick(struct hrtimer *timer)
+	rq->curr->sched_class->task_tick(rq, rq->curr, 1); //task_tick_fair
+		cfs_rq = cfs_rq_of(se);
+			update_rq_clock(rq);
+			entity_tick(cfs_rq, se, queued);（同上）
+
+4.负载均衡
+https://www.ibm.com/developerworks/cn/linux/l-cn-schldom/
+		调度器要解决的一个首要问题就是如何发挥这么多 CPU 的性能，使得负载均衡。不存某些 CPU 一直很忙，进程在排队等待运行，而某些
+ CPU 却是处于空闲状态。但是在这些 CPU 之间进行 Load Balance 是有代价的，比如对处于两个不同物理 CPU 的进程之间进行负载平衡的话，
+ 将会使得 Cache 失效。造成效率的下降。而且过多的 Load Balance 会大量占用 CPU 资源。还有一个要考虑的就是功耗 (Power) 的问题。一
+ 个物理 CPU 中的两个 Virtual CPU 各执行一个进程，显然比两个物理 CPU 中的 Virtual CPU 各执行一个进程节省功耗。因为硬件上可以实现
+ 一个物理 CPU 不用时关掉它以节省功耗。
+ 
+ 典型的一些原则如下：
+*在 cpu_domain 级： 因为是共享 cache，cpu_power 也基本是共用的。所以可以在这个 domain 级的 cpu groups 之间可以不受限制的进行 load balance 。
+*在 core_domain 级：可能会共享 L2 级 cache, 具体跟实现相关了。因此这一级的 balance 相对没那么频繁。要 core 之间负载的不平衡达到一定程度才进
+ 行 balance 。
+*在 phys_domain 级：在这一个 domain 级，如果进行 balance 。则每个物理 CPU 上的 Cache 会失效一段时间，并且要考虑 cpu_power，因为物理 CPU 级的
+ power 一般是被数关系。比如两个物理 CPU 是 power*2，而不像 core, 或逻辑 CPU，只是 power*1.1 这样的关系。
+*在 numa_domain 级：这一级的开销最大，一般很少进行 balance 。		
+	

@@ -277,4 +277,13 @@ static int __init rmem_cma_setup(struct reserved_mem *rmem)
 	return 0;
 }
 RESERVEDMEM_OF_DECLARE(cma, "shared-dma-pool", rmem_cma_setup);
+/*
+#define RESERVEDMEM_OF_DECLARE(name, compat, init)
+_OF_DECLARE(reservedmem, name, compat, init, reservedmem_of_init_fn)
+#define _OF_DECLARE(table, name, compat, fn, fn_type)			\
+	static const struct of_device_id __of_table_cma		\
+		__used __section(__##table##_of_table)			\
+		 = { .compatible = compat,				\
+		     .data = (fn == (fn_type)NULL) ? fn : fn  }
+*/
 #endif

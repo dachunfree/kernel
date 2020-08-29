@@ -99,6 +99,7 @@ static int __init cma_activate_area(struct cma *cma)
 	int bitmap_size = BITS_TO_LONGS(cma_bitmap_maxno(cma)) * sizeof(long);
 	unsigned long base_pfn = cma->base_pfn, pfn = base_pfn;
 	unsigned i = cma->count >> pageblock_order;
+	/*CMA area有一个bitmap来管理各个page的状态，这里bitmap_size给出了bitmap需要多少的内存。i变量表示该CMA area有多少个pageblock*/
 	struct zone *zone;
 
 	cma->bitmap = kzalloc(bitmap_size, GFP_KERNEL);
@@ -108,11 +109,12 @@ static int __init cma_activate_area(struct cma *cma)
 
 	WARN_ON_ONCE(!pfn_valid(pfn));
 	zone = page_zone(pfn_to_page(pfn));
-
+	/*遍历该CMA area中的所有的pageblock*/
 	do {
 		unsigned j;
 
 		base_pfn = pfn;
+		/*确保CMA area中的所有page都是在一个memory zone内，同时累加了pfn，从而得到下一个pageblock的初始page frame number*/
 		for (j = pageblock_nr_pages; j; --j, pfn++) {
 			WARN_ON_ONCE(!pfn_valid(pfn));
 			/*
@@ -124,6 +126,7 @@ static int __init cma_activate_area(struct cma *cma)
 			if (page_zone(pfn_to_page(pfn)) != zone)
 				goto err;
 		}
+		/*将该pageblock导入到伙伴系统，并且将migrate type设定为MIGRATE_CMA*/
 		init_cma_reserved_pageblock(pfn_to_page(base_pfn));
 	} while (--i);
 
@@ -382,6 +385,7 @@ struct page *cma_alloc(struct cma *cma, size_t count, unsigned int align)
 	mask = cma_bitmap_aligned_mask(cma, align);
 	offset = cma_bitmap_aligned_offset(cma, align);
 	bitmap_maxno = cma_bitmap_maxno(cma);
+	//计算分配所需要的bitmap数
 	bitmap_count = cma_bitmap_pages_to_bits(cma, count);
 
 	for (;;) {
@@ -393,6 +397,7 @@ struct page *cma_alloc(struct cma *cma, size_t count, unsigned int align)
 			mutex_unlock(&cma->lock);
 			break;
 		}
+		//将申请的位图置位，表示已经分配
 		bitmap_set(cma->bitmap, bitmap_no, bitmap_count);
 		/*
 		 * It's safe to drop the lock here. We've marked this region for
@@ -403,6 +408,7 @@ struct page *cma_alloc(struct cma *cma, size_t count, unsigned int align)
 
 		pfn = cma->base_pfn + (bitmap_no << cma->order_per_bit);
 		mutex_lock(&cma_mutex);
+		//使用页分配器分配内存
 		ret = alloc_contig_range(pfn, pfn + count, MIGRATE_CMA);
 		mutex_unlock(&cma_mutex);
 		if (ret == 0) {

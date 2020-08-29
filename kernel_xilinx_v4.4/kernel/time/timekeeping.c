@@ -1922,7 +1922,10 @@ struct timespec64 get_monotonic_coarse64(void)
 void do_timer(unsigned long ticks)
 {
 	jiffies_64 += ticks;
-	calc_global_load(ticks); //更新系统的平均负载（不是单一CPU core的负载），这些都是系统级别的任务，只需要在local tick device中选择一个作为global tick device就OK了
+	/*更新系统的平均负载（不是单一CPU core的负载），这些都是系统级别的任务，只需要在
+	local tick device中选择一个作为global tick device就OK了*/
+	calc_global_load(ticks);
+
 }
 /**
  * ktime_get_update_offsets_now - hrtimer helper

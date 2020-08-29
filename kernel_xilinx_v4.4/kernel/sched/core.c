@@ -590,7 +590,7 @@ void resched_curr(struct rq *rq)
 	}
 
 	if (set_nr_and_not_polling(curr))
-		smp_send_reschedule(cpu);
+		smp_send_reschedule(cpu); //ipi:scheduler_ipi
 	else
 		trace_sched_wake_idle_without_ipi(cpu);
 }
@@ -2919,9 +2919,16 @@ void scheduler_tick(void)
 	update_rq_clock(rq); //更新 clock_task
 	//如果需要重新调度，就把当前进程的thread_info中的flags标志位_TIF_NEED_RESCHED标志置1
 	curr->sched_class->task_tick(rq, curr, 0); //fair_sched_class.task_tick_fair
-	//更新就绪队列的cpu负载信息
+	/*__update_load_avg()是计算se/cfs_rq级别的负载，在cpu级别linux使用update_cpu_load_active(rq)来计算整个cpu->rq负载的变化趋势*/
 	update_cpu_load_active(rq);
+	/*
+	uptime 获取的平均负载，per-cpu每隔5s更新本cpu rq的(nr_running+nr_uninterruptible)任务数量到系统全局变量
+	calc_load_tasks，calc_load_tasks是整系统多个cpu(nr_running+nr_uninterruptible)任 务数量的总和，多cpu在访问
+	calc_load_tasks变量时使用原子操作来互斥。
+	do_timer(1);中靠1个cpu0 来进行汇总计算1分钟，5分钟，15分钟的负载。
+	*/
 	calc_global_load_tick(rq);
+
 	raw_spin_unlock(&rq->lock);
 
 	perf_event_task_tick();
@@ -2929,7 +2936,7 @@ void scheduler_tick(void)
 #ifdef CONFIG_SMP
 	//判断当前cpu是否是空闲的，是的话idle_cpu返回1，否则返回0
 	rq->idle_balance = idle_cpu(cpu);
-	//挂起SCHED_SOFTIRQ软中断函数，去做周期性的负载平衡操作
+	//挂起SCHED_SOFTIRQ软中断函数，去做周期性的负载平衡操作(周期为1分钟)
 	trigger_load_balance(rq); //触发负载均衡
 #endif
 	rq_last_tick_reset(rq);

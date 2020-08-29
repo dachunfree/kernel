@@ -389,8 +389,8 @@ struct cfs_rq {
 	 * CFS load tracking
 	 */
 	struct sched_avg avg;
-	u64 runnable_load_sum;
-	unsigned long runnable_load_avg;
+	u64 runnable_load_sum; //负载总和
+	unsigned long runnable_load_avg; //平均负载
 #ifdef CONFIG_FAIR_GROUP_SCHED
 	unsigned long tg_load_avg_contrib;
 #endif
@@ -595,7 +595,10 @@ struct rq {
 	unsigned int nr_preferred_running;
 #endif
 	#define CPU_LOAD_IDX_MAX 5
-	unsigned long cpu_load[CPU_LOAD_IDX_MAX]; //跟踪此前的负荷状态。
+	/*run_queue的load值也是这样。有些进程可能频繁地在TASK_RUNNING和非TASK_RUNNING状态之间变换，
+	导致run_queue的load值不断抖动。光看某一时刻的load值，我们是体会不到run_queue的负载情况的，
+	必须将一段时间内的load值综合起来看才行。于是，run_queue结构中维护了一个保存load值的数组：*/
+	unsigned long cpu_load[CPU_LOAD_IDX_MAX]; //cpu 的rq的负载均衡计算。共5种，表示不同的时间，时间单位为tick。
 	unsigned long last_load_update_tick; //最近的jiffies
 #ifdef CONFIG_NO_HZ_COMMON
 	u64 nohz_stamp;
@@ -624,7 +627,7 @@ struct rq {
 	 * one CPU and if it got migrated afterwards it may decrease
 	 * it on another CPU. Always updated under the runqueue lock:
 	 */
-	unsigned long nr_uninterruptible;
+	unsigned long nr_uninterruptible; //当前不可中断睡眠进程的个数
 
 	struct task_struct *curr, *idle, *stop;
 	unsigned long next_balance;
@@ -878,7 +881,10 @@ struct sched_group_capacity {
 
 	unsigned long cpumask[0]; /* iteration mask */
 };
-
+/*
+每个 Scheduling domain 都有一个或多个 CPU group，每个 group 都被 domain 当做一个
+单独的单元来对待。 Load Balance 就是在这些 CPU group 之间的 CPU 进行的
+*/
 struct sched_group {
 	struct sched_group *next;	/* Must be a circular list */
 	atomic_t ref;
