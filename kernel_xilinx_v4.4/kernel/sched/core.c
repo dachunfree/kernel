@@ -3234,7 +3234,7 @@ static void __sched notrace __schedule(bool preempt)
 
 	if (likely(prev != next)) {
 		rq->nr_switches++;
-		rq->curr = next;
+		rq->curr = next; //更新rq中的正在运行的队列
 		++*switch_count;
 
 		trace_sched_switch(preempt, prev, next);

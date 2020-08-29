@@ -729,7 +729,7 @@ static void update_curr(struct cfs_rq *cfs_rq)
 {
 	struct sched_entity *curr = cfs_rq->curr;
 	//从就绪队列rq的clock_task成员中获取当前时间
-	u64 now = rq_clock_task(rq_of(cfs_rq)); //scheduler_tick 中update_rq_clock更新的
+	u64 now = rq_clock_task(rq_of(cfs_rq)); //scheduler_tick 中 update_rq_clock更新的
 	u64 delta_exec;
 
 	if (unlikely(!curr))
@@ -2623,7 +2623,7 @@ __update_load_avg(u64 now, int cpu, struct sched_avg *sa,
 	scale_cpu = arch_scale_cpu_capacity(NULL, cpu); //获取不同CPU影响因子
 
 	/* delta_w is the amount already accumulated against our next period */
-	delta_w = sa->period_contrib; //上一周期不足1024的??
+	delta_w = sa->period_contrib; //上一统计周期不足1024的
 	/*如果出现时间长度超过period（1ms），那么在计算当前load的时候，上一个period中的load需要乘上衰减系数*/
 	if (delta + delta_w >= 1024) {
 		decayed = 1;
@@ -2768,7 +2768,7 @@ static inline void update_load_avg(struct sched_entity *se, int update_tg)
 	__update_load_avg(now, cpu, &se->avg,
 			  se->on_rq * scale_load_down(se->load.weight),
 			  cfs_rq->curr == se, NULL);
-
+	//在更新se负载后，顺便更新se attach的cfs就绪队列的负载信息。runqueue的负载就是该runqueue下所有的se负载总和
 	if (update_cfs_rq_load_avg(now, cfs_rq) && update_tg)
 		update_tg_load_avg(cfs_rq, 0);
 }
