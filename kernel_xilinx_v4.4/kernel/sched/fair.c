@@ -12983,7 +12983,7 @@ void update_cpu_load_nohz(void)
  * Called from scheduler_tick()
  */
 void update_cpu_load_active(struct rq *this_rq)
-{
+{
 	/*获取cfs_rq的runnable_load_avg的数值*/
 	unsigned long load = weighted_cpuload(cpu_of(this_rq));
 	/*
@@ -14888,7 +14888,7 @@ static inline void update_sg_lb_stats(struct lb_env *env,
 	int i;
 
 	memset(sgs, 0, sizeof(*sgs));
-
+	//遍历该调度组的所有cpu，计算该调度组的总负载。
 	for_each_cpu_and(i, sched_group_cpus(group), env->cpus) {
 		struct rq *rq = cpu_rq(i);
 
@@ -15027,7 +15027,7 @@ static inline void update_sd_lb_stats(struct lb_env *env, struct sd_lb_stats *sd
 	do {
 		struct sg_lb_stats *sgs = &tmp_sgs;
 		int local_group;
-
+		//判断是不是本地调度组即是否包含当前cpu。
 		local_group = cpumask_test_cpu(env->dst_cpu, sched_group_cpus(sg));
 		if (local_group) {
 			sds->local = sg;
@@ -15497,7 +15497,7 @@ static int active_load_balance_cpu_stop(void *data);
 
 static int should_we_balance(struct lb_env *env)
 {
-	struct sched_group *sg = env->sd->groups;
+	struct sched_group *sg = env->sd->groups; //sg指向sd调度域的第一个调度组
 	struct cpumask *sg_cpus, *sg_mask;
 	int cpu, balance_cpu = -1;
 
@@ -15509,18 +15509,19 @@ static int should_we_balance(struct lb_env *env)
 		return 1;
 
 	sg_cpus = sched_group_cpus(sg);
-	sg_mask = sched_group_mask(sg);
+	sg_mask = sched_group_mask(sg); //调度能力系数？？
 	/* Try to find first idle cpu */
+	//检查当前调度组中是否有空闲的cpu
 	for_each_cpu_and(cpu, sg_cpus, env->cpus) {
 		if (!cpumask_test_cpu(cpu, sg_mask) || !idle_cpu(cpu))
 			continue;
-
+		//如果本调度组有空闲的cpu,记录该空闲的cpu到 balance_cpu
 		balance_cpu = cpu;
 		break;
 	}
 
 	if (balance_cpu == -1)
-		balance_cpu = group_balance_cpu(sg);
+		balance_cpu = group_balance_cpu(sg); //没有idle cpu，找到第一个cpu
 
 	/*
 	 * First idle cpu or the first cpu(busiest) in this sched group
@@ -15552,10 +15553,10 @@ static int load_balance(int this_cpu, struct rq *this_rq,
 	struct cpumask *cpus = this_cpu_cpumask_var_ptr(load_balance_mask);
 
 	struct lb_env env = {
-		.sd		= sd,
-		.dst_cpu	= this_cpu,
-		.dst_rq		= this_rq,
-		.dst_grpmask    = sched_group_cpus(sd->groups),
+		.sd		= sd, //表示当前的调度域
+		.dst_cpu	= this_cpu, //当前的cpu，后面可能把繁忙的进程迁移到此cpu上面
+		.dst_rq		= this_rq, //对应当前cpu的就绪队列
+		.dst_grpmask    = sched_group_cpus(sd->groups), //当前调度域里面第一个调度组的位图
 		.idle		= idle,
 		.loop_break	= sched_nr_migrate_break,
 		.cpus		= cpus,
@@ -15576,6 +15577,7 @@ static int load_balance(int this_cpu, struct rq *this_rq,
 	schedstat_inc(sd, lb_count[idle]);
 
 redo:
+	//判断是否需要做负载均衡。调度组第一个cpu或者idle cpu。
 	if (!should_we_balance(&env)) {
 		*continue_balancing = 0;
 		goto out_balanced;
@@ -16200,7 +16202,7 @@ static void rebalance_domains(struct rq *rq, enum cpu_idle_type idle)
 			need_decay = 1;
 		}
 		max_cost += sd->max_newidle_lb_cost;
-
+		//如果调度域没有SD_LOAD_BALANCE，不用作负载均衡
 		if (!(sd->flags & SD_LOAD_BALANCE))
 			continue;
 

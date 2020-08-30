@@ -1029,12 +1029,12 @@ Load Balance 是针对每个 domain 里的 CPU 进行的。这里要注意 Scheduling Domains 是
 */
 struct sched_domain {
 	/* These fields must be setup */
-	struct sched_domain *parent;	/* top domain must be null terminated */
-	struct sched_domain *child;	/* bottom domain must be null terminated */
+	struct sched_domain *parent;	/* 当前 domain 的父 domain top domain must be null terminated */
+	struct sched_domain *child;	/* 当前 domain 的子 domain  bottom domain must be null terminated */
 	struct sched_group *groups;	/* the balancing groups of the domain */
-	unsigned long min_interval;	/* Minimum balance interval ms */
-	unsigned long max_interval;	/* Maximum balance interval ms */
-	unsigned int busy_factor;	/* less balancing by factor if busy */
+	unsigned long min_interval;	/* 最小的 load balance 间隔 Minimum balance interval ms */
+	unsigned long max_interval;	/*最大的 load balance 间隔 Maximum balance interval ms */
+	unsigned int busy_factor;	/*Busy 时延迟进行 balance 的系数  less balancing by factor if busy */
 	unsigned int imbalance_pct;	/* No balance until over watermark */
 	unsigned int cache_nice_tries;	/* Leave cache hot tasks for # tries */
 	unsigned int busy_idx;
@@ -1049,9 +1049,9 @@ struct sched_domain {
 	int level;
 
 	/* Runtime fields. */
-	unsigned long last_balance;	/* init to jiffies. units in jiffies */
-	unsigned int balance_interval;	/* initialise to 1. units in ms. */
-	unsigned int nr_balance_failed; /* initialise to 0 */
+	unsigned long last_balance;	/* 当前 domain 最近一次进行 balance 时的时间 (jiffies 为单位 )init to jiffies. units in jiffies */
+	unsigned int balance_interval;	/* 进行 balance 的时间间隔（ms 为单位）initialise to 1. units in ms. */ 
+	unsigned int nr_balance_failed; /*balance 失败的次数 initialise to 0 */
 
 	/* idle_balance() stats */
 	u64 max_newidle_lb_cost;
