@@ -889,7 +889,7 @@ struct sched_group {
 	struct sched_group *next;	/* Must be a circular list */
 	atomic_t ref;
 
-	unsigned int group_weight;
+	unsigned int group_weight; //该组包含cpu个数。
 	struct sched_group_capacity *sgc;
 
 	/*

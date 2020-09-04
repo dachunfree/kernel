@@ -1050,7 +1050,7 @@ struct sched_domain {
 
 	/* Runtime fields. */
 	unsigned long last_balance;	/* 当前 domain 最近一次进行 balance 时的时间 (jiffies 为单位 )init to jiffies. units in jiffies */
-	unsigned int balance_interval;	/* 进行 balance 的时间间隔（ms 为单位）initialise to 1. units in ms. */ 
+	unsigned int balance_interval;	/* 进行 balance 的时间间隔（ms 为单位）initialise to 1. units in ms. */
 	unsigned int nr_balance_failed; /*balance 失败的次数 initialise to 0 */
 
 	/* idle_balance() stats */
@@ -1426,7 +1426,7 @@ struct task_struct {
 
 	unsigned int policy; //调度策略
 	int nr_cpus_allowed;
-	cpumask_t cpus_allowed;
+	cpumask_t cpus_allowed; //被绑定到哪个cpu运行
 
 #ifdef CONFIG_PREEMPT_RCU
 	int rcu_read_lock_nesting;

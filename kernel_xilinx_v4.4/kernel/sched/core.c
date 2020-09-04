@@ -2937,6 +2937,13 @@ void scheduler_tick(void)
 	//判断当前cpu是否是空闲的，是的话idle_cpu返回1，否则返回0
 	rq->idle_balance = idle_cpu(cpu);
 	//挂起SCHED_SOFTIRQ软中断函数，去做周期性的负载平衡操作(周期为1分钟)
+/*
+在软中断中进行处理，主要流程如下:
+1.负载均衡从当前cpu开始，由下至上遍历调度域，从最底层的调度域开始做负载均衡；
+2.允许做负载均衡的首要条件是当前cpu是调度域的第一个cpu，或者当前cpu是idle cpu。shoule_we_balcace
+3.在调度域中查找最忙的调度组，更新调度域和调度组相关信息，最后计算出该调度域的不均衡负载值(imbalance)
+4.在最忙的调度组中找到最忙的cpu，然后把最繁忙的cpu的的进程迁移到当前cpu上，迁移的负载量为不均衡负载值。
+*/
 	trigger_load_balance(rq); //触发负载均衡
 #endif
 	rq_last_tick_reset(rq);

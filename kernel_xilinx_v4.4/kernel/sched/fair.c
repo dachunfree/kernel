@@ -4523,7 +4523,7 @@ static unsigned long source_load(int cpu, int type)
 static unsigned long target_load(int cpu, int type)
 {
 	struct rq *rq = cpu_rq(cpu);
-	unsigned long total = weighted_cpuload(cpu);
+	unsigned long total = weighted_cpuload(cpu); //cfs_rq->runnable_load_avg
 
 	if (type == 0 || !sched_feat(LB_BIAS))
 		return total;
@@ -14105,11 +14105,11 @@ enum fbq_type { regular, remote, all };
 struct lb_env {
 	struct sched_domain	*sd;
 
-	struct rq		*src_rq;
-	int			src_cpu;
+	struct rq		*src_rq; //最繁忙的cpu的rq
+	int			src_cpu; //最繁忙的cpu
 
-	int			dst_cpu;
-	struct rq		*dst_rq;
+	int			dst_cpu; //目标cpu
+	struct rq		*dst_rq; //对应目标cpu的rq
 
 	struct cpumask		*dst_grpmask;
 	int			new_dst_cpu;
@@ -14229,8 +14229,8 @@ int can_migrate_task(struct task_struct *p, struct lb_env *env)
 	/*
 	 * We do not migrate tasks that are:
 	 * 1) throttled_lb_pair, or
-	 * 2) cannot be migrated to this CPU due to cpus_allowed, or
-	 * 3) running (obviously), or
+	 * 2) cannot be migrated to this CPU due to cpus_allowed, or //被绑定的到固定cpu的线程不允许迁移
+	 * 3) running (obviously), or 正在运行的不允许迁移
 	 * 4) are cache-hot on their current CPU.
 	 */
 	if (throttled_lb_pair(task_group(p), env->src_cpu, env->dst_cpu))
@@ -14255,6 +14255,7 @@ int can_migrate_task(struct task_struct *p, struct lb_env *env)
 			return 0;
 
 		/* Prevent to re-select dst_cpu via env's cpus */
+		//被绑定的cpu线程不允许迁移。
 		for_each_cpu_and(cpu, env->dst_grpmask, env->cpus) {
 			if (cpumask_test_cpu(cpu, tsk_cpus_allowed(p))) {
 				env->flags |= LBF_DST_PINNED;
@@ -14268,7 +14269,7 @@ int can_migrate_task(struct task_struct *p, struct lb_env *env)
 
 	/* Record that we found atleast one task that could run on dst_cpu */
 	env->flags &= ~LBF_ALL_PINNED;
-
+	//正在运行的进程不允许迁移
 	if (task_running(env->src_rq, p)) {
 		schedstat_inc(p, se.statistics.nr_failed_migrations_running);
 		return 0;
@@ -14280,6 +14281,7 @@ int can_migrate_task(struct task_struct *p, struct lb_env *env)
 	 * 2) task is cache cold, or
 	 * 3) too many balance attempts have failed.
 	 */
+	 //非 cache-hot类型
 	tsk_cache_hot = migrate_degrades_locality(p, env);
 	if (tsk_cache_hot == -1)
 		tsk_cache_hot = task_hot(p, env);
@@ -14303,7 +14305,7 @@ int can_migrate_task(struct task_struct *p, struct lb_env *env)
 static void detach_task(struct task_struct *p, struct lb_env *env)
 {
 	lockdep_assert_held(&env->src_rq->lock);
-
+	//将进程p从src_rq(最繁忙的cpu)的rb tree中移除
 	deactivate_task(env->src_rq, p, 0);
 	p->on_rq = TASK_ON_RQ_MIGRATING;
 	set_task_cpu(p, env->dst_cpu);
@@ -14380,7 +14382,7 @@ static int detach_tasks(struct lb_env *env)
 			env->flags |= LBF_NEED_BREAK;
 			break;
 		}
-
+		//判断哪些进程可以迁移。从链表中获取相关进程进行判断。
 		if (!can_migrate_task(p, env))
 			goto next;
 
@@ -14388,7 +14390,7 @@ static int detach_tasks(struct lb_env *env)
 
 		if (sched_feat(LB_MIN) && load < 16 && !env->sd->nr_balance_failed)
 			goto next;
-
+		//进程负载的一半  大于 要总迁移的负载量
 		if ((load / 2) > env->imbalance)
 			goto next;
 
@@ -14396,7 +14398,7 @@ static int detach_tasks(struct lb_env *env)
 		list_add(&p->se.group_node, &env->tasks);
 
 		detached++;
-		env->imbalance -= load;
+		env->imbalance -= load; //总迁移负载量减去迁移的
 
 #ifdef CONFIG_PREEMPT
 		/*
@@ -14468,7 +14470,7 @@ static void attach_tasks(struct lb_env *env)
 	while (!list_empty(tasks)) {
 		p = list_first_entry(tasks, struct task_struct, se.group_node);
 		list_del_init(&p->se.group_node);
-
+		//将从负载重的cpu移除的进程迁移到本cpu中
 		attach_task(env->dst_rq, p);
 	}
 
@@ -14569,8 +14571,8 @@ static unsigned long task_h_load(struct task_struct *p)
 
 enum group_type {
 	group_other = 0,
-	group_imbalanced,
-	group_overloaded,
+	group_imbalanced, //表示调度组有负载不均衡的情况
+	group_overloaded, //表示组里正在运行的进程数大于 group_capacity_factor
 };
 
 /*
@@ -14894,12 +14896,13 @@ static inline void update_sg_lb_stats(struct lb_env *env,
 
 		/* Bias balancing toward cpus of our domain */
 		if (local_group)
-			load = target_load(i, load_idx);
+			load = target_load(i, load_idx); //max value
 		else
-			load = source_load(i, load_idx);
-
+			load = source_load(i, load_idx); //min value
+		//计算调度组的总负载
 		sgs->group_load += load;
 		sgs->group_util += cpu_util(i);
+		//统计运行中的进程数目
 		sgs->sum_nr_running += rq->cfs.h_nr_running;
 
 		if (rq->nr_running > 1)
@@ -14909,6 +14912,7 @@ static inline void update_sg_lb_stats(struct lb_env *env,
 		sgs->nr_numa_running += rq->nr_numa_running;
 		sgs->nr_preferred_running += rq->nr_preferred_running;
 #endif
+		//计算总负载
 		sgs->sum_weighted_load += weighted_cpuload(i);
 		if (idle_cpu(i))
 			sgs->idle_cpus++;
@@ -14916,14 +14920,16 @@ static inline void update_sg_lb_stats(struct lb_env *env,
 
 	/* Adjust by relative CPU capacity of the group */
 	sgs->group_capacity = group->sgc->capacity;
+	//计算该调度组中的每个cpu的平均负载。总负载/调度组能力系数
 	sgs->avg_load = (sgs->group_load*SCHED_CAPACITY_SCALE) / sgs->group_capacity;
 
 	if (sgs->sum_nr_running)
 		sgs->load_per_task = sgs->sum_weighted_load / sgs->sum_nr_running;
-
+	//group_weight 该调度组包含cpu的个数
 	sgs->group_weight = group->group_weight;
-
+	//看注释，首选判断这个条件，是否已经超过了cpu的能力
 	sgs->group_no_capacity = group_is_overloaded(env, sgs);
+	//返回调度组的状态。
 	sgs->group_type = group_classify(group, sgs);
 }
 
@@ -15023,7 +15029,7 @@ static inline void update_sd_lb_stats(struct lb_env *env, struct sd_lb_stats *sd
 		prefer_sibling = 1;
 
 	load_idx = get_sd_load_idx(env->sd, env->idle);
-
+	//遍历调度域中的调度组
 	do {
 		struct sg_lb_stats *sgs = &tmp_sgs;
 		int local_group;
@@ -15037,7 +15043,7 @@ static inline void update_sd_lb_stats(struct lb_env *env, struct sd_lb_stats *sd
 			    time_after_eq(jiffies, sg->sgc->next_update))
 				update_group_capacity(env->sd, env->dst_cpu);
 		}
-
+		//遍历该调度组的所有cpu，计算该调度组的总负载。放在 sds->busiest_stat
 		update_sg_lb_stats(env, sg, load_idx, local_group, sgs,
 						&overload);
 
@@ -15060,7 +15066,7 @@ static inline void update_sd_lb_stats(struct lb_env *env, struct sd_lb_stats *sd
 			sgs->group_no_capacity = 1;
 			sgs->group_type = group_classify(sg, sgs);
 		}
-
+		//进行检测比较，更新出最忙组
 		if (update_sd_pick_busiest(env, sds, sg, sgs)) {
 			sds->busiest = sg;
 			sds->busiest_stat = *sgs;
@@ -15071,7 +15077,7 @@ next_group:
 		sds->total_load += sgs->group_load;
 		sds->total_capacity += sgs->group_capacity;
 
-		sg = sg->next;
+		sg = sg->next; //遍历下一个group
 	} while (sg != env->sd->groups);
 
 	if (env->sd->flags & SD_NUMA)
@@ -15313,7 +15319,7 @@ static struct sched_group *find_busiest_group(struct lb_env *env)
 	if ((env->idle == CPU_IDLE || env->idle == CPU_NEWLY_IDLE) &&
 	    check_asym_packing(env, &sds))
 		return sds.busiest;
-
+	//如果没有找到最忙的调度组或者最忙的调度组没有正在运行的进程，跳过该调度域
 	/* There is no busy sibling group to pull tasks from */
 	if (!sds.busiest || busiest->sum_nr_running == 0)
 		goto out_balanced;
@@ -15420,7 +15426,7 @@ static struct rq *find_busiest_queue(struct lb_env *env,
 			continue;
 
 		capacity = capacity_of(i);
-
+		//cfs_rq->runnable_load_avg
 		wl = weighted_cpuload(i);
 
 		/*
@@ -15508,7 +15514,7 @@ static int should_we_balance(struct lb_env *env)
 	if (env->idle == CPU_NEWLY_IDLE)
 		return 1;
 
-	sg_cpus = sched_group_cpus(sg);
+	sg_cpus = sched_group_cpus(sg); //多少个cpu
 	sg_mask = sched_group_mask(sg); //调度能力系数？？
 	/* Try to find first idle cpu */
 	//检查当前调度组中是否有空闲的cpu
@@ -15558,7 +15564,7 @@ static int load_balance(int this_cpu, struct rq *this_rq,
 		.dst_rq		= this_rq, //对应当前cpu的就绪队列
 		.dst_grpmask    = sched_group_cpus(sd->groups), //当前调度域里面第一个调度组的位图
 		.idle		= idle,
-		.loop_break	= sched_nr_migrate_break,
+		.loop_break	= sched_nr_migrate_break, //本次最多迁移32个进程
 		.cpus		= cpus,
 		.fbq_type	= all,
 		.tasks		= LIST_HEAD_INIT(env.tasks),
@@ -15621,7 +15627,7 @@ more_balance:
 		 * cur_ld_moved - load moved in current iteration
 		 * ld_moved     - cumulative load moved across iterations
 		 */
-		 //进行task迁移
+		 //从最繁忙的cpu中迁移到此cpu中。
 		cur_ld_moved = detach_tasks(&env);
 
 		/*
