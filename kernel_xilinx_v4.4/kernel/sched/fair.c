@@ -219,7 +219,7 @@ static void __update_inv_weight(struct load_weight *lw)
 */
 static u64 __calc_delta(u64 delta_exec, unsigned long weight, struct load_weight *lw)
 {
-	u64 fact = scale_load_down(weight);
+	u64 fact = scale_load_down(weight); //1024
 	int shift = WMULT_SHIFT;
 
 	__update_inv_weight(lw);
@@ -2646,7 +2646,7 @@ __update_load_avg(u64 now, int cpu, struct sched_avg *sa,
 						weight * scaled_delta_w;
 			}
 		}
-		if (running) ////如果进程当前状态是running，那么也累计到sa->util_sum中
+		if (running) //如果进程当前状态是running，那么也累计到sa->util_sum中
 			sa->util_sum += scaled_delta_w * scale_cpu;
 
 		delta -= delta_w; //去掉补齐部分,剩下需要计算的load: current time-T2
@@ -3365,6 +3365,7 @@ entity_tick(struct cfs_rq *cfs_rq, struct sched_entity *curr, int queued)
 	/*
 	 * Ensure that runnable average is periodically updated.
 	 */
+	 //更新负载
 	update_load_avg(curr, 1);
 	update_cfs_shares(cfs_rq);
 
@@ -13492,6 +13493,7 @@ static int cpu_util(int cpu)
  *
  * preempt must be disabled.
  */
+ /*sd_flag为SD_BALANCE_WAKE，pre cpu为上一运行该进程的CPU*/
 static int
 select_task_rq_fair(struct task_struct *p, int prev_cpu, int sd_flag, int wake_flags)
 {
@@ -13513,6 +13515,7 @@ select_task_rq_fair(struct task_struct *p, int prev_cpu, int sd_flag, int wake_f
 		 * If both cpu and prev_cpu are part of this domain,
 		 * cpu is a valid SD_WAKE_AFFINE target.
 		 */
+		 // wake up cpu(本地)和 pre cpu(上一进程运行的cpu)是同一调度域，具有亲和性
 		if (want_affine && (tmp->flags & SD_WAKE_AFFINE) &&
 		    cpumask_test_cpu(prev_cpu, sched_domain_span(tmp))) {
 			affine_sd = tmp;
@@ -13524,7 +13527,7 @@ select_task_rq_fair(struct task_struct *p, int prev_cpu, int sd_flag, int wake_f
 		else if (!want_affine)
 			break;
 	}
-
+	/*找到一个具有亲和性的调度域,且wake up cpu和pre cpu不是同一个cpu*/
 	if (affine_sd) {
 		sd = NULL; /* Prefer wake_affine over balance flags */
 		if (cpu != prev_cpu && wake_affine(affine_sd, p, sync))
@@ -14108,13 +14111,13 @@ struct lb_env {
 	struct rq		*src_rq; //最繁忙的cpu的rq
 	int			src_cpu; //最繁忙的cpu
 
-	int			dst_cpu; //目标cpu
-	struct rq		*dst_rq; //对应目标cpu的rq
+	int			dst_cpu; //目标cpu，当前cpu
+	struct rq		*dst_rq; //对应目标cpu的rq.cpu0或者idle cpu
 
 	struct cpumask		*dst_grpmask;
 	int			new_dst_cpu;
 	enum cpu_idle_type	idle;
-	long			imbalance;
+	long			imbalance; //差多少不平衡
 	/* The set of CPUs under consideration for load-balancing */
 	struct cpumask		*cpus;
 
@@ -14308,6 +14311,7 @@ static void detach_task(struct task_struct *p, struct lb_env *env)
 	//将进程p从src_rq(最繁忙的cpu)的rb tree中移除
 	deactivate_task(env->src_rq, p, 0);
 	p->on_rq = TASK_ON_RQ_MIGRATING;
+	//进行迁移
 	set_task_cpu(p, env->dst_cpu);
 }
 
@@ -14582,14 +14586,14 @@ struct sg_lb_stats {
 	unsigned long avg_load; /*Avg load across the CPUs of the group */
 	unsigned long group_load; /* Total load over the CPUs of the group */
 	unsigned long sum_weighted_load; /* Weighted load of group's tasks */
-	unsigned long load_per_task;
+	unsigned long load_per_task; // 等于 sum_weighted_load / sum_nr_running
 	unsigned long group_capacity;
-	unsigned long group_util; /* Total utilization of the group */
-	unsigned int sum_nr_running; /* Nr tasks running in the group */
+	unsigned long group_util; /*组利用率 Total utilization of the group */
+	unsigned int sum_nr_running; /* 组中运行的进程的数目。Nr tasks running in the group */
 	unsigned int idle_cpus;
 	unsigned int group_weight;
 	enum group_type group_type;
-	int group_no_capacity;
+	int group_no_capacity;  //是否超载
 #ifdef CONFIG_NUMA_BALANCING
 	unsigned int nr_numa_running;
 	unsigned int nr_preferred_running;
@@ -14863,10 +14867,10 @@ static inline enum
 group_type group_classify(struct sched_group *group,
 			  struct sg_lb_stats *sgs)
 {
-	if (sgs->group_no_capacity)
+	if (sgs->group_no_capacity) //超载了
 		return group_overloaded;
 
-	if (sg_imbalanced(group))
+	if (sg_imbalanced(group))  //不平衡
 		return group_imbalanced;
 
 	return group_other;
@@ -14899,7 +14903,7 @@ static inline void update_sg_lb_stats(struct lb_env *env,
 			load = target_load(i, load_idx); //max value
 		else
 			load = source_load(i, load_idx); //min value
-		//计算调度组的总负载
+		//计算调度组的总负载。rq级别的
 		sgs->group_load += load;
 		sgs->group_util += cpu_util(i);
 		//统计运行中的进程数目
@@ -15211,6 +15215,26 @@ void fix_small_imbalance(struct lb_env *env, struct sd_lb_stats *sds)
  * @env: load balance environment
  * @sds: statistics of the sched_domain whose imbalance is to be calculated.
  */
+ //	计算group在给定domain中的imbalance
+//	调用路径：find_busiest_group->calculate_imbalance
+//	函数参数：
+//		sds:sched domain的统计信息
+//		this_cpu：当前正在运行load balance的cpu
+//		imbalance：保存imbalance值
+//	函数任务：
+//		1.计算最忙group内进程的平均负载
+//			1.1 公式：最忙group当前的负载量/最忙group当前运行的进程数
+//		2.如果最忙group失衡
+//			2.1 最忙group内进程的平均负载 = min(最忙group的当前负载，sched doman的平均负载)
+//		3.如果最忙group的负载小于domain平均负载，则说明已经平衡，返回
+//		4.如果最忙group没有失衡
+//			4.1 计算最忙group超过group容量的进程个数
+//		5.计算load balance进行pull的load
+//			5.1 pull的load量为 min(最忙group超过domain平均负载的量，最忙group的超过容量的负载量)
+//		6.计算this_cpu所在group与最忙cpu所在group之间的imbalance量
+//			6.1 imbalance量为 min(load balance进行pull的load，当前cpu所在group超过domain平均负载的量)
+//		7.如果imbalance不足最忙group中进程的平均负载
+//			7.1 进行微调整
 static inline void calculate_imbalance(struct lb_env *env, struct sd_lb_stats *sds)
 {
 	unsigned long max_pull, load_above_capacity = ~0UL;
@@ -15233,6 +15257,7 @@ static inline void calculate_imbalance(struct lb_env *env, struct sd_lb_stats *s
 	 * max load less than avg load(as we skip the groups at or below
 	 * its cpu_capacity, while calculating max_load..)
 	 */
+	//如果最忙调度组的平均负载小于等于当前cpu的平均负载，不必负载均衡
 	if (busiest->avg_load <= sds->avg_load ||
 	    local->avg_load >= sds->avg_load) {
 		env->imbalance = 0;
@@ -15242,6 +15267,7 @@ static inline void calculate_imbalance(struct lb_env *env, struct sd_lb_stats *s
 	/*
 	 * If there aren't any idle cpus, avoid creating some.
 	 */
+	 //如果本地cpu的调度组和最忙调度组都出现了超载(over_load),即运行的进程数目大于该组能力指数
 	if (busiest->group_type == group_overloaded &&
 	    local->group_type   == group_overloaded) {
 		load_above_capacity = busiest->sum_nr_running *
@@ -15588,7 +15614,7 @@ redo:
 		*continue_balancing = 0;
 		goto out_balanced;
 	}
-	//找到domain内最忙的group
+	//找到domain内最忙的group,并计算domain内group的imbalance程度
 	group = find_busiest_group(&env);
 	if (!group) {
 		schedstat_inc(sd, lb_nobusyg[idle]);
@@ -15627,7 +15653,7 @@ more_balance:
 		 * cur_ld_moved - load moved in current iteration
 		 * ld_moved     - cumulative load moved across iterations
 		 */
-		 //从最繁忙的cpu中迁移到此cpu中。
+		 //从最繁忙的cpu(src)中迁移出来
 		cur_ld_moved = detach_tasks(&env);
 
 		/*
@@ -15639,7 +15665,7 @@ more_balance:
 		 */
 
 		raw_spin_unlock(&busiest->lock);
-
+		//加入dst_rq 队列
 		if (cur_ld_moved) {
 			attach_tasks(&env);
 			ld_moved += cur_ld_moved;
@@ -16053,12 +16079,12 @@ static void nohz_balancer_kick(void)
 	int ilb_cpu;
 
 	nohz.next_balance++;
-
+	//通过find_new_ilb查找一个idle的cpu
 	ilb_cpu = find_new_ilb();
 
 	if (ilb_cpu >= nr_cpu_ids)
 		return;
-
+	//如果该cpu已经在做nohz load balance的话，直接返回
 	if (test_and_set_bit(NOHZ_BALANCE_KICK, nohz_flags(ilb_cpu)))
 		return;
 	/*
@@ -16458,7 +16484,12 @@ void trigger_load_balance(struct rq *rq)
 
 	if (time_after_eq(jiffies, rq->next_balance))
 		raise_softirq(SCHED_SOFTIRQ); //软中断处理函数。run_rebalance_domains
+/*Nohz就是关闭idle CPU上的时钟中断。这样不会存在定期的时钟中断*/
 #ifdef CONFIG_NO_HZ_COMMON
+/*其他的cpu已经进入idle，本CPU任务太重，需要通过ipi将其idle的cpu唤醒来进行负载均衡。
+我们称之idle load banlance*/
+/*nohz_kick_needed用于检查是否需要kick nohz load balance，就是检查当前CPU是否负载过高等等情况，
+是否需要唤醒一个idle CPU让其pull 一些进程过去，分担一下压力*/
 	if (nohz_kick_needed(rq))
 		nohz_balancer_kick();
 #endif

@@ -367,6 +367,7 @@ void calc_global_load(unsigned long ticks)
 	active = atomic_long_read(&calc_load_tasks);
 	active = active > 0 ? active * FIXED_1 : 0;
 	/* (3) 计算1分钟、5分钟、15分钟的负载 */
+	/*=load *(e/2048)+active*(1-e/2048)+0.5 0.5为四舍五入 */
 	avenrun[0] = calc_load(avenrun[0], EXP_1, active);
 	avenrun[1] = calc_load(avenrun[1], EXP_5, active);
 	avenrun[2] = calc_load(avenrun[2], EXP_15, active);

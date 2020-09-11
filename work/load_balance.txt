@@ -65,3 +65,52 @@ unsigned long cpu_load[CPU_LOAD_IDX_MAX] （目前CPU_LOAD_IDX_MAX值为5）
 可见，load_balance实际上是实现了对应sched_domain下的sched_group之间的平衡。较高层次的sched_domain包含了很多CPU，但是在这个
 sched_domain上的load_balance并不直接解决这些CPU之间的负载均衡，而只是解决sched_group之间的平衡（这又是load_balance的一大简化）。
 而最底层的sched_group是跟CPU一一对应的，所以最终还是实现了CPU之间的平衡。
+
+负载均衡比较好的3篇文章：
+https://mp.weixin.qq.com/s/pLAFcD23qBP4iZxvek7xlg
+https://mp.weixin.qq.com/s/-04fc_d0FNqxE6_asXFgpw
+https://blog.csdn.net/feelabclihu/article/details/106435849?utm_medium=distribute.pc_relevant.none-task-blog-searchFromBaidu-5.channel_param&depth_1-utm_source=distribute.pc_relevant.none-task-blog-searchFromBaidu-5.channel_param
+2、什么是均衡
+
+		对于负载均衡而言，并不是把整个系统的负载平均的分配到系统中的各个CPU上。实际上，我们还是必须要考虑系统中各个CPU的算力，
+让CPU获得和其算力匹配的负载。例如在一个6个小核+2个大核的系统中，整个系统如果有800的负载，那么每个CPU上分配100的负载其实是
+不均衡的，因为大核CPU可以提供更强的算力。
+
+		什么是CPU算力（capacity），所谓算力就是描述CPU的能够提供的计算能力。在同样的频率下，一个微架构是A77的CPU显然算力要大于A57的CPU。
+如果CPU的微架构都是一样的，那么一个最大频率是2.2GHz的CPU算力肯定是大于最大频率是1.1GHz的CPU。因此，确定了微架构和最大频率，一个CPU的
+算力就基本确定了。Cpufreq系统会根据当前的CPU util来调节CPU当前的运行频率，但这并不能改变CPU算力。只有当CPU最大运行频率发生变化的时候
+（例如触发温控，限制了该CPU的最大频率），CPU的算力才会随之变化。
+		CFS任务均衡中使用的CPU算力其实一个不断变化的值，需要经常更新。为了让CPU算力和任务负载可以对比，实际上我们采用了归一化的方式，
+即系统中处理能力最强的CPU运行在最高频率的算力是1024，其他的CPU算力根据微架构和运行频率响应的调整其算力。
+
+为了更好的进行CFS任务的均衡，系统需要跟踪任务负载和CPU负载。跟踪任务负载是主要有两个原因：
+
+（1）判断该任务是否适合当前CPU算力。
+
+（2）如果判定需要均衡，那么需要在CPU之间迁移多少的任务才能达到平衡？有了任务负载跟踪模块，这个问题就比较好回答了。
+
+		有了上面描述的基础设施，那么什么时候进行负载均衡呢？这主要和调度事件相关，当发生任务唤醒、任务创建、tick到来等调度事件的时候，
+我们可以检查当前系统的不均衡情况，并酌情进行任务迁移，以便让系统负载处于平衡状态。
+
+		我们还定义了不均衡的门限值，也就是说domain的group之间如果有较小的不均衡，我们也是可以允许的，超过了门限值才发起负载均衡的操作。
+		
+1、整体的场景描述
+
+在linux内核中，为了让任务均衡的分布在系统的所有CPU上，我们主要考虑下面三个场景：
+
+（1）负载均衡（load balance）。通过搬移cpu runqueue上的任务，让各个CPU上的负载匹配CPU算力。
+
+（2）任务放置（task placement）。当阻塞的任务被唤醒的时候，确定该任务应该放置在那个CPU上执行。
+
+（3）主动均衡（active upmigration）。当一个低算力CPU的runqueue中出现misfit task的时候，如果该任务持续执行，那么负载均衡无能为力，
+		因为它只负责迁移runnable状态的任务。这种场景下，active upmigration可以把当前正在运行的misfit task向上迁移到算力更高的CPU上去。
+		
+		
+第二篇：
+内核中，task placement场景发生在以下三种情况：
+
+（1）进程通过fork创建子进程；
+
+（2）进程通过sched_exec开始执行；
+
+（3）阻塞的进程被唤醒。

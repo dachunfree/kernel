@@ -389,7 +389,7 @@ struct cfs_rq {
 	 * CFS load tracking
 	 */
 	struct sched_avg avg;
-	u64 runnable_load_sum; //负载总和
+	u64 runnable_load_sum; //负载总和.时间*权重*fre_factor
 	unsigned long runnable_load_avg; //平均负载
 #ifdef CONFIG_FAIR_GROUP_SCHED
 	unsigned long tg_load_avg_contrib;
@@ -641,7 +641,7 @@ struct rq {
 
 #ifdef CONFIG_SMP
 	struct root_domain *rd;
-	struct sched_domain *sd;
+	struct sched_domain *sd; //负载均衡的调度域
 
 	unsigned long cpu_capacity;
 	unsigned long cpu_capacity_orig;
@@ -889,8 +889,8 @@ struct sched_group {
 	struct sched_group *next;	/* Must be a circular list */
 	atomic_t ref;
 
-	unsigned int group_weight; //该组包含cpu个数。
-	struct sched_group_capacity *sgc;
+	unsigned int group_weight; //该调度组中包含cpu个数。
+	struct sched_group_capacity *sgc; //该调度组的算力信息
 
 	/*
 	 * The CPUs this group covers.
@@ -899,7 +899,7 @@ struct sched_group {
 	 * by attaching extra space to the end of the structure,
 	 * depending on how many CPUs the kernel has booted up with)
 	 */
-	unsigned long cpumask[0];
+	unsigned long cpumask[0]; //多少个系统已经boot up的cpu
 };
 
 static inline struct cpumask *sched_group_cpus(struct sched_group *sg)

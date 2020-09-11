@@ -1031,13 +1031,13 @@ struct sched_domain {
 	/* These fields must be setup */
 	struct sched_domain *parent;	/* 当前 domain 的父 domain top domain must be null terminated */
 	struct sched_domain *child;	/* 当前 domain 的子 domain  bottom domain must be null terminated */
-	struct sched_group *groups;	/* the balancing groups of the domain */
-	unsigned long min_interval;	/* 最小的 load balance 间隔 Minimum balance interval ms */
-	unsigned long max_interval;	/*最大的 load balance 间隔 Maximum balance interval ms */
-	unsigned int busy_factor;	/*Busy 时延迟进行 balance 的系数  less balancing by factor if busy */
-	unsigned int imbalance_pct;	/* No balance until over watermark */
+	struct sched_group *groups;	/*环形链表。the balancing groups of the domain */
+	unsigned long min_interval;	/* 最小的 负载均衡 间隔。Minimum balance interval ms */
+	unsigned long max_interval;	/*最大的 负载均衡 间隔。Maximum balance interval ms */
+	unsigned int busy_factor;	/*Busy 时延迟进行 balance 的系数。cpu 繁忙的情况下 均衡时间长:busy factor* balance_interval。 less balancing by factor if busy */
+	unsigned int imbalance_pct;	/* 调度域不均衡达到水位标志后开始进行。No balance until over watermark */
 	unsigned int cache_nice_tries;	/* Leave cache hot tasks for # tries */
-	unsigned int busy_idx;
+	unsigned int busy_idx; //cpu[load_index] 的load_index
 	unsigned int idle_idx;
 	unsigned int newidle_idx;
 	unsigned int wake_idx;
@@ -1209,7 +1209,7 @@ struct sched_avg {
 	u64 last_update_time, load_sum;
 	/*util_sum:基于正在运行（running）时间的负载贡献总和。running时间是指调度实体se正在cpu上执行时间*/
 	//period_contrib:上一周期剩余的(小于1024)的负载
-	u32 util_sum, period_contrib;
+	u32 util_sum, period_contrib; //util_sum = 运行状态的 timer*cpu_factor*fre_factor
 	//load_avg：基于可运行（runnable）时间的平均负载贡献
 	//util_avg：基于正在运行（running）时间的平均负载贡献
 	unsigned long load_avg, util_avg;
