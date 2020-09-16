@@ -276,6 +276,7 @@ static int __init rmem_cma_setup(struct reserved_mem *rmem)
 
 	return 0;
 }
+//dma-coherent用来分配per device coherent memory的
 RESERVEDMEM_OF_DECLARE(cma, "shared-dma-pool", rmem_cma_setup);
 /*
 #define RESERVEDMEM_OF_DECLARE(name, compat, init)

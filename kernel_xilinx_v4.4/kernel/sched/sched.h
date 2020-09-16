@@ -218,11 +218,14 @@ struct rt_rq;
 
 extern struct list_head task_groups;
 
+/*当一个组的进程运行时间超过quota后，就会被限制运行，这个动作被称作throttle。
+直到下一个period周期开始，这个组会被重新调度，这个过程称作unthrottle*/
 struct cfs_bandwidth {
 #ifdef CONFIG_CFS_BANDWIDTH
 	raw_spinlock_t lock;
-	ktime_t period;
-	u64 quota, runtime;
+	ktime_t period; //period是指一段周期时间
+	//quota是指在period周期时间内，一个组可以使用的CPU时间限额
+	u64 quota, runtime; //runtime:记录剩余限额时间
 	s64 hierarchical_quota;
 	u64 runtime_expires;
 
