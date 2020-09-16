@@ -390,20 +390,27 @@ struct mm_rss_stat {
 
 struct kioctx_table;
 struct mm_struct {
+	//虚拟内存区链表
 	struct vm_area_struct *mmap;		/* list of VMAs */
 	struct rb_root mm_rb;
 	u32 vmacache_seqnum;                   /* per-thread vmacache */
 #ifdef CONFIG_MMU
+	//在内存区域找到一个没有映射的区域
 	unsigned long (*get_unmapped_area) (struct file *filp,
 				unsigned long addr, unsigned long len,
 				unsigned long pgoff, unsigned long flags);
 #endif
+	//内存映射区的起始地址
 	unsigned long mmap_base;		/* base of mmap area */
 	unsigned long mmap_legacy_base;         /* base of mmap area in bottom-up allocations */
+	//用户虚拟地址空间的长度
 	unsigned long task_size;		/* size of task vm space */
 	unsigned long highest_vm_end;		/* highest vma end address */
+	//指向全局目录，即第一级页表
 	pgd_t * pgd;
+	//共享同一个用户虚拟地址空间的进程数量，也就是线程组包含的进程数量
 	atomic_t mm_users;			/* How many users with user space? */
+	//内存描述符引用计数
 	atomic_t mm_count;			/* How many references to "struct mm_struct" (users count as 1) */
 	atomic_long_t nr_ptes;			/* PTE page table pages */
 #if CONFIG_PGTABLE_LEVELS > 2
@@ -430,8 +437,11 @@ struct mm_struct {
 	unsigned long exec_vm;		/* VM_EXEC & ~VM_WRITE */
 	unsigned long stack_vm;		/* VM_GROWSUP/DOWN */
 	unsigned long def_flags;
+	//代码段和数据段的起始地址和结束地址
 	unsigned long start_code, end_code, start_data, end_data;
+	//堆的起始地址和结束地址。    栈的起始地址
 	unsigned long start_brk, brk, start_stack;
+	//参数字符串的起始地址和结束地址  环境变量的起始地址和结束地址
 	unsigned long arg_start, arg_end, env_start, env_end;
 
 	unsigned long saved_auxv[AT_VECTOR_SIZE]; /* for /proc/PID/auxv */
@@ -447,6 +457,7 @@ struct mm_struct {
 	cpumask_var_t cpu_vm_mask_var;
 
 	/* Architecture-specific MM context */
+	//处理器架构特定的内存管理上下文
 	mm_context_t context;
 
 	unsigned long flags; /* Must use atomic bitops to access the bits */

@@ -362,7 +362,7 @@ struct cfs_bandwidth { };
 //struct rq
 struct cfs_rq {
 	struct load_weight load;  /*就绪队列权重，就绪队列管理的所有调度实体权重之和*/
-	unsigned int nr_running, h_nr_running;  //nr_running:就绪队列上调度实体的个数
+	unsigned int nr_running, h_nr_running;  //nr_running:就绪队列上调度实体的个数.h_nr_running:包含组调度下面的调度实体个数
 
 	u64 exec_clock;
 	u64 min_vruntime; //跟踪就绪队列上所有调度实体的最小虚拟时间.用于在睡眠进程被唤醒后以及新进程被创建好时，进行虚拟时间补偿或者惩罚
