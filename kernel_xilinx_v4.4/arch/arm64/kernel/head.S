@@ -206,7 +206,12 @@ section_table:
 	 */
 	.align 12
 #endif
-
+/*
+在初始化阶段，我们mapping三段地址，一段是identity mapping，其实就是把物理地址mapping到物理地址上去，
+在打开MMU的时候需要这样的mapping（ARM ARCH强烈推荐这么做的）。第二段是kernel image mapping，内核代码
+欢快的执行当然需要将kernel running需要的地址（kernel txt、dernel rodata、data、bss等等）进行映射了，
+第三段是blob memory对应的mapping。
+*/
 ENTRY(stext)
 	bl	preserve_boot_args
 	bl	el2_setup			// Drop to EL1, w20=cpu_boot_mode
@@ -228,17 +233,23 @@ ENDPROC(stext)
 /*
  * Preserve the arguments passed by the bootloader in x0 .. x3
  */
+ /*
+ x0:dtb的地址
+ 因为ARM64 boot protocol对启动时候的x0～x3这四个寄存器有严格的限制：
+ x0是dtb的物理地址，x1～x3必须是0（非零值是保留将来使用）。在后续setup_arch
+ 函数执行的时候会访问boot_args并进行校验。
+ */
 preserve_boot_args:
-	mov	x21, x0				// x21=FDT
+	mov	x21, x0				// 将dtb的地址暂存在x21寄存器中，释放出x0以便后续做临时变量使用
 
-	adr_l	x0, boot_args			// record the contents of
-	stp	x21, x1, [x0]			// x0 .. x3 at kernel entry
-	stp	x2, x3, [x0, #16]
+	adr_l	x0, boot_args			// x0保存了boot_args变量的地址
+	stp	x21, x1, [x0]			//保存x0和x1的值到boot_args[0]和boot_args[1]
+	stp	x2, x3, [x0, #16]    //保存x2和x3的值到boot_args[2]和boot_args[3]
 
 	dmb	sy				// needed before dc ivac with
 						// MMU off
-
-	add	x1, x0, #0x20			// 4 x 8 bytes
+	//x1是末尾的地址（boot_args变量长度是4x8byte＝32byte，也就是0x20了）。
+	add	x1, x0, #0x20			// 4 x 8 bytes.x0和x1是传递给__inval_cache_range的参数
 	b	__inval_cache_range		// tail call
 ENDPROC(preserve_boot_args)
 
@@ -309,23 +320,23 @@ ENDPROC(preserve_boot_args)
  *     been enabled
  */
 __create_page_tables:
-	adrp	x25, idmap_pg_dir
-	adrp	x26, swapper_pg_dir
-	mov	x27, lr
+	adrp	x25, idmap_pg_dir //获取idmap的页表基地址（物理地址）
+	adrp	x26, swapper_pg_dir //获取kernel space的页表基地址（物理地址）
+	mov	x27, lr  //保存lr
 
 	/*
 	 * Invalidate the idmap and swapper page tables to avoid potential
 	 * dirty cache lines being evicted.
 	 */
-	mov	x0, x25
-	add	x1, x26, #SWAPPER_DIR_SIZE
-	bl	__inval_cache_range
+	mov	x0, x25    //准备要invalid cache的地址段的首地址
+	add	x1, x26, #SWAPPER_DIR_SIZE //准备要invalid cache的地址段的尾地址
+	bl	__inval_cache_range //将idmap和swapper页表地址段对应的cacheline设定为无效
 
 	/*
 	 * Clear the idmap and swapper page tables.
 	 */
-	mov	x0, x25
-	add	x6, x26, #SWAPPER_DIR_SIZE
+	mov	x0, x25 //这一段代码是将idmap和swapper页表内容设定为0
+	add	x6, x26, #SWAPPER_DIR_SIZE  //x0是开始地址，x6是结束地址
 1:	stp	xzr, xzr, [x0], #16
 	stp	xzr, xzr, [x0], #16
 	stp	xzr, xzr, [x0], #16
@@ -446,9 +457,9 @@ ENDPROC(__mmap_switched)
  * booted in EL1 or EL2 respectively.
  */
 ENTRY(el2_setup)
-	mrs	x0, CurrentEL
-	cmp	x0, #CurrentEL_EL2
-	b.ne	1f
+	mrs	x0, CurrentEL    //CurrentEL就是获取PSTATE中current exception level域的特殊寄存器
+	cmp	x0, #CurrentEL_EL2 //判断是否处于EL2
+	b.ne	1f //不是的话，跳到1f
 	mrs	x0, sctlr_el2
 CPU_BE(	orr	x0, x0, #(1 << 25)	)	// Set the EE bit for EL2
 CPU_LE(	bic	x0, x0, #(1 << 25)	)	// Clear the EE bit for EL2
@@ -492,7 +503,7 @@ CPU_LE(	bic	x0, x0, #(3 << 24)	)	// Clear the EE and E0E bits for EL1
 #endif
 
 	/* Populate ID registers. */
-	mrs	x0, midr_el1
+	mrs	x0, midr_el1 //Multiprocessor Affinity Register，该寄存器保存了processor ID
 	mrs	x1, mpidr_el1
 	msr	vpidr_el2, x0
 	msr	vmpidr_el2, x1

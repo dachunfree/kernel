@@ -22,34 +22,37 @@
 
 /* Definition of memblock flags. */
 enum {
-	MEMBLOCK_NONE		= 0x0,	/* No special request */
-	MEMBLOCK_HOTPLUG	= 0x1,	/* hotpluggable region */
-	MEMBLOCK_MIRROR		= 0x2,	/* mirrored region */
+	MEMBLOCK_NONE		= 0x0,	/*无特殊要求 No special request */
+	MEMBLOCK_HOTPLUG	= 0x1,	/* 可热插拔区域 hotpluggable region */
+	MEMBLOCK_MIRROR		= 0x2,	/* 镜像区域 mirrored region */
 };
 
 struct memblock_region {
-	phys_addr_t base;
-	phys_addr_t size;
-	unsigned long flags;
+	phys_addr_t base;  //region的基地址
+	phys_addr_t size;  //region的大小
+	unsigned long flags; //MEMBLOCK_NONE
 #ifdef CONFIG_HAVE_MEMBLOCK_NODE_MAP
-	int nid;
+	int nid; //节点编号
 #endif
 };
 
 struct memblock_type {
-	unsigned long cnt;	/* number of regions */
-	unsigned long max;	/* size of the allocated array */
-	phys_addr_t total_size;	/* size of all regions */
+	unsigned long cnt;	/*区域数量 number of regions */
+	unsigned long max;	/* 已分配数组大小 size of the allocated array */
+	phys_addr_t total_size;	/* 所有区域长度 size of all regions */
 	struct memblock_region *regions;
 };
-
+/*
+	内存类型是物理内存的子集。引导内核启动时候，可以指定 mm=nn[]设置内存类型大小，内核会看不到所有内存
+	物理内存包含所有内存范围
+*/
 struct memblock {
-	bool bottom_up;  /* is bottom up direction? */
-	phys_addr_t current_limit;
-	struct memblock_type memory;
-	struct memblock_type reserved;
+	bool bottom_up;  /* is bottom up direction? */ //是从下向上的分配方式??值为真，低地址向高地址分配。
+	phys_addr_t current_limit; //可分配内存的最大的物理地址
+	struct memblock_type memory; //内存类型，包括已经分配和未分配的内存
+	struct memblock_type reserved; //预留的类型(已分配的内存)。
 #ifdef CONFIG_HAVE_MEMBLOCK_PHYS_MAP
-	struct memblock_type physmem;
+	struct memblock_type physmem; //物理内存类型
 #endif
 };
 

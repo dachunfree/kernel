@@ -341,7 +341,7 @@
 	eor	\reg, \reg, #HYP_MODE
 	tst	\reg, #MODE_MASK
 	bic	\reg , \reg , #MODE_MASK
-	orr	\reg , \reg , #PSR_I_BIT | PSR_F_BIT | SVC_MODE
+	orr	\reg , \reg , #PSR_I_BIT | PSR_F_BIT | SVC_MODE  //设置BIT6\BIT7,关闭中断，设置[4:0]为SVC_MODE
 THUMB(	orr	\reg , \reg , #PSR_T_BIT	)
 	bne	1f
 	orr	\reg, \reg, #PSR_A_BIT

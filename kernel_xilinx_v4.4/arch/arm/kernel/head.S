@@ -92,7 +92,7 @@ ENTRY(stext)
 	safe_svcmode_maskall r9
 
 	mrc	p15, 0, r9, c0, c0		@ get processor id
-	bl	__lookup_processor_type		@ r5=procinfo r9=cpuid
+	bl	__lookup_processor_type		@ r5=procinfo r9=cpuid //判断内核是否处理器cpu
 	movs	r10, r5				@ invalid processor (r5=0)?
  THUMB( it	eq )		@ force fixup-able long branch encoding
 	beq	__error_p			@ yes, error 'p'
@@ -126,7 +126,10 @@ ENTRY(stext)
 	 * r1 = machine no, r2 = atags or dtb,
 	 * r8 = phys_offset, r9 = cpuid, r10 = procinfo
 	 */
-	bl	__vet_atags
+	bl	__vet_atags  //验证tags或者dtb的合法性
+/*
+	Returns: r2 either valid atags pointer, valid dtb pointer, or zero
+*/
 #ifdef CONFIG_SMP_ON_UP
 	bl	__fixup_smp
 #endif
@@ -390,9 +393,9 @@ ENTRY(secondary_startup)
 #ifdef CONFIG_ARM_VIRT_EXT
 	bl	__hyp_stub_install_secondary
 #endif
-	safe_svcmode_maskall r9
+	safe_svcmode_maskall r9  //进入svc模式且关闭中断
 
-	mrc	p15, 0, r9, c0, c0		@ get processor id
+	mrc	p15, 0, r9, c0, c0		@ get processor id  //将cpuid从协处理器中读到r9寄存器中
 	bl	__lookup_processor_type
 	movs	r10, r5				@ invalid processor?
 	moveq	r0, #'p'			@ yes, error 'p'

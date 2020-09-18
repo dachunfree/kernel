@@ -262,7 +262,7 @@ void __init arm_memblock_init(const struct machine_desc *mdesc)
 		initrd_end = initrd_start + phys_initrd_size;
 	}
 #endif
-
+	//为页表预留内存位置，swapper_pg_dir,SWAPPER_PG_DIR_SIZE
 	arm_mm_memblock_reserve();
 
 	/* reserve any platform specific memblock areas */

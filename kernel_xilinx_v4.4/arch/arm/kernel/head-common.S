@@ -150,14 +150,14 @@ ENDPROC(lookup_processor_type)
  *	r9 = cpuid (preserved)
  */
 __lookup_processor_type:
-	adr	r3, __lookup_processor_type_data
+	adr	r3, __lookup_processor_type_data //获取所有cpu的相关信息。
 	ldmia	r3, {r4 - r6}
-	sub	r3, r3, r4			@ get offset between virt&phys
+	sub	r3, r3, r4			@ get offset between virt&phys //物理地址和虚拟地址的偏移
 	add	r5, r5, r3			@ convert virt addresses to
-	add	r6, r6, r3			@ physical address space
+	add	r6, r6, r3			@ physical address space  //struct proc_info_list
 1:	ldmia	r5, {r3, r4}			@ value, mask
 	and	r4, r4, r9			@ mask wanted bits
-	teq	r3, r4
+	teq	r3, r4              //比较cpu id 是否一致
 	beq	2f
 	add	r5, r5, #PROC_INFO_SZ		@ sizeof(proc_info_list)
 	cmp	r5, r6
@@ -171,7 +171,7 @@ ENDPROC(__lookup_processor_type)
  */
 	.align	2
 	.type	__lookup_processor_type_data, %object
-__lookup_processor_type_data:
+__lookup_processor_type_data:  //vmlinux.lds.S
 	.long	.
 	.long	__proc_info_begin
 	.long	__proc_info_end

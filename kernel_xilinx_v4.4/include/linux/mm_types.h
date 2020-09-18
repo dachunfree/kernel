@@ -43,9 +43,16 @@ struct mem_cgroup;
  */
 struct page {
 	/* First double word block */
+	//Page flags: | [SECTION] | [NODE] | ZONE | [LAST_CPUPID] | ... | FLAGS | */
 	unsigned long flags;		/* Atomic flags, some possibly
 					 * updated asynchronously */
 	union {
+	/*
+	 a: 如果mapping = 0，说明该page属于交换缓存（swap cache）；当需要使用地址空间时会指定交换分区的地址空间swapper_space。
+     b: 如果mapping != 0，bit[0] = 0，说明该page属于页缓存或文件映射，mapping指向文件的地址空间address_space。
+     c: 如果mapping != 0，bit[0] != 0，说明该page为匿名映射，mapping指向struct anon_vma对象。
+     通过mapping恢复anon_vma的方法：anon_vma = (struct anon_vma *)(mapping - PAGE_MAPPING_ANON)。
+	*/
 		struct address_space *mapping;	/* If low bit clear, points to
 						 * inode address_space, or NULL.
 						 * If page mapped as anonymous
@@ -59,6 +66,10 @@ struct page {
 	/* Second double word */
 	struct {
 		union {
+			/*
+			在映射的虚拟空间（vma_area）内的偏移；一个文件可能只映射一部分，假设映射了1M的空间，
+			index指的是在1M空间内的偏移，而不是在整个文件内的偏移
+		    */
 			pgoff_t index;		/* Our offset within mapping. */
 			void *freelist;		/* sl[aou]b first free object */
 		};
@@ -96,6 +107,11 @@ struct page {
 					 * never succeed on tail
 					 * pages.
 					 */
+					 /*被页表映射的次数，也就是说该page同时被多少个进程共享。初始值为-1，如果只被一个进程的页表映射了，该值为0 。
+					 如果该page处于伙伴系统中，该值为PAGE_BUDDY_MAPCOUNT_VALUE（-128），内核通过判断该值是否为PAGE_BUDDY_MAPCOUNT_VALUE
+					 来确定该page是否属于伙伴系统。
+   					 注意区分_count和_mapcount，_mapcount表示的是映射次数，而_count表示的是使用次数；被映射了不一定在使用，但要使用必须
+   					 先映射。*/
 					atomic_t _mapcount;
 
 					struct { /* SLUB */
@@ -105,6 +121,8 @@ struct page {
 					};
 					int units;	/* SLOB */
 				};
+				/*引用计数，表示内核中引用该page的次数，如果要操作该page，引用计数会+1，操作完成-1。当该值为0时，
+				  表示没有引用该page的位置，所以该page可以被解除映射，这往往在内存回收时是有用的*/
 				atomic_t _count;		/* Usage count, see below. */
 			};
 			unsigned int active;	/* SLAB */
@@ -119,6 +137,11 @@ struct page {
 	 * avoid collision and false-positive PageTail().
 	 */
 	union {
+	/*
+	a：page处于伙伴系统中时，用于链接相同阶的伙伴（只使用伙伴中的第一个page的lru即可达到目的）。
+    b：page属于slab时，page->lru.next指向page驻留的的缓存的管理结构，page->lru.prec指向保存该page的slab的管理结构。
+    c：page被用户态使用或被当做页缓存使用时，用于将该page连入zone中相应的lru链表，供内存回收时使用。
+	*/
 		struct list_head lru;	/* Pageout list, eg. active_list
 					 * protected by zone->lru_lock !
 					 * Can be used as a generic list

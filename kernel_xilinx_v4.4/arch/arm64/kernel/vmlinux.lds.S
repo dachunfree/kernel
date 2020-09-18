@@ -163,13 +163,22 @@ SECTIONS
 	PECOFF_EDATA_PADDING
 	_edata = .;
 
-	BSS_SECTION(0, 0, 0)
-
+	BSS_SECTION(0, 0, 0)   //bss之后
+/*
+ARM32的的时候，kernel image在RAM开始的位置让出了32KB的memory保存了bootloader
+到kernel传递的tag参数以及内核空间的页表。在刚开始的时候，ARM64沿用了ARM32的做法，
+将这些初始页表放到了PHYS_OFFSET和PHYS_OFFSET+TEXT_OFFSET之间（size是0x80000）。但是，
+其实这段内存是有可能被bootloader使用的，而且，这个时候，memory block模块
+（确定内核需要管理的memory block）没有ready，想要标记reservation memory也是不可能的。
+在这种情况下，假设bootloader在这段memory放了些数据，试图传递给kernel，但是kernel如果在
+这段memory上建立页表，那么就把有用数据给覆盖了。最后，initial translation tables被放到
+了kernel image的后面，位于bss段之后，从而解决了这个问题。
+*/
 	. = ALIGN(PAGE_SIZE);
-	idmap_pg_dir = .;
-	. += IDMAP_DIR_SIZE;
-	swapper_pg_dir = .;
-	. += SWAPPER_DIR_SIZE;
+	idmap_pg_dir = .;    //identity mapping 的映射地址页表(va==pa 的映射)
+	. += IDMAP_DIR_SIZE; //留个3个page
+	swapper_pg_dir = .;  //页表的地址
+	. += SWAPPER_DIR_SIZE; //留个3个page
 
 	_end = .;
 
