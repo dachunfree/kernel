@@ -211,9 +211,15 @@ section_table:
 在打开MMU的时候需要这样的mapping（ARM ARCH强烈推荐这么做的）。第二段是kernel image mapping，内核代码
 欢快的执行当然需要将kernel running需要的地址（kernel txt、dernel rodata、data、bss等等）进行映射了，
 第三段是blob memory对应的mapping。
+boot loader传参进来:
+x0 = physical address of device tree blob (dtb) in system RAM.
+x1 = 0 (reserved for future use)
+x2 = 0 (reserved for future use)
+x3 = 0 (reserved for future use)
 */
 ENTRY(stext)
 	bl	preserve_boot_args
+	//进入EL2模式
 	bl	el2_setup			// Drop to EL1, w20=cpu_boot_mode
 	adrp	x24, __PHYS_OFFSET
 	bl	set_cpu_boot_mode_flag
@@ -243,9 +249,15 @@ preserve_boot_args:
 	mov	x21, x0				// 将dtb的地址暂存在x21寄存器中，释放出x0以便后续做临时变量使用
 
 	adr_l	x0, boot_args			// x0保存了boot_args变量的地址
+	//stp:把Xt1，Xt2两个双字/字数据写到Memory地址addr中
 	stp	x21, x1, [x0]			//保存x0和x1的值到boot_args[0]和boot_args[1]
 	stp	x2, x3, [x0, #16]    //保存x2和x3的值到boot_args[2]和boot_args[3]
 
+	/*
+	dmb:数据内存屏障指令.保证该指令前的所有内存访问结束，而该指令之后引起的内存访问
+	只能在该指令执行结束后开始，其它数据处理指令等可以越过DMB屏障乱序执行
+	保证前(stp)指令和后指令(add),不乱序。
+	*/
 	dmb	sy				// needed before dc ivac with
 						// MMU off
 	//x1是末尾的地址（boot_args变量长度是4x8byte＝32byte，也就是0x20了）。
@@ -319,6 +331,20 @@ ENDPROC(preserve_boot_args)
  *   - first few MB of the kernel linear mapping to jump to once the MMU has
  *     been enabled
  */
+ /*
++--------+--------+--------+--------+--------+--------+--------+--------+
+|63    56|55    48|47    40|39    32|31    24|23    16|15     8|7      0|
++--------+--------+--------+--------+--------+--------+--------+--------+
+ |                 |         |         |         |         |
+ |                 |         |         |         |         v
+ |                 |         |         |         |   [11:0]  in-page offset
+ |                 |         |         |         +-> [20:12] L3 index
+ |                 |         |         +-----------> [29:21] L2 index
+ |                 |         +---------------------> [38:30] L1 index
+ |                 +-------------------------------> [47:39] L0 index
+ +-------------------------------------------------> [63] TTBR0/1
+
+*/
 __create_page_tables:
 	adrp	x25, idmap_pg_dir //获取idmap的页表基地址（物理地址）
 	adrp	x26, swapper_pg_dir //获取kernel space的页表基地址（物理地址）
@@ -463,7 +489,7 @@ ENTRY(el2_setup)
 	mrs	x0, sctlr_el2
 CPU_BE(	orr	x0, x0, #(1 << 25)	)	// Set the EE bit for EL2
 CPU_LE(	bic	x0, x0, #(1 << 25)	)	// Clear the EE bit for EL2
-	msr	sctlr_el2, x0
+	msr	sctlr_el2, x0    //写回sctlr_el2寄存器 
 	b	2f
 1:	mrs	x0, sctlr_el1
 CPU_BE(	orr	x0, x0, #(3 << 24)	)	// Set the EE and E0E bits for EL1
