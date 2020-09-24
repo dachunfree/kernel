@@ -265,12 +265,26 @@ ENDPROC(preserve_boot_args)
  * Corrupts:	tmp1, tmp2
  * Returns:	tbl -> next level table page address
  */
+ 	//当前页表项的内容就是下一级页表的起始地址&&生效位。
 	.macro	create_table_entry, tbl, virt, shift, ptrs, tmp1, tmp2
-	lsr	\tmp1, \virt, #\shift
-	and	\tmp1, \tmp1, #\ptrs - 1	// table index
-	add	\tmp2, \tbl, #PAGE_SIZE
+	lsr	\tmp1, \virt, #\shift   //tmp1 = virt >>shift
+	/*
+	除了右移操作，我们还需要mask操作（ptrs - 1实际上就是掩码）。对于PGD，其index占据9个bit，
+	因此mask是0x1ff。同样的，对于PUD，其index占据9个bit，因此mask是0x1ff。至此，tmp1就是virt
+	地址在translation table中对应的index了.
+	*/
+	and	\tmp1, \tmp1, #\ptrs - 1	// table index.tmp1 = tmp1&(0x1ff).9位
+	//如果是table描述符，需要指向另外一个level的translation table，就是next page
+	add	\tmp2, \tbl, #PAGE_SIZE		// tmp2 = tbl + #PAGE_SIZE
+	/*
+	光有下一级translation table的地址不行，还要告知该描述符是否有效（set bit 0），
+	该描述符的类型是哪一种类型（set bit 1表示是table descriptor），至此，描述符内容准备完毕，
+	保存在tmp2中
+	*/
 	orr	\tmp2, \tmp2, #PMD_TYPE_TABLE	// address of next table and entry type
+	//将描述符写入页表中。之所以有“lsl #3”操作，是因为一个描述符占据8个Byte
 	str	\tmp2, [\tbl, \tmp1, lsl #3]
+	//将translation table的地址移到next level，以便进行下一步设定
 	add	\tbl, \tbl, #PAGE_SIZE		// next level table page
 	.endm
 
@@ -299,9 +313,13 @@ ENDPROC(preserve_boot_args)
  * Corrupts:	phys, start, end, pstate
  */
 	.macro	create_block_map, tbl, flags, phys, start, end
+	// phys = phys >>21;
 	lsr	\phys, \phys, #SWAPPER_BLOCK_SHIFT
+	//start = start >> SWAPPER_BLOCK_SHIFT;
 	lsr	\start, \start, #SWAPPER_BLOCK_SHIFT
+	//start = start&();
 	and	\start, \start, #PTRS_PER_PTE - 1	// table index
+	//phys = phys |
 	orr	\phys, \flags, \phys, lsl #SWAPPER_BLOCK_SHIFT	// table entry
 	lsr	\end, \end, #SWAPPER_BLOCK_SHIFT
 	and	\end, \end, #PTRS_PER_PTE - 1		// table end index
@@ -320,7 +338,7 @@ ENDPROC(preserve_boot_args)
  *     been enabled
  */
 __create_page_tables:
-	adrp	x25, idmap_pg_dir //获取idmap的页表基地址（物理地址）
+	adrp	x25, idmap_pg_dir //获取idmap的页表基地址（物理地址）.开mmu的操作，必须物理地址 == 虚拟地址。看lds
 	adrp	x26, swapper_pg_dir //获取kernel space的页表基地址（物理地址）
 	mov	x27, lr  //保存lr
 
@@ -349,8 +367,8 @@ __create_page_tables:
 	/*
 	 * Create the identity mapping.
 	 */
-	mov	x0, x25				// idmap_pg_dir
-	adrp	x3, __idmap_text_start		// __pa(__idmap_text_start)
+	mov	x0, x25				// idmap_pg_dir.x0保存了idmap_pg_dir变量的物理地址
+	adrp	x3, __idmap_text_start		// __pa(__idmap_text_start).x3保存了内核image的物理地址
 
 #ifndef CONFIG_ARM64_VA_BITS_48
 #define EXTRA_SHIFT	(PGDIR_SHIFT + PAGE_SHIFT - 3)
@@ -390,11 +408,12 @@ __create_page_tables:
 	create_table_entry x0, x3, EXTRA_SHIFT, EXTRA_PTRS, x5, x6
 1:
 #endif
-
-	create_pgd_entry x0, x3, x5, x6
+	//x0是pgd的地址(idmap_pg_dir)，具体要创建哪一个地址的描述符由x3指定(__idmap_text_start)，x5和x6是临时变量
+	//pgd+pud+(pmd+pte):pmd和pte合并，表示一个页表项。
+	create_pgd_entry x0, x3, x5, x6 //建立中间level（也就是PGD和PUD）的描述符
 	mov	x5, x3				// __pa(__idmap_text_start)
 	adr_l	x6, __idmap_text_end		// __pa(__idmap_text_end)
-	create_block_map x0, x7, x3, x5, x6
+	create_block_map x0, x7, x3, x5, x6 //建立pmd
 
 	/*
 	 * Map the kernel image (starting with PHYS_OFFSET).
@@ -637,6 +656,7 @@ ENDPROC(__secondary_switched)
  * Checks if the selected granule size is supported by the CPU.
  * If it isn't, park the CPU
  */
+ //放在 lds 中。直接进行映射 物理地址 == 虚拟地址。
 	.section	".idmap.text", "ax"
 __enable_mmu:
 	mrs	x1, ID_AA64MMFR0_EL1

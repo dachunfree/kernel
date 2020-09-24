@@ -43,7 +43,7 @@ jiffies = jiffies_64;
 #define IDMAP_TEXT					\
 	. = ALIGN(SZ_4K);				\
 	VMLINUX_SYMBOL(__idmap_text_start) = .;		\
-	*(.idmap.text)					\
+	*(.idmap.text)	//直接搜索就会看到 enable mmu的操作再lds中的	idmap.text段中			\
 	VMLINUX_SYMBOL(__idmap_text_end) = .;
 
 /*
@@ -175,11 +175,14 @@ ARM32的的时候，kernel image在RAM开始的位置让出了32KB的memory保存了bootloader
 了kernel image的后面，位于bss段之后，从而解决了这个问题。
 */
 	. = ALIGN(PAGE_SIZE);
-	idmap_pg_dir = .;    //identity mapping 的映射地址页表(va==pa 的映射)
+	idmap_pg_dir = .;    //identity mapping 的映射地址页表(va==pa 的映射)，开mmu专用
 	. += IDMAP_DIR_SIZE; //留个3个page
 	swapper_pg_dir = .;  //页表的地址
 	. += SWAPPER_DIR_SIZE; //留个3个page
-
+/*3个page分别是3个level的translation table。上面不是说48 bit VA加上4K page size需要4阶translation table吗？
+这里怎么只有3个level？实际上，3级映射是PGD/PUM/PMD（每个table占据一个page），只不过PMD的内容不是下一级
+的table descriptor，而是基于2M block的mapping（或者说PMD中的描述符是block descriptor）。
+*/
 	_end = .;
 
 	STABS_DEBUG
