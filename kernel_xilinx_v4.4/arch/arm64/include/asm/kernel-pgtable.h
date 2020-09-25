@@ -72,6 +72,18 @@
  */
 #define SWAPPER_PTE_FLAGS	(PTE_TYPE_PAGE | PTE_AF | PTE_SHARED)
 #define SWAPPER_PMD_FLAGS	(PMD_TYPE_SECT | PMD_SECT_AF | PMD_SECT_S)
+/*
+PMD_TYPE_SECT :说明该描述符是一个有效的（bit 0等于1）的block descriptor（bit 1等于0）
+PMD_SECT_AF	  :access flag的意思，表示该memory block（或者page）是否被最近被访问过.当然，
+			  这需要软件的协助。如果该bit被设置为0，当程序第一次访问的时候会产生异常，软件
+			  需要将给bit设置为1，之后再访问该page的时候，就不会产生异常了。不过当软件认为该
+			  page已经old enough的时候，也可以clear这个bit，表示最近都没有访问该page。这个flag
+			  是硬件对page reclaim算法的支持，找到最近不常访问的那些page。当然在这个场景下，我们
+			  没有必要enable这个特性，因此将其设定为1.
+PMD_SECT_S	  :PMD_SECT_S对应SH[1:0]，描述memory的sharebility.
+
+
+*/
 
 #if ARM64_SWAPPER_USES_SECTION_MAPS
 #define SWAPPER_MM_MMUFLAGS	(PMD_ATTRINDX(MT_NORMAL) | SWAPPER_PMD_FLAGS)

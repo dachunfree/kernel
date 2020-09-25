@@ -43,7 +43,7 @@ jiffies = jiffies_64;
 #define IDMAP_TEXT					\
 	. = ALIGN(SZ_4K);				\
 	VMLINUX_SYMBOL(__idmap_text_start) = .;		\
-	*(.idmap.text)	//直接搜索就会看到 enable mmu的操作再lds中的	idmap.text段中			\
+	*(.idmap.text)	//直接搜索就会看到 enable mmu的操作再lds中的	idmap.text段中.或者Sysmap中			\
 	VMLINUX_SYMBOL(__idmap_text_end) = .;
 
 /*
@@ -89,7 +89,7 @@ SECTIONS
 		*(.discard.*)
 	}
 
-	. = PAGE_OFFSET + TEXT_OFFSET;
+	. = PAGE_OFFSET + TEXT_OFFSET; //PAGE_OFFSET:(UL(0xffffffffffffffff) << (VA_BITS - 1)).
 
 	.head.text : {
 		_text = .;

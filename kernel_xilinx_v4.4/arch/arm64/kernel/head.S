@@ -218,11 +218,11 @@ x2 = 0 (reserved for future use)
 x3 = 0 (reserved for future use)
 */
 ENTRY(stext)
-	bl	preserve_boot_args
+	bl	preserve_boot_args   //进行blob 设备树地址的保存。
 	//进入EL2模式
 	bl	el2_setup			// Drop to EL1, w20=cpu_boot_mode
 	adrp	x24, __PHYS_OFFSET
-	bl	set_cpu_boot_mode_flag
+	bl	set_cpu_boot_mode_flag      //svc mode
 	bl	__create_page_tables		// x25=TTBR0, x26=TTBR1
 	/*
 	 * The following calls CPU setup code, see arch/arm64/mm/proc.S for
@@ -268,8 +268,8 @@ ENDPROC(preserve_boot_args)
 /*
  * Macro to create a table entry to the next page.
  *
- *	tbl:	page table address
- *	virt:	virtual address
+ *	tbl:	page table address。页表基地址
+ *	virt:	virtual address。需要创建地址映射的虚拟地址
  *	shift:	#imm page table shift
  *	ptrs:	#imm pointers per table page
  *
@@ -308,11 +308,13 @@ ENDPROC(preserve_boot_args)
  * Corrupts:	tmp1, tmp2
  */
 	.macro	create_pgd_entry, tbl, virt, tmp1, tmp2
+	//填充pgd
 	create_table_entry \tbl, \virt, PGDIR_SHIFT, PTRS_PER_PGD, \tmp1, \tmp2
 #if SWAPPER_PGTABLE_LEVELS > 3
 	create_table_entry \tbl, \virt, PUD_SHIFT, PTRS_PER_PUD, \tmp1, \tmp2
 #endif
 #if SWAPPER_PGTABLE_LEVELS > 2
+	//填充pud
 	create_table_entry \tbl, \virt, SWAPPER_TABLE_SHIFT, PTRS_PER_PTE, \tmp1, \tmp2
 #endif
 	.endm
@@ -324,18 +326,35 @@ ENDPROC(preserve_boot_args)
  * Preserves:	tbl, flags
  * Corrupts:	phys, start, end, pstate
  */
+ /*
+填充最后一级页表:
+tbl：页表基地址
+flags：将要填充页表项的flags
+phys：创建映射的物理地址
+start：创建映射的虚拟地址起始地址
+end：创建映射的虚拟地址结束地址
+ */
 	.macro	create_block_map, tbl, flags, phys, start, end
-	// phys = phys >>21;
+	// phys = phys >>21;2M对齐
 	lsr	\phys, \phys, #SWAPPER_BLOCK_SHIFT
 	//start = start >> SWAPPER_BLOCK_SHIFT;
 	lsr	\start, \start, #SWAPPER_BLOCK_SHIFT
-	//start = start&();
+	//start &= PTRS_PER_PTE - 1;
 	and	\start, \start, #PTRS_PER_PTE - 1	// table index
-	//phys = phys |
+	//phys = flags | (phys << SWAPPER_BLOCK_SHIFT);
 	orr	\phys, \flags, \phys, lsl #SWAPPER_BLOCK_SHIFT	// table entry
+	//end >>= SWAPPER_BLOCK_SHIFT;
 	lsr	\end, \end, #SWAPPER_BLOCK_SHIFT
+	//end &= PTRS_PER_PTE - 1;
 	and	\end, \end, #PTRS_PER_PTE - 1		// table end index
-9999:	str	\phys, [\tbl, \start, lsl #3]		// store the entry
+/*
+		while (start != end) {
+			*((long *)(tbl + (start << 3))) = phys;
+			start++;
+			phys += SWAPPER_BLOCK_SIZE;
+		}
+*/
+9999:	str	\phys, [\tbl, \start, lsl #3]//store the entry.根据页表基地址tbl和当前的start变量填充对应的页表项。start << 3是因为ARM64地址占用8 bytes
 	add	\start, \start, #1			// next entry
 	add	\phys, \phys, #SWAPPER_BLOCK_SIZE		// next block
 	cmp	\start, \end
@@ -430,25 +449,31 @@ __create_page_tables:
 	str	x5, [x6]
 	dmb	sy
 	dc	ivac, x6		// Invalidate potentially stale cache line
-
 	create_table_entry x0, x3, EXTRA_SHIFT, EXTRA_PTRS, x5, x6
 1:
 #endif
 	//x0是pgd的地址(idmap_pg_dir)，具体要创建哪一个地址的描述符由x3指定(__idmap_text_start)，x5和x6是临时变量
 	//pgd+pud+(pmd+pte):pmd和pte合并，表示一个页表项。
+	//填充pgd和pud页表项
 	create_pgd_entry x0, x3, x5, x6 //建立中间level（也就是PGD和PUD）的描述符
-	mov	x5, x3				// __pa(__idmap_text_start)
+	mov	x5, x3				// __pa(__idmap_text_start)。因为我们为了创建虚拟地址和物理地址相等的映射，因此这里的x5和x3值相等。
 	adr_l	x6, __idmap_text_end		// __pa(__idmap_text_end)
-	create_block_map x0, x7, x3, x5, x6 //建立pmd
+	//填充最后一个PMD。x0第3个page页表地址;x7:flags;x3:__idmap_text_start;x6:__idmap_text_end
+	create_block_map x0, x7, x3, x5, x6
 
 	/*
-	 * Map the kernel image (starting with PHYS_OFFSET).
+	 * Map the kernel image (starting with PHYS_OFFSET).swapper_pg_dir其实就是swapper进程（pid等于0的那个，其实就是idle进程）
+	   的地址空间，这时候，x0指向了内核地址空间的PGD的基地址.
+	   #define PAGE_OFFSET		(UL(0xffffffffffffffff) << (VA_BITS - 1))
 	 */
+
 	mov	x0, x26				// swapper_pg_dir
-	mov	x5, #PAGE_OFFSET
+	mov	x5, #PAGE_OFFSET    //PAGE_OFFSET是kernel image的首地址，对于48bit的VA而言，该地址是0xffff,8000,0000,0000。
+	//x0:swapper_pg_dir页表基地址；x5:#PAGE_OFFSET;
 	create_pgd_entry x0, x5, x3, x6
-	ldr	x6, =KERNEL_END			// __va(KERNEL_END)
-	mov	x3, x24				// phys offset
+	ldr	x6, =KERNEL_END			// __va(KERNEL_END).,lds中的虚拟地址_end
+	mov	x3, x24				// phys offset.物理地址
+	//x0:页表基地址;x7:flags;x3:phys offset;x5:PAGE_OFFSET;x6:KERNEL_END.映射kernel phyoffset---->va page_offset
 	create_block_map x0, x7, x3, x5, x6
 
 	/*
@@ -508,7 +533,7 @@ ENTRY(el2_setup)
 	mrs	x0, sctlr_el2
 CPU_BE(	orr	x0, x0, #(1 << 25)	)	// Set the EE bit for EL2
 CPU_LE(	bic	x0, x0, #(1 << 25)	)	// Clear the EE bit for EL2
-	msr	sctlr_el2, x0    //写回sctlr_el2寄存器 
+	msr	sctlr_el2, x0    //写回sctlr_el2寄存器
 	b	2f
 1:	mrs	x0, sctlr_el1
 CPU_BE(	orr	x0, x0, #(3 << 24)	)	// Set the EE and E0E bits for EL1
