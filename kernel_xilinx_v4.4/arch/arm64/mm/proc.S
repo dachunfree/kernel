@@ -169,10 +169,15 @@ ENTRY(__cpu_setup)
 	 *   NORMAL		100	11111111
 	 *   NORMAL_WT		101	10111011
 	 */
+	 /*
+	 描述符中的AttrIndx[2:0]是一个index，可以定位到8个条目，而这些条目就是保存在MAIR_EL1
+	 （Memory Attribute Indirection Register (EL1)）中：
+	 MAIR(attr, mt)====((attr) << ((mt) * 8))
+	*/
 	ldr	x5, =MAIR(0x00, MT_DEVICE_nGnRnE) | \
 		     MAIR(0x04, MT_DEVICE_nGnRE) | \
 		     MAIR(0x0c, MT_DEVICE_GRE) | \
-		     MAIR(0x44, MT_NORMAL_NC) | \
+		     MAIR(0x44, MT_NORMAL_NC) | \           //NC是no cache
 		     MAIR(0xff, MT_NORMAL) | \
 		     MAIR(0xbb, MT_NORMAL_WT)
 	msr	mair_el1, x5

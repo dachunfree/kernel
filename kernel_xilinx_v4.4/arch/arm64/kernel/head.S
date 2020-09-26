@@ -232,7 +232,17 @@ ENTRY(stext)
 	 */
 	ldr	x27, =__mmap_switched		// address to jump to after
 						// MMU has been enabled
+   /*	
+   传入该函数的参数有四个，一个是x0寄存器，该寄存器中保存了打开MMU时候要设定的SCTLR_EL1的值（在__cpu_setup函数中设定），
+   第二个是个是x25寄存器，保存了idmap_pg_dir的值（ttBR0中？）。第三个参数是x26寄存器，保存了swapper_pg_dir的值。最后一
+   个参数是x27，是执行完毕该函数之后，跳转到哪里去执行（__mmap_switched）
+	*/
 	adr_l	lr, __enable_mmu		// return (PIC) address
+	/*
+	1、cache和TLB的处理
+	2、Memory attributes lookup table的构建
+	3、SCTLR_EL1、TCR_EL1的设定
+	*/
 	b	__cpu_setup			// initialise processor
 ENDPROC(stext)
 
@@ -504,7 +514,7 @@ __mmap_switched:
 	str	xzr, [x6], #8			// Clear BSS
 	b	1b
 2:
-	adr_l	sp, initial_sp, x4
+	adr_l	sp, initial_sp, x4			//建立和swapper进程的链接
 	str_l	x21, __fdt_pointer, x5		// Save FDT pointer
 	str_l	x24, memstart_addr, x6		// Save PHYS_OFFSET
 	mov	x29, #0
@@ -715,11 +725,14 @@ __enable_mmu:
 	cmp	x2, #ID_AA64MMFR0_TGRAN_SUPPORTED
 	b.ne	__no_granule_support
 	ldr	x5, =vectors
-	msr	vbar_el1, x5
-	msr	ttbr0_el1, x25			// load TTBR0
-	msr	ttbr1_el1, x26			// load TTBR1
+	msr	vbar_el1, x5    //VBAR_EL1, Vector Base Address Register (EL1)，该寄存器保存了EL1状态的异常向量表
+	/*idmap_pg_dir是为turn on MMU准备的一致性映射，物理地址的高16bit都是0，因此identity mapping必定是选择
+	TTBR0_EL1指向的各级地址翻译表。后续当系统运行之后，在进程切换的时候，会修改TTBR0的值，切换到真实的进程
+	地址空间上去。TTBR1用于kernel space，所有的内核线程都是共享一个空间就是swapper_pg_dir*/
+	msr	ttbr0_el1, x25			// load TTBR0。idmap
+	msr	ttbr1_el1, x26			// load TTBR1。swapper
 	isb
-	msr	sctlr_el1, x0
+	msr	sctlr_el1, x0          //打开mmu
 	isb
 	/*
 	 * Invalidate the local I-cache so that any instructions fetched
@@ -729,7 +742,7 @@ __enable_mmu:
 	ic	iallu
 	dsb	nsh
 	isb
-	br	x27
+	br	x27             //跳转到 mmap_switch
 ENDPROC(__enable_mmu)
 
 __no_granule_support:
