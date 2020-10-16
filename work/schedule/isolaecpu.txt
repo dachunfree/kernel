@@ -1,0 +1,33 @@
+1.进行cpu的物理隔离：
+dts节点或者bootloader 环境变量增加：isolcpus=1
+		chosen {
+		bootargs = "earlycon console=ttyS0,115200 rootwait root=/dev/mmcblk0p2 isolcpus=1";
+		stdout-path = "serial0:115200n8";
+	};
+	
+2.进行进程绑定：
+绑定到cpu 1上
+set_cpus_allowed_ptr(current, cpumask_of(1))
+	
+3.设置进程为实时进程和优先级：
+void set_rt_policy(void)
+{
+	int priority, nice;
+	int ret = 0;
+	struct sched_param param_cur;
+	priority = task_prio(current);
+	nice = task_nice(current);
+	printk(KERN_ERR "PID:%d,priority:%d,NICE:%d",current->pid,priority,nice);
+	param_cur.sched_priority =  (MAX_RT_PRIO - 1);
+	ret = sched_setscheduler(current, SCHED_FIFO, &param_cur);
+	if(ret < 0)
+		printk(KERN_ERR "sched_setscheduler SET ERROR:%d \n\r",ret);
+	//sched_setaffinity();
+	priority = task_prio(current);
+	nice = task_nice(current);
+	printk(KERN_ERR "AFTER:PID:%d,priority:%d,NICE:%d",current->pid,priority,nice);
+}
+
+4.相关命令：
+4.1  查看进程运行在哪个cpu上的命令：ps -eo pid,args,psr
+4.2  看自己进程cpu 占用率：top。

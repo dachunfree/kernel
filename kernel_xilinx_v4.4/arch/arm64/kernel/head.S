@@ -232,7 +232,7 @@ ENTRY(stext)
 	 */
 	ldr	x27, =__mmap_switched		// address to jump to after
 						// MMU has been enabled
-   /*	
+   /*
    传入该函数的参数有四个，一个是x0寄存器，该寄存器中保存了打开MMU时候要设定的SCTLR_EL1的值（在__cpu_setup函数中设定），
    第二个是个是x25寄存器，保存了idmap_pg_dir的值（ttBR0中？）。第三个参数是x26寄存器，保存了swapper_pg_dir的值。最后一
    个参数是x27，是执行完毕该函数之后，跳转到哪里去执行（__mmap_switched）
@@ -504,7 +504,7 @@ ENDPROC(__create_page_tables)
 /*
  * The following fragment of code is executed with the MMU enabled.
  */
-	.set	initial_sp, init_thread_union + THREAD_START_SP
+	.set	initial_sp, init_thread_union + THREAD_START_SP   //栈顶
 __mmap_switched:
 	adr_l	x6, __bss_start
 	adr_l	x7, __bss_stop
@@ -514,9 +514,15 @@ __mmap_switched:
 	str	xzr, [x6], #8			// Clear BSS
 	b	1b
 2:
+	/*如果说之前的代码执行都处于一个孤魂野鬼的状态，“adr_l    sp, initial_sp, x4”指令执行之后，
+	初始化代码终于找到了归宿，初始化代码有了自己的thread info，有了自己的task struct，有了自己的pid，
+	有了进程（内核线程）应该拥有的一切，从此之后的代码归属idle进程，pid等于0的那个进程*/
 	adr_l	sp, initial_sp, x4			//建立和swapper进程的链接
-	str_l	x21, __fdt_pointer, x5		// Save FDT pointer
-	str_l	x24, memstart_addr, x6		// Save PHYS_OFFSET
+	/*为了方便后面的代码的访问，这里还初始化了两个变量，分别是__fdt_pointer（设备树信息，物理地址）
+	和memstart_addr（kernel image所在的物理地址，一般而言是main memory的首地址）。 memstart_addr主
+	要用于main memory中物理地址和虚拟地址的转换，具体可以参考__virt_to_phys和__phys_to_virt的实现*/
+	str_l	x21, __fdt_pointer, x5		// Save FDT pointer.x21是保存uboot传进来的x0的dtb的地址。
+	str_l	x24, memstart_addr, x6		// Save PHYS_OFFSET.x24: __PHYS_OFFSET
 	mov	x29, #0
 #ifdef CONFIG_KASAN
 	bl	kasan_early_init

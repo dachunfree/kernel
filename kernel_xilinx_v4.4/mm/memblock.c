@@ -32,7 +32,7 @@ static struct memblock_region memblock_physmem_init_regions[INIT_PHYSMEM_REGIONS
 #endif
 
 struct memblock memblock __initdata_memblock = {
-	.memory.regions		= memblock_memory_init_regions,
+	.memory.regions		= memblock_memory_init_regions,   //看上，128的数组
 	.memory.cnt		= 1,	/* empty dummy entry */
 	.memory.max		= INIT_MEMBLOCK_REGIONS,
 
@@ -127,11 +127,11 @@ __memblock_find_range_bottom_up(phys_addr_t start, phys_addr_t end,
 {
 	phys_addr_t this_start, this_end, cand;
 	u64 i;
-
+	//正着从memblock中查找
 	for_each_free_mem_range(i, nid, flags, &this_start, &this_end, NULL) {
 		this_start = clamp(this_start, start, end);
 		this_end = clamp(this_end, start, end);
-
+		//返回起始地址
 		cand = round_up(this_start, align);
 		if (cand < this_end && this_end - cand >= size)
 			return cand;
@@ -161,7 +161,7 @@ __memblock_find_range_top_down(phys_addr_t start, phys_addr_t end,
 {
 	phys_addr_t this_start, this_end, cand;
 	u64 i;
-
+	//反着查找
 	for_each_free_mem_range_reverse(i, nid, flags, &this_start, &this_end,
 					NULL) {
 		this_start = clamp(this_start, start, end);
@@ -207,22 +207,27 @@ phys_addr_t __init_memblock memblock_find_in_range_node(phys_addr_t size,
 	phys_addr_t kernel_end, ret;
 
 	/* pump up @end */
+	//如果end是MEMBLOCK_ALLOC_ACCESSIBLE,表示在所有区域中查找
 	if (end == MEMBLOCK_ALLOC_ACCESSIBLE)
 		end = memblock.current_limit;
 
 	/* avoid allocating the first page */
 	start = max_t(phys_addr_t, start, PAGE_SIZE);
 	end = max(start, end);
+	//记录kernel加载的末地址
 	kernel_end = __pa_symbol(_end);
 
 	/*
 	 * try bottom-up allocation only when bottom-up mode
 	 * is set and @end is above the kernel image.
 	 */
+	 //如果botton_up设置为true,则从上往下进行分配
+	 //这里是从上往下分配。
 	if (memblock_bottom_up() && end > kernel_end) {
 		phys_addr_t bottom_up_start;
 
 		/* make sure we will allocate above the kernel */
+		//保证从kernel的上面的内存空间开始分配
 		bottom_up_start = max(start, kernel_end);
 
 		/* ok, try bottom-up allocation first */
@@ -451,6 +456,7 @@ static int __init_memblock memblock_double_array(struct memblock_type *type,
  *
  * Scan @type and merge neighboring compatible regions.
  */
+ //合并相邻的
 static void __init_memblock memblock_merge_regions(struct memblock_type *type)
 {
 	int i = 0;
@@ -496,7 +502,7 @@ static void __init_memblock memblock_insert_region(struct memblock_type *type,
 	struct memblock_region *rgn = &type->regions[idx];
 
 	BUG_ON(type->cnt >= type->max);
-	memmove(rgn + 1, rgn, (type->cnt - idx) * sizeof(*rgn));
+	memmove(rgn + 1, rgn, (type->cnt - idx) * sizeof(*rgn)); //是整个数组后移呀
 	rgn->base = base;
 	rgn->size = size;
 	rgn->flags = flags;
@@ -551,20 +557,27 @@ repeat:
 	 */
 	base = obase;
 	nr_new = 0;
-
+	/*
+	 region必须从大到小排列。这里说的大小，是指region所代表的内存的起始/结束地址，也就是说，
+	 region0的结束地址，必须小于或等于region1的起始地址。
+	*/
 	for (i = 0; i < type->cnt; i++) {
 		struct memblock_region *rgn = &type->regions[i];
 		phys_addr_t rbase = rgn->base;
 		phys_addr_t rend = rbase + rgn->size;
 
-		if (rbase >= end)
+		if (rbase >= end)  //已经插入的内存的起始地址 大于 即将插入的结束地址。要交换位置。退出
 			break;
-		if (rend <= base)
+		if (rend <= base) //如果已经插入的region的结束地址 小于 即将插入的起始地址。继续找下一块
 			continue;
 		/*
 		 * @rgn overlaps.  If it separates the lower part of new
 		 * area, insert that portion.
 		 */
+		 /************************************存在重叠区域**********************************/
+		 /*如果已经插入的regions的起始地址 大于 即将插入的起始地址。3个条件满足则存在重叠区域。
+		   如果内存区域存在重叠，则先插入低地址[base,rebase]
+		*/
 		if (rbase > base) {
 #ifdef CONFIG_HAVE_MEMBLOCK_NODE_MAP
 			WARN_ON(nid != memblock_get_region_node(rgn));
@@ -579,11 +592,12 @@ repeat:
 		/* area below @rend is dealt with, forget about it */
 		base = min(rend, end);
 	}
-
+	/*然后再插入[base,end](重合的部分上面插入了一段)*/
 	/* insert the remaining portion */
 	if (base < end) {
 		nr_new++;
 		if (insert)
+			//插入新区域，将后面的区域整体后移。
 			memblock_insert_region(type, i, base, end - base,
 					       nid, flags);
 	}
@@ -592,7 +606,9 @@ repeat:
 	 * If this was the first round, resize array and repeat for actual
 	 * insertions; otherwise, merge and return.
 	 */
+	 //这里开始第一次执行，确定是否需要调整数组的大小。
 	if (!insert) {
+		// 如果出现region[]数组空间不够的情况，则通过memblock_double_array()添加新的region[]空间。double指数增长分配；
 		while (type->cnt + nr_new > type->max)
 			if (memblock_double_array(type, obase, size) < 0)
 				return -ENOMEM;
@@ -615,7 +631,7 @@ static int __init_memblock memblock_add_region(phys_addr_t base,
 						int nid,
 						unsigned long flags)
 {
-	struct memblock_type *type = &memblock.memory;
+	struct memblock_type *type = &memblock.memory; //全局变量结构体 内存类型，包括已经分配和未分配的内存。
 
 	memblock_dbg("memblock_add: [%#016llx-%#016llx] flags %#02lx %pF\n",
 		     (unsigned long long)base,
@@ -667,12 +683,18 @@ static int __init_memblock memblock_isolate_range(struct memblock_type *type,
 		struct memblock_region *rgn = &type->regions[i];
 		phys_addr_t rbase = rgn->base;
 		phys_addr_t rend = rbase + rgn->size;
-
+		//这两个判断都是没有重叠
+		// |base------end|	|rebase<----------->rend|
 		if (rbase >= end)
 			break;
+		 //  |rebase<----------->rend|
 		if (rend <= base)
 			continue;
-
+		/*
+		|rbase<------------------>rend|
+			|base<----------->end|
+		存在重合区域。将其隔离出来。
+		*/
 		if (rbase < base) {
 			/*
 			 * @rgn intersects from below.  Split and continue
@@ -706,12 +728,16 @@ static int __init_memblock memblock_isolate_range(struct memblock_type *type,
 	return 0;
 }
 
+/*
+假如现在需要移除掉一片区域，而该区域跨越了多个region，则会先调用memblock_isolate_range来对这片区域进行切分，
+最后再调用memblock_isolate_range对区域范围内的region进行移除操作
+*/
+
 static int __init_memblock memblock_remove_range(struct memblock_type *type,
 					  phys_addr_t base, phys_addr_t size)
 {
 	int start_rgn, end_rgn;
 	int i, ret;
-
 	ret = memblock_isolate_range(type, base, size, &start_rgn, &end_rgn);
 	if (ret)
 		return ret;
@@ -881,19 +907,24 @@ void __init_memblock __next_reserved_mem_region(u64 *idx,
  * As both region arrays are sorted, the function advances the two indices
  * in lockstep and returns each intersection.
  */
+ /*
+ 这个函数的操作比较怪，需要到memblock_alloc_range_nid需要查看。系统申请mem_block成功之后，
+并没有把该段内存从memory_region中删除，而是在reserve region中把它标记为已经预留。所以才有
+了下面比较诡异的判断算法。
+*/
 void __init_memblock __next_mem_range(u64 *idx, int nid, ulong flags,
 				      struct memblock_type *type_a,
 				      struct memblock_type *type_b,
 				      phys_addr_t *out_start,
 				      phys_addr_t *out_end, int *out_nid)
 {
-	int idx_a = *idx & 0xffffffff;
-	int idx_b = *idx >> 32;
+	int idx_a = *idx & 0xffffffff; //for type_a 用记录所有内存区域。
+	int idx_b = *idx >> 32; //for type_b记录的已经分配出去的区域
 
 	if (WARN_ONCE(nid == MAX_NUMNODES,
 	"Usage of MAX_NUMNODES is deprecated. Use NUMA_NO_NODE instead\n"))
 		nid = NUMA_NO_NODE;
-
+	//这是是外循环，针对每个region，执行内循环依次比较。
 	for (; idx_a < type_a->cnt; idx_a++) {
 		struct memblock_region *m = &type_a->regions[idx_a];
 
@@ -924,13 +955,16 @@ void __init_memblock __next_mem_range(u64 *idx, int nid, ulong flags,
 			*idx = (u32)idx_a | (u64)idx_b << 32;
 			return;
 		}
-
+		//内循环，找出region为记录的空闲区域，进行比较是否重合。
 		/* scan areas before each reservation */
 		for (; idx_b < type_b->cnt + 1; idx_b++) {
 			struct memblock_region *r;
 			phys_addr_t r_start;
 			phys_addr_t r_end;
-
+/* 找的实际是预留的空档。比如两个已经预留的段，
+[idx_b-1].base <-->[idx_b-1].base+[idx_b-1].size: <----free area in memory region -->[idx_b].base <--->[idx_b].base+[idx_b].size
+我们在乎的是free area是否和memory region重合*/
+			//rstart 和 rend是空闲域
 			r = &type_b->regions[idx_b];
 			r_start = idx_b ? r[-1].base + r[-1].size : 0;
 			r_end = idx_b < type_b->cnt ?
@@ -940,9 +974,14 @@ void __init_memblock __next_mem_range(u64 *idx, int nid, ulong flags,
 			 * if idx_b advanced past idx_a,
 			 * break out to advance idx_a
 			 */
+			 /*
+			 				|rstart ------- rend|    reserved memory
+			 |mstart--mend| 					 	 all memory
+			*/
 			if (r_start >= m_end)
 				break;
 			/* if the two regions intersect, we're done */
+			//memory 和 reserved memeory相交，做处理
 			if (m_start < r_end) {
 				if (out_start)
 					*out_start =
@@ -1143,9 +1182,10 @@ static phys_addr_t __init memblock_alloc_range_nid(phys_addr_t size,
 
 	if (!align)
 		align = SMP_CACHE_BYTES;
-
+	//在memblock中查找一个指定大小的区域
 	found = memblock_find_in_range_node(size, align, start, end, nid,
 					    flags);
+	//如果找到了,把这个区域放入到reserve内存中。
 	if (found && !memblock_reserve(found, size)) {
 		/*
 		 * The min_count is set to 0 so that memblock allocations are
@@ -1169,6 +1209,7 @@ static phys_addr_t __init memblock_alloc_base_nid(phys_addr_t size,
 					phys_addr_t align, phys_addr_t max_addr,
 					int nid, ulong flags)
 {
+	//start 和 end是整个段，不是我们想要的大小
 	return memblock_alloc_range_nid(size, align, 0, max_addr, nid, flags);
 }
 

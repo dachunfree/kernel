@@ -6151,6 +6151,19 @@ static int __init isolated_cpu_setup(char *str)
 	return 1;
 }
 
+
+//Èç´Ë¸ôÀë
+#define __setup(str, fn)						\
+	__setup_param(str, fn, fn, 0)
+
+#define __setup_param(str, unique_id, fn, early)			\
+	static const char __setup_str_isolcpus=[] __initconst		\
+		__aligned(1) = str; 					\
+	static struct obs_kernel_param __setup_isolcpus=		\
+		__used __section(.init.setup)				\
+		__attribute__((aligned((sizeof(long)))))		\
+		= { __setup_str_isolcpus=, fn, early }
+
 __setup("isolcpus=", isolated_cpu_setup);
 
 struct s_data {

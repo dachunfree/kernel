@@ -92,7 +92,7 @@ SECTIONS
 	. = PAGE_OFFSET + TEXT_OFFSET; //PAGE_OFFSET:(UL(0xffffffffffffffff) << (VA_BITS - 1)).
 
 	.head.text : {
-		_text = .;
+		_text = .; //KERNEL_START
 		HEAD_TEXT
 	}
 	ALIGN_DEBUG_RO
@@ -183,7 +183,7 @@ ARM32的的时候，kernel image在RAM开始的位置让出了32KB的memory保存了bootloader
 这里怎么只有3个level？实际上，3级映射是PGD/PUM/PMD（每个table占据一个page），只不过PMD的内容不是下一级
 的table descriptor，而是基于2M block的mapping（或者说PMD中的描述符是block descriptor）。
 */
-	_end = .;
+	_end = .;  //kernel结束标志。KERNEL_END
 
 	STABS_DEBUG
 

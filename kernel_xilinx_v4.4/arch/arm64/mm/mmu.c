@@ -346,7 +346,11 @@ static void __init __map_memblock(phys_addr_t start, phys_addr_t end)
 			PAGE_KERNEL_EXEC);
 }
 #endif
-
+/*一旦完成了（PHYS_OFFSET，PHYS_OFFSET＋SWAPPER_INIT_MAP_SIZE）这段物理内存的地址映射，这时候，终于可
+以自由使用memblock_alloc进行内存分配了，当然，要进行限制，确保分配的内存位于（PHYS_OFFSET，PHYS_OFFSET＋SWAPPER_INIT_MAP_SIZE）
+这段物理内存中。完成所有memory type类型的memory region的地址映射之后，可以解除限制，任意分配memory了。而这时候，所有memory type
+的地址区域（上上图中绿色block）都已经可见，而这些宝贵的内存资源就是内存管理模块需要管理的对象。具体代码请参考paging_init--->map_mem
+函数的实现。*/
 static void __init map_mem(void)
 {
 	struct memblock_region *reg;
@@ -583,20 +587,24 @@ static inline pte_t * fixmap_pte(unsigned long addr)
 
 	return pte_offset_kernel(pmd, addr);
 }
-
+//可参考https://www.cnblogs.com/LoyenWang/p/11440957.html 中的图。
 void __init early_fixmap_init(void)
 {
+	/*
+		bm_pud/bm_pmd/bm_pte是三个全局数组，相当于是中间的页表，存放各级页表的entry
+		bm_pud(1),bm_pud(1),bm_pte(512)起到页表的作用。mmu找物理地址，所以里面要转换成pa
+	*/
 	pgd_t *pgd;
 	pud_t *pud;
 	pmd_t *pmd;
-	unsigned long addr = FIXADDR_START;
-
-	pgd = pgd_offset_k(addr);
-	pgd_populate(&init_mm, pgd, bm_pud);
+	unsigned long addr = FIXADDR_START; // 点进去看虚拟地址映射图。虚拟地址
+	//得出pgd的虚拟地址的bit位
+	pgd = pgd_offset_k(addr); //获取addr地址对应pgd全局页表中的entry，而这个pgd全局页表正是swapper_pg_dir全局页表；。
+	pgd_populate(&init_mm, pgd, bm_pud); //将bm_pud的物理地址写到pgd全局页目录表中
 	pud = pud_offset(pgd, addr);
-	pud_populate(&init_mm, pud, bm_pmd);
+	pud_populate(&init_mm, pud, bm_pud);//将bm_pmd的物理地址写到pud页目录表中
 	pmd = pmd_offset(pud, addr);
-	pmd_populate_kernel(&init_mm, pmd, bm_pte);
+	pmd_populate_kernel(&init_mm, pmd, bm_pte); //将bm_pte的物理地址写到pmd页表目录表中
 
 	/*
 	 * The boot-ioremap range spans multiple pmds, for which
@@ -641,7 +649,7 @@ void __set_fixmap(enum fixed_addresses idx,
 
 void *__init fixmap_remap_fdt(phys_addr_t dt_phys)
 {
-	const u64 dt_virt_base = __fix_to_virt(FIX_FDT);
+	const u64 dt_virt_base = __fix_to_virt(FIX_FDT); //fdt要放在fixmap中的虚拟地址。
 	pgprot_t prot = PAGE_KERNEL_RO;
 	int size, offset;
 	void *dt_virt;

@@ -1,0 +1,64 @@
+https://blog.csdn.net/liuhangtiant/article/details/80561148
+
+从dtb中的memory节点获取内存的起始地址，加入到memblock中。
+
+可以看memblock结构体
+memblock
+ |----->bottom_up
+ |      内存分配从高地址到低地址，还是从低地址到高地址
+ |----->current_limit
+ |      可以使用的内存的上限
+ |----->memory
+    |    记录完整的内存资源
+    |----->cnt
+    |       总的内存资源有几个region
+    |----->max
+    |       最多有几个region
+    |----->total_size
+    |       总的容量是多少
+    |----->regions（128个大小）
+       |----->base
+       |       该memory region的基地址
+       |----->size
+       |       该memory region的容量
+       |------>flags
+       |       该memory region的flag
+ |----->reserved（同上）
+ |       记录已经分配或者预留的内存资源
+ 
+Memblock中有两种内存类型, memory和reserved，memory用于记录总的内存资源，reserved用于记录已经使用或者预留的内存资源。
+
+1.添加内存：memblock_add
+memblock_add
+   |-----> memblock_add_range
+      |-----> type->regions[0].base = base;
+      |-----> type->regions[0].size = size;
+      |-----> type->regions[0].flags = flags;
+      |-----> type->total_size = size;
+      |        如果该类型memory第一个region为空，则填充该region并返回
+   |-----> memblock_insert_region(type, idx, base, end - base, nid, flags)
+   |       如果该类型memory第一个region不为空，则调用该函数插入如新的region
+   |-----> memblock_merge_regions(type)
+   |       如果相邻的region可以合并，则将其合并  
+  
+ 插入region:
+ a. region必须从大到小排列。这里说的大小，是指region所代表的内存的起始/结束地址，也就是说，region0的结束地址，必须小于
+    或等于region1的起始地址
+ b. 调用一次memblock_add，有可能将拆分成两个。
+ 
+
+合并region:
+如果前一个region的结束地址等于后一个region的开始地址，则将两个region合并。
+
+
+删除内存：memblock_remove：
+
+
+分配内存：memblock_alloc：
+分配内存逻辑比较简单，主要分为两步：
+a. 遍历memory类型内存的region，已经分配的内存以region的形式存放在rserved类型内存中.
+b. 调用memblock_reserve函数将分配的内存以region的形式存放在rserved类型内存中
+
+arm64_memblock_init：
+
+

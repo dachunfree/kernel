@@ -896,10 +896,11 @@ u64 __init dt_mem_next_cell(int s, const __be32 **cellp)
 int __init early_init_dt_scan_memory(unsigned long node, const char *uname,
 				     int depth, void *data)
 {
+	//获取该节点中属性"device_type"的属性值
 	const char *type = of_get_flat_dt_prop(node, "device_type", NULL);
 	const __be32 *reg, *endp;
 	int l;
-
+	//检查"device_type"的属性值，确定该节点是否为memory节点
 	/* We are scanning "memory" nodes only */
 	if (type == NULL) {
 		/*
@@ -911,19 +912,20 @@ int __init early_init_dt_scan_memory(unsigned long node, const char *uname,
 	} else if (strcmp(type, "memory") != 0)
 		return 0;
 
+    //从该memory节点中获取属性"linux,usable-memory"的属性值，及属性值大小l
 	reg = of_get_flat_dt_prop(node, "linux,usable-memory", &l);
 	if (reg == NULL)
 		reg = of_get_flat_dt_prop(node, "reg", &l);
 	if (reg == NULL)
 		return 0;
-
+	//reg为属性值的起始地址，endp为结束地址
 	endp = reg + (l / sizeof(__be32));
 
 	pr_debug("memory scan node %s, reg size %d,\n", uname, l);
 
 	while ((endp - reg) >= (dt_root_addr_cells + dt_root_size_cells)) {
 		u64 base, size;
-
+		//读出物理内存的起始地址以及size
 		base = dt_mem_next_cell(dt_root_addr_cells, &reg);
 		size = dt_mem_next_cell(dt_root_size_cells, &reg);
 
@@ -1084,19 +1086,26 @@ bool __init early_init_dt_verify(void *params)
 void __init early_init_dt_scan_nodes(void)
 {
 	/* Retrieve various information from the /chosen node */
+	/*of_scan_flat_dt函数是用来scan整个device tree，针对每一个node调用callback函数，
+	因此，这里实际上是针对设备树中的每一个节点调用early_init_dt_scan_chosen函数。
+	之所以这么做是因为device tree blob刚刚完成地址映射，还没有展开，我们只能使用这种
+	比较笨的办法。这句代码主要是寻址chosen node，并解析，将相关数据放入到
+	boot_command_line*/
 	of_scan_flat_dt(early_init_dt_scan_chosen, boot_command_line);
 
 	/* Initialize {size,address}-cells info */
 	of_scan_flat_dt(early_init_dt_scan_root, NULL);
 
 	/* Setup memory, calling early_init_dt_add_memory_arch */
+	//遍历blob中所有节点依次调用 early_init_dt_scan_memory。
 	of_scan_flat_dt(early_init_dt_scan_memory, NULL);
+	printk(KERN_ERR "PID:%d",current->);
 }
 
 bool __init early_init_dt_scan(void *params)
 {
 	bool status;
-
+	//dtb 映射fixmap后的虚拟地址给全局变量 initial_boot_params。里面做了基本的校验
 	status = early_init_dt_verify(params);
 	if (!status)
 		return false;

@@ -109,7 +109,7 @@ uint32_t fdt_next_tag(const void *fdt, int startoffset, int *nextoffset)
 	case FDT_BEGIN_NODE:
 		/* skip name */
 		do {
-			p = fdt_offset_ptr(fdt, offset++, 1);
+			p = fdt_offset_ptr(fdt, offset++, 1); //在这遍历设备树节点，直到找到节点结尾
 		} while (p && (*p != '\0'));
 		if (!p)
 			return FDT_END; /* premature end */
@@ -157,7 +157,15 @@ int _fdt_check_prop_offset(const void *fdt, int offset)
 
 	return offset;
 }
+/*
 
+在结构块中，节点起始标志为32位常值宏OF_DT_BEGIN_NODE，节点结束标志为宏OF_DT_END_NODE
+
+1.3 字符串块（Strings block）
+为了节省空间，对于那些属性名，尤其是很多属性名是重复冗余出现的，提取出来单独存放到字符串块。
+这个块中包含了很多有结束标志的属性名字符串。 在设备树的结构块中存储了这些字符串的偏移地址，
+因为可以很容易的查找到属性名字符串。字符串块的引入节省嵌入式系统较为紧张的存储空间。
+*/
 int fdt_next_node(const void *fdt, int offset, int *depth)
 {
 	int nextoffset = 0;
@@ -176,7 +184,7 @@ int fdt_next_node(const void *fdt, int offset, int *depth)
 		case FDT_NOP:
 			break;
 
-		case FDT_BEGIN_NODE:
+		case FDT_BEGIN_NODE:   //开始节点
 			if (depth)
 				(*depth)++;
 			break;

@@ -63,15 +63,15 @@ static inline void __init __late_clear_fixmap(enum fixed_addresses idx)
 static void __iomem *prev_map[FIX_BTMAPS_SLOTS] __initdata;
 static unsigned long prev_size[FIX_BTMAPS_SLOTS] __initdata;
 static unsigned long slot_virt[FIX_BTMAPS_SLOTS] __initdata;
-
+/*初始化slot_virt数组，存放虚拟地址空间，每一个跨度为256k*/
 void __init early_ioremap_setup(void)
 {
 	int i;
-
+	//FIX_BTMAPS_SLOTS = 7;
 	for (i = 0; i < FIX_BTMAPS_SLOTS; i++)
 		if (WARN_ON(prev_map[i]))
 			break;
-
+	//NR_FIX_BTMAPS等于(SZ_256K / PAGE_SIZE)
 	for (i = 0; i < FIX_BTMAPS_SLOTS; i++)
 		slot_virt[i] = __fix_to_virt(FIX_BTMAP_BEGIN - NR_FIX_BTMAPS*i);
 }

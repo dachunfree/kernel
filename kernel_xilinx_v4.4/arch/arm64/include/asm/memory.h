@@ -57,7 +57,37 @@
 #define PCI_IO_START		(PCI_IO_END - PCI_IO_SIZE)
 #define FIXADDR_TOP		(PCI_IO_START - SZ_2M)
 #define TASK_SIZE_64		(UL(1) << VA_BITS)
+/*
+按CONFIG_ARM64_VA_BITS = 48bit 进行计算。
 
+。。。。。。。。高地址。。。。。。。。。
+____________
+			|
+线性映射区 	|
+ 			|
+____________|
+text		|
+____________|
+			|		MODULES_END (PAGE_OFFSET = 0xffff,8000,0000,0000)
+	64M		|
+____________|______
+_____2M_____|______ MODULES_VADDR (MODULES_END = PAGE_OFFSET - 64M)
+_____2M_____|______PCI_IO_END
+			|
+	16M		|
+____________|_____PCI_IO_START
+	2M		|
+____________|______FIXADDR_TOP
+			|
+FIXADDR_SIZE| fix map有了进一步的划分。分为永久映射和临时映射。fixed_addresses
+____________|
+	.		|
+	.		|
+	.		|
+____________|VA_START (0xffff,0000,0000,0000)
+
+。。。。。。。。。低地址。。。。。。。。。。
+*/
 #ifdef CONFIG_COMPAT
 #define TASK_SIZE_32		UL(0x100000000)
 #define TASK_SIZE		(test_thread_flag(TIF_32BIT) ? \
