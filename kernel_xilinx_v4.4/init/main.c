@@ -383,7 +383,7 @@ static void __init setup_command_line(char *command_line)
 
 static __initdata DECLARE_COMPLETION(kthreadd_done);
 
-//ÏµÍ³³õÊ¼»¯Íê³Éºó£¬½«µÚÒ»¸ö½ø³Ì£¨init£©±äÎªidle½ø³Ì¡£
+//???????????????????????init?????idle?????
 static noinline void __init_refok rest_init(void)
 {
 	int pid;
@@ -526,6 +526,7 @@ asmlinkage __visible void __init start_kernel(void)
 	boot_cpu_init();
 	page_address_init();
 	pr_notice("%s", linux_banner);
+	//fdtè§£æï¼Œå†…å­˜memblockå»ºç«‹ã€‚
 	setup_arch(&command_line);
 	mm_init_cpumask(&init_mm);
 	setup_command_line(command_line);
@@ -586,7 +587,7 @@ asmlinkage __visible void __init start_kernel(void)
 	init_IRQ();
 	tick_init();
 	rcu_init_nohz();
-	init_timers(); //timer ÈíÖĞ¶Ï´¦Àíº¯Êı
+	init_timers(); //timer ???Ğ¶???????
 	hrtimers_init();
 	softirq_init();
 	timekeeping_init();

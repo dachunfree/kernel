@@ -102,13 +102,13 @@ static int __init cma_activate_area(struct cma *cma)
 	/*CMA area有一个bitmap来管理各个page的状态，这里bitmap_size给出了bitmap需要多少的内存。i变量表示该CMA area有多少个pageblock*/
 	struct zone *zone;
 
-	cma->bitmap = kzalloc(bitmap_size, GFP_KERNEL);
+	cma->bitmap = kzalloc(bitmap_size, GFP_KERNEL); //分配内存
 
 	if (!cma->bitmap)
 		return -ENOMEM;
 
 	WARN_ON_ONCE(!pfn_valid(pfn));
-	zone = page_zone(pfn_to_page(pfn));
+	zone = page_zone(pfn_to_page(pfn)); //找到page对应的memory zone
 	/*遍历该CMA area中的所有的pageblock*/
 	do {
 		unsigned j;
@@ -145,7 +145,8 @@ err:
 	return -EINVAL;
 }
 
-static int __init cma_init_reserved_areas(void)
+//负载把所有的CMA区域的物理页释放给伙伴分配器
+static  __init cma_init_reserved_areas(void)
 {
 	int i;
 

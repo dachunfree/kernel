@@ -64,6 +64,7 @@ static inline void pud_free(struct mm_struct *mm, pud_t *pud)
 
 static inline void pgd_populate(struct mm_struct *mm, pgd_t *pgd, pud_t *pud)
 {
+	//*pgd =  __pa(pud) | PUD_TYPE_TABLE
 	set_pgd(pgd, __pgd(__pa(pud) | PUD_TYPE_TABLE));
 }
 

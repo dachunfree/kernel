@@ -179,7 +179,7 @@ static void __init smp_build_mpidr_hash(void)
 
 static void __init setup_machine_fdt(phys_addr_t dt_phys)
 {
-	//建立pte entry 映射才能访问物理地址
+	//建立pte entry 映射才能访问物理地址，加入到reserved的memory中
 	void *dt_virt = fixmap_remap_fdt(dt_phys);
 	//扫描DTB中的节点，主要是chosen，root,memory
 	if (!dt_virt || !early_init_dt_scan(dt_virt)) {
@@ -317,17 +317,13 @@ void __init setup_arch(char **cmdline_p)
 	local_async_enable();
 
 	efi_init();
-	/*
-	内核需要动态管理起来的内存资源被保存在memblock的memory type的数组中
-	（上图中的绿色block，按照地址的大小顺序排列），而那些需要预留的，不需要内核管理
-	的内存被保存在memblock的reserved type的数组中（上图中的青色block，也是按照地址的
-	大小顺序排列)
-	*/
+	/*内核需要动态管理起来的内存资源被保存在memblock的memory type的数组中
+	而那些需要预留的，不需要内核管理的内存被保存在memblock的reserved type的数组中*/
 	arm64_memblock_init();
 
 	/* Parse the ACPI tables for possible boot-time configuration */
 	acpi_boot_table_init();
-
+	//建立memblock中的memory页表。
 	paging_init();
 	relocate_initrd();
 

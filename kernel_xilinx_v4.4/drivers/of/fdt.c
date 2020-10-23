@@ -543,13 +543,15 @@ static int __init __fdt_scan_reserved_mem(unsigned long node, const char *uname,
 	static int found;
 	const char *status;
 	int err;
-
+	//找到了reserved-memory，且depth为1，接下来是要扫描其子节点
 	if (!found && depth == 1 && strcmp(uname, "reserved-memory") == 0) {
+		//进行节点内容的检测
 		if (__reserved_mem_check_root(node) != 0) {
 			pr_err("Reserved memory: unsupported node format, ignoring\n");
 			/* break scan */
 			return 1;
 		}
+		//节点内容正常，已经找到
 		found = 1;
 		/* scan next node */
 		return 0;
@@ -564,8 +566,30 @@ static int __init __fdt_scan_reserved_mem(unsigned long node, const char *uname,
 	status = of_get_flat_dt_prop(node, "status", NULL);
 	if (status && strcmp(status, "okay") != 0 && strcmp(status, "ok") != 0)
 		return 0;
+	/*
 
+	memory {
+		 device_type = "memory";
+		 reg = <0x0 0x40000000>; //512m DDR
+	 };
+	 reserved-memory {
+	 #address-cells = <1>;
+	 #size-cells = <1>;
+		 ranges;
+		 test_reserved: test@1c000000 {
+			 compatible = "test,test-memory";
+			 reg = <0x1c000000 0x4000000>; //起始内存，内存大小
+			 no-map; //禁止操作系统做逻辑地址映射,开始我没加这句话，ioremap出错了。
+		 };
+	*/
+	/*定义reserved memory有两种方法，一种是静态定义，也就是定义了reg属性，这时候，可以通过调用__reserved_mem_reserve_reg
+	函数解析reg的（address，size）的二元数组，逐一对每一个定义的memory region进行预留。实际的预留内存动作可以调用memblock_reserve
+	或者memblock_remove，具体调用哪一个是和该节点是否定义no-map属性相关，如果定义了no-map属性，那么说明这段内存操作系统根本不需要
+	进行地址映射，也就是说这块内存是不归操作系统内存管理模块来管理的，而是归于具体的驱动使用（在device tree中，设备节点可以定义
+	memory-region节点来引用在memory node中定义的保留内存，具体可以参考reserved-memory.txt文件）。*/
 	err = __reserved_mem_reserve_reg(node, uname);
+	/*另外一种定义reserved memory的方法是动态定义，也就是说定义了该内存区域的size（也可以定义alignment或者alloc-range
+	进一步约定动态分配的reserved memory属性，不过这些属性都是option的），但是不指定具体的基地址，让操作系统自己来分配这段memory*/
 	if (err == -ENOENT && of_get_flat_dt_prop(node, "size", NULL))
 		fdt_reserved_mem_save_node(node, uname, 0, 0);
 
@@ -590,13 +614,29 @@ void __init early_init_fdt_scan_reserved_mem(void)
 
 	/* Process header /memreserve/ fields */
 	for (n = 0; ; n++) {
+		/*
+			分析fdt中的 /memreserve/ fields ，进行内存的保留。在fdt的header中定义了一组memory reserve参数，其具体的位置是
+			fdt base address + off_mem_rsvmap。off_mem_rsvmap是fdt header中的一个成员，如下：
+			struct fdt_header {
+				……
+   				fdt32_t off_mem_rsvmap;－－－－－－/memreserve/ fields offset
+				……
+			};
+		*/
 		fdt_get_mem_rsv(initial_boot_params, n, &base, &size);
 		if (!size)
 			break;
-		early_init_dt_reserve_memory_arch(base, size, 0);
+		//保留每一个/memreserve/ fields定义的memory region，底层是通过memblock_reserve接口函数实现的。
+		early_init_dt_reserve_memory_arch(base, size, 0); //将其加入到reserved 内存区域
 	}
-
+	//逐个节点扫描，调用 __fdt_scan_reserved_mem 函数
 	of_scan_flat_dt(__fdt_scan_reserved_mem, NULL);
+	/*
+	device tree中的reserved-memory节点及其子节点静态或者动态定义了若干的reserved memory region，静态定义
+	的memory region起始地址和size都是确定的，因此可以立刻调用memblock的模块进行内存区域的预留，但是对于动态定义的
+	memory region，__fdt_scan_reserved_mem只是将信息保存在了reserved_mem全局变量中，并没有进行实际的内存预留动作，
+	具体的操作在fdt_init_reserved_mem函数中
+	*/
 	fdt_init_reserved_mem();
 }
 
@@ -868,10 +908,10 @@ int __init early_init_dt_scan_root(unsigned long node, const char *uname,
 	dt_root_size_cells = OF_ROOT_NODE_SIZE_CELLS_DEFAULT;
 	dt_root_addr_cells = OF_ROOT_NODE_ADDR_CELLS_DEFAULT;
 
-	prop = of_get_flat_dt_prop(node, "#size-cells", NULL);
+	prop = of_get_flat_dt_prop(node, "#size-cells", NULL);  //多少字节表示起始地址
 	if (prop)
 		dt_root_size_cells = be32_to_cpup(prop);
-	pr_debug("dt_root_size_cells = %x\n", dt_root_size_cells);
+	pr_debug("dt_root_size_cells = %x\n", dt_root_size_cells);//多少字节表示大小
 
 	prop = of_get_flat_dt_prop(node, "#address-cells", NULL);
 	if (prop)
@@ -933,7 +973,8 @@ int __init early_init_dt_scan_memory(unsigned long node, const char *uname,
 			continue;
 		pr_debug(" - %llx ,  %llx\n", (unsigned long long)base,
 		    (unsigned long long)size);
-
+		/*针对该memory mode中的每一个memory region，调用early_init_dt_add_memory_arch向系统注册memory type的内存区域
+		（实际上是通过memblock_add完成的）。*/
 		early_init_dt_add_memory_arch(base, size);
 	}
 
@@ -947,14 +988,15 @@ int __init early_init_dt_scan_chosen(unsigned long node, const char *uname,
 	const char *p;
 
 	pr_debug("search \"chosen\", depth: %d, uname: %s\n", depth, uname);
-
+	//由于chosen node是root node的子节点，因此其depth必须是1
 	if (depth != 1 || !data ||
 	    (strcmp(uname, "chosen") != 0 && strcmp(uname, "chosen@0") != 0))
 		return 0;
-
+	//解析chosen node中的initrd的信息
 	early_init_dt_check_for_initrd(node);
 
 	/* Retrieve command line */
+	//解析chosen node中的bootargs（命令行参数）并将其copy到boot_command_line。
 	p = of_get_flat_dt_prop(node, "bootargs", &l);
 	if (p != NULL && l > 0)
 		strlcpy(data, p, min((int)l, COMMAND_LINE_SIZE));
@@ -964,6 +1006,8 @@ int __init early_init_dt_scan_chosen(unsigned long node, const char *uname,
 	 * managed to set the command line, unless CONFIG_CMDLINE_FORCE
 	 * is set in which case we override whatever was found earlier.
 	 */
+	 /*核有可能会定义一个default command line string（CONFIG_CMDLINE），如果bootloader没有通过device tree传递命令行参数过来，
+	 那么可以考虑使用default参数。如果系统定义了CONFIG_CMDLINE_FORCE，那么系统强制使用缺省命令行参数，bootloader传递过来的是无效的*/
 #ifdef CONFIG_CMDLINE
 #ifndef CONFIG_CMDLINE_FORCE
 	if (!((char *)data)[0])
@@ -1032,9 +1076,14 @@ void __init __weak early_init_dt_add_memory_arch(u64 base, u64 size)
 int __init __weak early_init_dt_reserve_memory_arch(phys_addr_t base,
 					phys_addr_t size, bool nomap)
 {
-	if (nomap)
+	/*
+	如果定义了no-map属性，那么说明这段内存操作系统根本不需要进行地址映射，也就是说这块内存是不归操
+	作系统内存管理模块来管理的，而是归于具体的驱动使用（在device tree中，设备节点可以定义memory-region节点来
+	引用在memory node中定义的保留内存，具体可以参考reserved-memory.txt文件）
+	*/
+	if (nomap) //标记有nomap则将其从memblock管理中删除
 		return memblock_remove(base, size);
-	return memblock_reserve(base, size);
+	return memblock_reserve(base, size); //没有标记nomap，则添加到reserve region中
 }
 
 /*

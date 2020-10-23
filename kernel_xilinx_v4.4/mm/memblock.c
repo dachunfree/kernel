@@ -209,7 +209,7 @@ phys_addr_t __init_memblock memblock_find_in_range_node(phys_addr_t size,
 	/* pump up @end */
 	//如果end是MEMBLOCK_ALLOC_ACCESSIBLE,表示在所有区域中查找
 	if (end == MEMBLOCK_ALLOC_ACCESSIBLE)
-		end = memblock.current_limit;
+		end = memblock.current_limit;  //限制大小。开始page_init的时候只从已经建立静态页表的位置分配
 
 	/* avoid allocating the first page */
 	start = max_t(phys_addr_t, start, PAGE_SIZE);

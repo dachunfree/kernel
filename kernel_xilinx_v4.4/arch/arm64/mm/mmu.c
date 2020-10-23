@@ -98,17 +98,19 @@ static void alloc_init_pte(pmd_t *pmd, unsigned long addr,
 				  void *(*alloc)(unsigned long size))
 {
 	pte_t *pte;
-
+	/*说明后续需要建立PTE这一个level的页表描述符，因此，需要分配PTE页表内存，场景有两个，
+	一个是从来没有进行过映射，另外一个是已经建立映射，但是是section mapping，不符合要求*/
 	if (pmd_none(*pmd) || pmd_sect(*pmd)) {
 		pte = alloc(PTRS_PER_PTE * sizeof(pte_t));
-		if (pmd_sect(*pmd))
+		if (pmd_sect(*pmd))//如果之前有section mapping，那么我们需要将其分裂成512个pte中的page descriptor
 			split_pmd(pmd, pte);
-		__pmd_populate(pmd, __pa(pte), PMD_TYPE_TABLE);
+		__pmd_populate(pmd, __pa(pte), PMD_TYPE_TABLE); //让pmd entry指向新的pte页表内存
 		flush_tlb_all();
 	}
 	BUG_ON(pmd_bad(*pmd));
 
 	pte = pte_offset_kernel(pmd, addr);
+	//循环设定（addr，end）这段地址区域的pte中的page descriptor
 	do {
 		set_pte(pte, pfn_pte(pfn, prot));
 		pfn++;
@@ -138,16 +140,22 @@ static void alloc_init_pmd(struct mm_struct *mm, pud_t *pud,
 	/*
 	 * Check for initial section mappings in the pgd/pud and remove them.
 	 */
+	 /*pud entry是空的，我们需要分配后续的PMD页表内存。另外一个是旧的pud entry是section 描述符，映射了1G的address block。
+	 但是现在由于种种原因，我们需要修改它，故需要remove这个1G block的section mapping*/
 	if (pud_none(*pud) || pud_sect(*pud)) {
-		pmd = alloc(PTRS_PER_PMD * sizeof(pmd_t));
+		pmd = alloc(PTRS_PER_PMD * sizeof(pmd_t)); //虚拟地址
 		if (pud_sect(*pud)) {
 			/*
 			 * need to have the 1G of mappings continue to be
 			 * present
 			 */
+			 /*虽然是建立新的mapping，但是原来旧的1G mapping也要保留的，也许这次我们只是想更新部分地址映射呢。
+			 在这种情况下，我们先通过split_pud函数调用把一个1G block mapping转换成通过pmd进行mapping的形式
+			 （一个pud的section mapping描述符（1G size）变成了512个pmd中的section mapping描述符（2M size）。
+			 仍然是1G block的地址映射*/
 			split_pud(pud, pmd);
 		}
-		pud_populate(mm, pud, pmd);
+		pud_populate(mm, pud, pmd); //pud entry指向新的pmd页表内存，同时flush tlb的内容
 		flush_tlb_all();
 	}
 	BUG_ON(pud_bad(*pud));
@@ -199,14 +207,17 @@ static void alloc_init_pud(struct mm_struct *mm, pgd_t *pgd,
 {
 	pud_t *pud;
 	unsigned long next;
-
+	/*如果当前pgd entry是全0的话，说明还没有对应的下级PUD页表内存，因此需要进行PUD页表内存
+	的分配。需要说明的是这时候，伙伴系统没有ready，分配内存仍然使用memblock模块*/
 	if (pgd_none(*pgd)) {
-		pud = alloc(PTRS_PER_PUD * sizeof(pud_t));
-		pgd_populate(mm, pgd, pud);
+		pud = alloc(PTRS_PER_PUD * sizeof(pud_t)); //物理地址
+		pgd_populate(mm, pgd, pud); //建立pgd entry中填入 PUD 页表(物理地址)
 	}
 	BUG_ON(pgd_bad(*pgd));
-
-	pud = pud_offset(pgd, addr);
+	/*pud的页表内存已经有了，但是addr对应PUD中的哪一个描述符呢？pud_offset给出了答案，其返回
+	的指针指向传入参数addr地址对应的pud 描述符内存，而我们随后的任务就是填充pud entry了*/
+	pud = pud_offset(pgd, addr); //根据addr从PGD中找到对应的PUD项。
+	//通过循环，逐一填充pud entry，同时分配并初始化下一阶页表
 	do {
 		next = pud_addr_end(addr, end);
 
@@ -226,7 +237,7 @@ static void alloc_init_pud(struct mm_struct *mm, pgd_t *pgd,
 			 * Look up the old pmd table and free it.
 			 */
 			if (!pud_none(old_pud)) {
-				flush_tlb_all();
+				flush_tlb_all(); //清除旧页表的TLB
 				if (pud_table(old_pud)) {
 					phys_addr_t table = __pa(pmd_offset(&old_pud, 0));
 					if (!WARN_ON_ONCE(slab_is_available()))
@@ -250,13 +261,20 @@ static void  __create_mapping(struct mm_struct *mm, pgd_t *pgd,
 				    void *(*alloc)(unsigned long size))
 {
 	unsigned long addr, length, end, next;
-
+	//因为地址映射的最小单位是page，因此这里进行mapping的虚拟地址需要对齐到page size
 	addr = virt & PAGE_MASK;
+	//经过对齐运算，（addr，length）定义的地址范围应该是囊括（virt，size）定义的地址范围，并且是对齐到page的。
 	length = PAGE_ALIGN(size + (virt & ~PAGE_MASK));
-
 	end = addr + length;
+	/*（addr，length）这个虚拟地址范围可能需要占据多个PGD entry，因此这里我们需要一个循环，
+	不断的调用alloc_init_pud函数来完成（addr，length）这个虚拟地址范围的映射，当然，
+	alloc_init_pud函数其实也会建立下游（例如PUD、PMD、PTE）翻译表的entry*/
 	do {
+		/*如果（addr，length）这个虚拟地址范围的mapping需要跨越多个pgd entry，那么next变量保存了
+		下一个pgd entry的起始虚拟地址*/
 		next = pgd_addr_end(addr, end);
+		/*一是填充pgd entry，二是创建后续的pud translation table（如果需要的话）
+		并进行下游Translation table的建立*/
 		alloc_init_pud(mm, pgd, addr, next, phys, prot, alloc);
 		phys += next - addr;
 	} while (pgd++, addr = next, addr != end);
@@ -275,11 +293,17 @@ static void *late_alloc(unsigned long size)
 static void __init create_mapping(phys_addr_t phys, unsigned long virt,
 				  phys_addr_t size, pgprot_t prot)
 {
+	//内核的虚拟地址空间从VMALLOC_START开始,低于这个地址错误。为什么?
 	if (virt < VMALLOC_START) {
 		pr_warn("BUG: not creating mapping for %pa at 0x%016lx - outside kernel range\n",
 			&phys, virt);
 		return;
 	}
+	/*
+	init_mm:内核空间的内存描述符
+	pgd_offset_k:是根据给定的虚拟地址，在kernel space的pgd中找到对应的描述符的位置(是offset)
+	early_alloc是在mapping过程中，如果需要分配内存的话（页表需要内存），调用该函数进行内存的分配(注意刚才看到的limit分配限制)
+	*/
 	__create_mapping(&init_mm, pgd_offset_k(virt & PAGE_MASK), phys, virt,
 			 size, prot, early_alloc);
 }
@@ -342,6 +366,15 @@ static void __init __map_memblock(phys_addr_t start, phys_addr_t end)
 #else
 static void __init __map_memblock(phys_addr_t start, phys_addr_t end)
 {
+/*
+#define PAGE_KERNEL_EXEC	__pgprot(_PAGE_DEFAULT | PTE_UXN | PTE_DIRTY | PTE_WRITE)
+PTE_UXN		:Unprivileged Execute-never bit，也就是限制userspace从这里取指执行
+PTE_DIRTY	:是一个软件设定的bit，硬件并不操作这个bit，OS软件用这个bit标识该entry是clean or dirty，
+			如果是dirty的话，说明该page的数据已经被写入过，如果该page需要被swapped out，那么还需要保存
+			dirty的数据才能回收该page.
+*/
+	/*起始物理地址等于phys，大小是size的这一段物理内存mapping到起始虚拟地址是virt的虚拟地址空间，
+	  映射的memory attribute是prot*/
 	create_mapping(start, __phys_to_virt(start), end - start,
 			PAGE_KERNEL_EXEC);
 }
@@ -366,15 +399,22 @@ static void __init map_mem(void)
 	 * memory starting from PHYS_OFFSET (which must be aligned to 2MB as
 	 * per Documentation/arm64/booting.txt).
 	 */
+	 /*
+	 首先限制了当前memblock的上限,这些地址是开始时候已经静态映射好的(因为现在地址映射尚未建立好)。SWAPPER_INIT_MAP_SIZE 是启动阶
+	 段kernel direct mapping的size。也就是说，从PHYS_OFFSET到PHYS_OFFSET + SWAPPER_INIT_MAP_SIZE的区域，所有的页表
+	 （各个level的translation table）都已经OK，不需要分配，只需要把描述符写入页表即可
+	 */
 	limit = PHYS_OFFSET + SWAPPER_INIT_MAP_SIZE;
 	memblock_set_current_limit(limit);
 
 	/* map all the memory banks */
+	/*对系统中所有的memory type的region建立对应的地址映射。由于reserved type的memory region是memory type的region的真子集，
+	  因此reserved memory 的地址映射也就一并建立了*/
 	for_each_memblock(memory, reg) {
-		phys_addr_t start = reg->base;
-		phys_addr_t end = start + reg->size;
+		phys_addr_t start = reg->base;  //确定该region的起始地址
+		phys_addr_t end = start + reg->size; //确定该region的结束地址
 
-		if (start >= end)
+		if (start >= end) //参数检测
 			break;
 
 		if (ARM64_SWAPPER_USES_SECTION_MAPS) {
@@ -395,9 +435,10 @@ static void __init map_mem(void)
 				memblock_set_current_limit(limit);
 			}
 		}
+		//在map_mem之后，所有之前通过__create_page_tables创建的描述符都被覆盖了，取而代之的是新的映射
 		__map_memblock(start, end);
 	}
-
+	//所有的系统内存的地址映射已经建立完毕，取消之前的上限，让memblock模块可以自由的分配内存
 	/* Limit no longer required. */
 	memblock_set_current_limit(MEMBLOCK_ALLOC_ANYWHERE);
 }
@@ -449,7 +490,7 @@ void fixup_init(void)
 void __init paging_init(void)
 {
 	void *zero_page;
-
+	//对memblock_type的regions依次建立页表映射。
 	map_mem();
 	fixup_executable();
 
@@ -697,7 +738,7 @@ void *__init fixmap_remap_fdt(phys_addr_t dt_phys)
 	if (offset + size > SWAPPER_BLOCK_SIZE)
 		create_mapping(round_down(dt_phys, SWAPPER_BLOCK_SIZE), dt_virt_base,
 			       round_up(offset + size, SWAPPER_BLOCK_SIZE), prot);
-
+	//保留fdt占用的内存
 	memblock_reserve(dt_phys, size);
 
 	return dt_virt;

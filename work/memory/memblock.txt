@@ -59,6 +59,20 @@ memblock_add
 a. 遍历memory类型内存的region，已经分配的内存以region的形式存放在rserved类型内存中.
 b. 调用memblock_reserve函数将分配的内存以region的形式存放在rserved类型内存中
 
+//no-map的memory在reserved中，但是不在memblock中？
 arm64_memblock_init：
-
-
+	|----->memblock_reserve(__pa(_text), _end - _text); //内核的加入到memory的中的 reserved区域
+	|----->early_init_fdt_scan_reserved_mem
+	 	 |----->fdt_get_mem_rsv(initial_boot_params, n, &base, &size); //扫描dtb中的reserved 内存区域(header中有);
+		 |----->early_init_dt_reserve_memory_arch(base, size, 0); //将其加入到reserved 内存区域
+		 |----->of_scan_flat_dt(__fdt_scan_reserved_mem, NULL); //逐个节点扫描，调用 __fdt_scan_reserved_mem 函数
+		 		|---->__fdt_scan_reserved_mem
+		 			 |----->strcmp(uname, "reserved-memory") //检测DTB是否为reserved-memory
+		 			 |----->__reserved_mem_check_root //检测节点内部属性（#size-cells，#address-cells,ranges）
+		 			 |----->of_get_flat_dt_prop(node, "status", NULL) //status节点是否为okay属性
+		 			 |----->__reserved_mem_reserve_reg
+		 			 		|----->of_get_flat_dt_prop(node, "reg", &len); //获取reg属性
+		 			 		|----->of_get_flat_dt_prop(node, "no-map", NULL) //获取是否为no-map属性
+		 			 		|-----> early_init_dt_reserve_memory_arch(base, size, nomap) //no-map从memory region中移除
+		 			 		|----->fdt_reserved_mem_save_node //将first的 reserved memory节点保存起来
+		 |----->fdt_init_reserved_mem

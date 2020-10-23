@@ -165,12 +165,12 @@ void __init arm64_memblock_init(void)
 	 * Register the kernel text, kernel data, initrd, and initial
 	 * pagetables with memblock.
 	 */
-	memblock_reserve(__pa(_text), _end - _text);
+	memblock_reserve(__pa(_text), _end - _text); //内核的加入到memory的中的 reserved区域
 #ifdef CONFIG_BLK_DEV_INITRD
 	if (initrd_start)
 		memblock_reserve(__virt_to_phys(initrd_start), initrd_end - initrd_start);
 #endif
-
+	//reserved memory的布局，里面也包含对cma的初始化
 	early_init_fdt_scan_reserved_mem();
 
 	/* 4GB maximum for 32-bit only capable devices */
@@ -178,12 +178,13 @@ void __init arm64_memblock_init(void)
 		arm64_dma_phys_limit = max_zone_dma_phys();
 	else
 		arm64_dma_phys_limit = PHYS_MASK + 1;
+	//如果有配置命令行参数，而且device tree并没有设定Global CMA area，那么dma_contiguous_reserve才会真正有作用
 	dma_contiguous_reserve(arm64_dma_phys_limit);
 
 	memblock_allow_resize();
 	memblock_dump_all();
 }
-
+//https://www.cnblogs.com/LoyenWang/p/11523678.html
 void __init bootmem_init(void)
 {
 	unsigned long min, max;

@@ -185,7 +185,14 @@ static int __init __reserved_mem_init_node(struct reserved_mem *rmem)
 {
 	extern const struct of_device_id __reservedmem_of_table[];
 	const struct of_device_id *i;
-
+	/*
+		RESERVEDMEM_OF_DECLARE(cma, "shared-dma-pool", rmem_cma_setup);
+		#define _OF_DECLARE(table, name, compat, fn, fn_type)			\
+		static const struct of_device_id __of_table_##name		\
+		__used __section(__reservedmem_of_table)			\
+		 = { .compatible = compat,				\
+		     .data = (fn == (fn_type)NULL) ? fn : fn  }
+	*/
 	for (i = __reservedmem_of_table; i < &__rmem_of_table_sentinel; i++) {
 		reservedmem_of_init_fn initfn = i->data;
 		const char *compat = i->compatible;
@@ -251,24 +258,36 @@ void __init fdt_init_reserved_mem(void)
 	int i;
 
 	/* check for overlapping reserved regions */
+	/*
+	  检查静态定义的 reserved memory region之间是否有重叠区域，如果有重叠，这里并不会对reserved memory region的base和
+	  size进行调整，只是打印出错信息而已
+	*/
 	__rmem_check_for_overlap();
-
 	for (i = 0; i < reserved_mem_count; i++) {
-		struct reserved_mem *rmem = &reserved_mem[i];
+		struct reserved_mem *rmem = &reserved_mem[i]; //当前所有的reserve mem(上面一个函数最后保存的数组)
 		unsigned long node = rmem->fdt_node;
 		int len;
 		const __be32 *prop;
 		int err = 0;
-
+		//获取node的phandle，每个节点都会有phandle或者linux,phandle属性，这个是在dtc编译的时候添加的
 		prop = of_get_flat_dt_prop(node, "phandle", &len);
 		if (!prop)
 			prop = of_get_flat_dt_prop(node, "linux,phandle", &len);
 		if (prop)
 			rmem->phandle = of_read_number(prop, len/4);
-
+		/*
+		size等于0的memory region表示这是一个动态分配region，base address尚未定义，因此我们需要通过__reserved_mem_alloc_size函数
+		对节点进行分析（size、alignment等属性），然后调用memblock的alloc接口函数进行memory block的分配，最终的结果是确定base address
+		和size，并将这段memory region从memory type的数组中移到reserved type的数组中。当然，如果定义了no-map属性，那么这段memory会从
+		系统中之间删除（memory type和reserved type数组中都没有这段memory的定义）
+		*/
 		if (rmem->size == 0)
 			err = __reserved_mem_alloc_size(node, rmem->name,
 						 &rmem->base, &rmem->size);
+		/*保留内存有两种使用场景，一种是被特定的驱动使用，这时候在特定驱动的初始化函数（probe函数）中自然会进行处理。
+		还有一种场景就是被所有驱动或者内核模块使用，例如CMA，per-device Coherent DMA的分配等，这时候，我们需要借用device tree的
+		匹配机制进行这段保留内存的初始化动作。有兴趣的话可以看看RESERVEDMEM_OF_DECLARE的定义*/
+		/*调用注册所有保留内存的初始化函数，保留初始化函数放在__reservedmem_of_table中，cma的初始化函数是rmem_cma_setup*/
 		if (err == 0)
 			__reserved_mem_init_node(rmem);
 	}

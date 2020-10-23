@@ -120,9 +120,9 @@ void __init dma_contiguous_reserve(phys_addr_t limit)
 		if (base_cmdline + size_cmdline == limit_cmdline)
 			fixed = true;
 	} else {
-#ifdef CONFIG_CMA_SIZE_SEL_MBYTES
+#ifdef CONFIG_CMA_SIZE_SEL_MBYTES  //兆字节数
 		selected_size = size_bytes;
-#elif defined(CONFIG_CMA_SIZE_SEL_PERCENTAGE)
+#elif defined(CONFIG_CMA_SIZE_SEL_PERCENTAGE) //百分比
 		selected_size = cma_early_percent_memory();
 #elif defined(CONFIG_CMA_SIZE_SEL_MIN)
 		selected_size = min(size_bytes, cma_early_percent_memory());
@@ -240,6 +240,7 @@ static const struct reserved_mem_ops rmem_cma_ops = {
 	.device_release = rmem_cma_device_release,
 };
 
+//core_initcall(cma_init_reserved_areas);
 static int __init rmem_cma_setup(struct reserved_mem *rmem)
 {
 	phys_addr_t align = PAGE_SIZE << max(MAX_ORDER - 1, pageblock_order);
@@ -247,7 +248,7 @@ static int __init rmem_cma_setup(struct reserved_mem *rmem)
 	unsigned long node = rmem->fdt_node;
 	struct cma *cma;
 	int err;
-
+	//reserved memory 如果没有reusable属性或者拥有no-map属性，错误
 	if (!of_get_flat_dt_prop(node, "reusable", NULL) ||
 	    of_get_flat_dt_prop(node, "no-map", NULL))
 		return -EINVAL;
