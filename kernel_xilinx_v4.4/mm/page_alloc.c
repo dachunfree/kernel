@@ -4941,6 +4941,7 @@ static unsigned long __meminit zone_spanned_pages_in_node(int nid,
 	/* Get the start and end of the zone */
 	zone_start_pfn = arch_zone_lowest_possible_pfn[zone_type];
 	zone_end_pfn = arch_zone_highest_possible_pfn[zone_type];
+	//留出movable类型?
 	adjust_zone_range_for_zone_movable(nid, zone_type,
 				node_start_pfn, node_end_pfn,
 				&zone_start_pfn, &zone_end_pfn);
@@ -5050,11 +5051,12 @@ static void __meminit calculate_node_totalpages(struct pglist_data *pgdat,
 	for (i = 0; i < MAX_NR_ZONES; i++) {
 		struct zone *zone = pgdat->node_zones + i;
 		unsigned long size, real_size;
-
+		//size 表示当前区域总的内存大小(包含空洞)
 		size = zone_spanned_pages_in_node(pgdat->node_id, i,
 						  node_start_pfn,
 						  node_end_pfn,
 						  zones_size);
+		//总的大小 - 空洞的大小为真实的大小。
 		real_size = size - zone_absent_pages_in_node(pgdat->node_id, i,
 						  node_start_pfn, node_end_pfn,
 						  zholes_size);
@@ -5064,8 +5066,9 @@ static void __meminit calculate_node_totalpages(struct pglist_data *pgdat,
 		totalpages += size;
 		realtotalpages += real_size;
 	}
-
+	//node_spanned_pages:包含空洞的物理页总数
 	pgdat->node_spanned_pages = totalpages;
+	//node_present_pages:物理页总数
 	pgdat->node_present_pages = realtotalpages;
 	printk(KERN_DEBUG "On node %d totalpages: %lu\n", pgdat->node_id,
 							realtotalpages);
@@ -5203,6 +5206,7 @@ static void __paginginit free_area_init_core(struct pglist_data *pgdat)
 		 * is used by this zone for memmap. This affects the watermark
 		 * and per-cpu initialisations
 		 */
+		 //计算struct page * size 所占的页数
 		memmap_pages = calc_memmap_size(size, realsize);
 		if (!is_highmem_idx(j)) {
 			if (freesize >= memmap_pages) {
@@ -5236,7 +5240,7 @@ static void __paginginit free_area_init_core(struct pglist_data *pgdat)
 		 * when the bootmem allocator frees pages into the buddy system.
 		 * And all highmem pages will be managed by the buddy system.
 		 */
-		zone->managed_pages = is_highmem_idx(j) ? realsize : freesize;
+		zone->managed_pages = is_highmem_idx(j) ? realsize : freesize;  //被Buddy System管理的页面数量
 #ifdef CONFIG_NUMA
 		zone->node = nid;
 		zone->min_unmapped_pages = (freesize*sysctl_min_unmapped_ratio)
@@ -5261,6 +5265,7 @@ static void __paginginit free_area_init_core(struct pglist_data *pgdat)
 		setup_usemap(pgdat, zone, zone_start_pfn, size);
 		ret = init_currently_empty_zone(zone, zone_start_pfn, size);
 		BUG_ON(ret);
+		//初始化struct page。为什么要设置为可迁移类型呢?
 		memmap_init(size, nid, j, zone_start_pfn);
 		zone_start_pfn += size;
 	}
@@ -5288,7 +5293,9 @@ static void __init_refok alloc_node_mem_map(struct pglist_data *pgdat)
 		 * aligned but the node_mem_map endpoints must be in order
 		 * for the buddy allocator to function correctly.
 		 */
+		 //end 包含空洞的总的物理页数
 		end = pgdat_end_pfn(pgdat);
+		//按照1<<10次方进行对齐
 		end = ALIGN(end, MAX_ORDER_NR_PAGES);
 		size =  (end - start) * sizeof(struct page);
 		map = alloc_remap(pgdat->node_id, size);
@@ -5315,6 +5322,7 @@ static void __init_refok alloc_node_mem_map(struct pglist_data *pgdat)
 void __paginginit free_area_init_node(int nid, unsigned long *zones_size,
 		unsigned long node_start_pfn, unsigned long *zholes_size)
 {
+	//每个NUMA节点有一个 pg_data_t
 	pg_data_t *pgdat = NODE_DATA(nid);
 	unsigned long start_pfn = 0;
 	unsigned long end_pfn = 0;
@@ -5331,16 +5339,17 @@ void __paginginit free_area_init_node(int nid, unsigned long *zones_size,
 		(u64)start_pfn << PAGE_SHIFT,
 		end_pfn ? ((u64)end_pfn << PAGE_SHIFT) - 1 : 0);
 #endif
+	//为了统计Node中的页面数(总内存大小(包含空洞)，实际内存大小)
 	calculate_node_totalpages(pgdat, start_pfn, end_pfn,
 				  zones_size, zholes_size);
-
+	//分配struct page到 pgdat->node_mem_map
 	alloc_node_mem_map(pgdat);
 #ifdef CONFIG_FLAT_NODE_MEM_MAP
 	printk(KERN_DEBUG "free_area_init_node: node %d, pgdat %08lx, node_mem_map %08lx\n",
 		nid, (unsigned long)pgdat,
 		(unsigned long)pgdat->node_mem_map);
 #endif
-
+	//真正初始化每个struct zone中的成员，填充pgdat的ZONE结构体。
 	free_area_init_core(pgdat);
 }
 

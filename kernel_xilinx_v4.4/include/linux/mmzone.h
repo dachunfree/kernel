@@ -1063,10 +1063,10 @@ struct mem_section {
 	 * Making it a UL at least makes someone do a cast
 	 * before using it wrong.
 	 */
-	unsigned long section_mem_map;
+	unsigned long section_mem_map; //存放nid等标志位+struct page 地址?
 
 	/* See declaration of similar field in struct zone */
-	unsigned long *pageblock_flags;
+	unsigned long *pageblock_flags; //bit map?
 #ifdef CONFIG_PAGE_EXTENSION
 	/*
 	 * If !SPARSEMEM, pgdat doesn't have page_ext pointer. We use
@@ -1082,7 +1082,7 @@ struct mem_section {
 };
 
 #ifdef CONFIG_SPARSEMEM_EXTREME
-#define SECTIONS_PER_ROOT       (PAGE_SIZE / sizeof (struct mem_section))
+#define SECTIONS_PER_ROOT       (PAGE_SIZE / sizeof (struct mem_section)) //一个物理页里面包含多少struct mem_section
 #else
 #define SECTIONS_PER_ROOT	1
 #endif

@@ -46,7 +46,7 @@
 	_min1 < _min2 ? _min1 : _min2; })
 #endif
 
-#ifndef roundup
+#ifndef roundup //向上圆整数。
 #define roundup(x, y) (                                \
 {                                                      \
 	const typeof(y) __y = y;		       \

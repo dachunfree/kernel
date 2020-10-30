@@ -80,6 +80,7 @@ static phys_addr_t max_zone_dma_phys(void)
 static void __init zone_sizes_init(unsigned long min, unsigned long max)
 {
 	struct memblock_region *reg;
+	//统计zone_size[ZONE_DMA] 和 zone_size[ZONE_NORMAL]的大小。
 	unsigned long zone_size[MAX_NR_ZONES], zhole_size[MAX_NR_ZONES];
 	unsigned long max_dma = min;
 
@@ -102,9 +103,10 @@ static void __init zone_sizes_init(unsigned long min, unsigned long max)
 			continue;
 
 #ifdef CONFIG_ZONE_DMA
+		//这里属于DMA 内存孔洞 区域。根据实际dts传进来给到memblock的大小来计算
 		if (start < max_dma) {
 			unsigned long dma_end = min(end, max_dma);
-			zhole_size[ZONE_DMA] -= dma_end - start;
+			zhole_size[ZONE_DMA] -= dma_end - start; //-= 优先级低于 -
 		}
 #endif
 		if (end > max_dma) {
@@ -113,7 +115,7 @@ static void __init zone_sizes_init(unsigned long min, unsigned long max)
 			zhole_size[ZONE_NORMAL] -= normal_end - normal_start;
 		}
 	}
-
+	//初始化内存节点
 	free_area_init_node(0, zone_size, min, zhole_size);
 }
 
@@ -135,6 +137,7 @@ static void arm64_memory_present(void)
 	struct memblock_region *reg;
 
 	for_each_memblock(memory, reg)
+		//传入参数为start_pfn和end_pfn。
 		memory_present(0, memblock_region_memory_base_pfn(reg),
 			       memblock_region_memory_end_pfn(reg));
 }
@@ -198,9 +201,11 @@ void __init bootmem_init(void)
 	 * Sparsemem tries to allocate bootmem in memory_present(), so must be
 	 * done after the fixed reservations.
 	 */
+	 //根据memblock 初始化struct mem_section *mem_section[NR_SECTION_ROOTS]二维数组。
 	arm64_memory_present();
-
+	//稀疏内存模型。给section分配一个pageblock bitmap位图
 	sparse_init();
+	//来初始化节点和管理区的一些数据项
 	zone_sizes_init(min, max);
 
 	high_memory = __va((max << PAGE_SHIFT) - 1) + 1;

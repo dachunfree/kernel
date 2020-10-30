@@ -79,16 +79,29 @@ static struct mem_section noinline __init_refok *sparse_index_alloc(int nid)
 
 static int __meminit sparse_index_init(unsigned long section_nr, int nid)
 {
-	unsigned long root = SECTION_NR_TO_ROOT(section_nr);
-	struct mem_section *section;
+	/*SECTIONS_PER_ROOT即一个物理页面可以存放多少"struct mem_section"实例，由于目前内存是按
+      物理页面来管理的，所以一次会分配一个物理页面来存放"struct mem_section"实例，称为一个
+      ROOT，如果"struct mem_section"实例很多的话，可能需要分配多个物理页面*/
+      //__pfn_to_section(unsigned long pfn);
+      /*
+	  mem_section[root][array_size]
 
+	  page 0-------------------------------------------->  |mem_section 0
+	  page 1											   |mem_section 1
+	  page 2											   |.............
+	  ..... 											   |.............
+	  page root											   |mem_section array_size
+	  */
+	unsigned long root = SECTION_NR_TO_ROOT(section_nr); //根据section_nr确定对应的struct mem_section索引
+	struct mem_section *section;
+	//判断root section是否存在
 	if (mem_section[root])
 		return -EEXIST;
-
+	//从memblock中分配 struct mem_section
 	section = sparse_index_alloc(nid);
 	if (!section)
 		return -ENOMEM;
-
+	//mem_section[i] = section.相当于数组指针吧
 	mem_section[root] = section;
 
 	return 0;
@@ -171,19 +184,21 @@ void __init memory_present(int nid, unsigned long start, unsigned long end)
 {
 	unsigned long pfn;
 
-	start &= PAGE_SECTION_MASK;
+	start &= PAGE_SECTION_MASK;// = 30 -12 = 18.(1个settion是2^30 = 1G)
+	//验证start，end是否超过最大限制地址
 	mminit_validate_memmodel_limits(&start, &end);
 	for (pfn = start; pfn < end; pfn += PAGES_PER_SECTION) {
 		unsigned long section = pfn_to_section_nr(pfn);
 		struct mem_section *ms;
-
+		//struct mem_section *mem_section[NR_SECTION_ROOTS]，为其按照1G的section分配数组指针。
 		sparse_index_init(section, nid);
+		//未使用numa，所以nid == 0；
 		set_section_nid(section, nid);
 
-		ms = __nr_to_section(section);
+		ms = __nr_to_section(section); //二维数组，第一维是root,第二维是page大小
 		if (!ms->section_mem_map)
 			ms->section_mem_map = sparse_encode_early_nid(nid) |
-							SECTION_MARKED_PRESENT;
+							SECTION_MARKED_PRESENT; //section 在位?
 	}
 }
 
@@ -237,18 +252,37 @@ static int __meminit sparse_init_one_section(struct mem_section *ms,
 		return -EINVAL;
 
 	ms->section_mem_map &= ~SECTION_MAP_MASK;
-	ms->section_mem_map |= sparse_encode_mem_map(mem_map, pnum) |
+	ms->section_mem_map |= sparse_encode_mem_map(mem_map, pnum) |   //mem_map为分配的struct page地址
 							SECTION_HAS_MEM_MAP;
  	ms->pageblock_flags = pageblock_bitmap;
 
 	return 1;
 }
+/*
+其中SECTION_BLOCKFLAGS_BITS表示一个section中的pageblock bit数量
+#define SECTION_BLOCKFLAGS_BITS \
+	((1UL << (PFN_SECTION_SHIFT - pageblock_order)) * NR_PAGEBLOCK_BITS)
+NR_PAGEBLOCK_BITS值为4,pageblock_order值为10。
+4bit类型:
+enum pageblock_bits {
+	PB_migrate,
+	PB_migrate_end = PB_migrate + 3 - 1,
+											/* 3 bits required for migrate types
+	PB_migrate_skip,/* If set the block is skipped by compaction */
 
+	/*
+	 * Assume the bits will always align on a word. If this assumption
+	 * changes then get/set pageblock needs updating.
+
+	NR_PAGEBLOCK_BITS
+};
+
+*/
 unsigned long usemap_size(void)
 {
 	unsigned long size_bytes;
-	size_bytes = roundup(SECTION_BLOCKFLAGS_BITS, 8) / 8;
-	size_bytes = roundup(size_bytes, sizeof(unsigned long));
+	size_bytes = roundup(SECTION_BLOCKFLAGS_BITS, 8) / 8; //bits
+	size_bytes = roundup(size_bytes, sizeof(unsigned long)); //bits to unsigned long
 	return size_bytes;
 }
 
@@ -350,8 +384,10 @@ static void __init sparse_early_usemaps_alloc_node(void *data,
 	void *usemap;
 	unsigned long pnum;
 	unsigned long **usemap_map = (unsigned long **)data;
+	/*计算一个section需要多少空间。当前上下文，一个section有（1<<(30-12-10)）个
+	pageblock，一个pageblock需要NR_PAGEBLOCK_BITS个bits来表示*/
 	int size = usemap_size();
-
+	//分配所需要的usemap空间
 	usemap = sparse_early_usemaps_alloc_pgdat_section(NODE_DATA(nodeid),
 							  size * usemap_count);
 	if (!usemap) {
@@ -549,10 +585,14 @@ void __init sparse_init(void)
 	 * powerpc need to call sparse_init_one_section right after each
 	 * sparse_early_mem_map_alloc, so allocate usemap_map at first.
 	 */
-	size = sizeof(unsigned long *) * NR_MEM_SECTIONS;
+	 //NR_MEM_SECTIONS是最大的section的数量
+	size = sizeof(unsigned long *) * NR_MEM_SECTIONS; //数组类型为unsigned long*类型，分配多少个section
+	/* usemap_map是一个二维指针，这里实际上为所有可能存在的section分配了unsigned long类型的指针，可以看做指针数组 */
+	//usemap与内存的回收机制相关，用4bit的bitmap来描述
 	usemap_map = memblock_virt_alloc(size, 0);
 	if (!usemap_map)
 		panic("can not allocate usemap_map\n");
+　　/*分别为各内存节点在位的所有section分配usemap_map空间,指向一个bitmap(unsigned long) */
 	alloc_usemap_and_memmap(sparse_early_usemaps_alloc_node,
 							(void *)usemap_map);
 
@@ -561,6 +601,7 @@ void __init sparse_init(void)
 	map_map = memblock_virt_alloc(size2, 0);
 	if (!map_map)
 		panic("can not allocate map_map\n");
+	/*遍历所有的section，只要它在位，就为该section所有物理页面"struct page"实例分配空间分配空间包括虚拟地址空间和实际物理内存*/
 	alloc_usemap_and_memmap(sparse_early_mem_maps_alloc_node,
 							(void *)map_map);
 #endif

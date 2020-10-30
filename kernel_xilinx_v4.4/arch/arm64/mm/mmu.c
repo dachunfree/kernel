@@ -496,7 +496,7 @@ void __init paging_init(void)
 
 	/* allocate the zero page. */
 	zero_page = early_alloc(PAGE_SIZE);
-
+	//初始化内存管理
 	bootmem_init();
 
 	empty_zero_page = virt_to_page(zero_page);
