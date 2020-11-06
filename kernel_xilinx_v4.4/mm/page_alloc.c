@@ -3179,9 +3179,9 @@ __alloc_pages_nodemask(gfp_t gfp_mask, unsigned int order,
 	int alloc_flags = ALLOC_WMARK_LOW|ALLOC_CPUSET|ALLOC_FAIR;
 	gfp_t alloc_mask; /* The gfp_t that was actually used for allocation */
 	struct alloc_context ac = {
-		.high_zoneidx = gfp_zone(gfp_mask),
+		.high_zoneidx = gfp_zone(gfp_mask), //获取从哪个zone分配(ZONE_DMA,ZONE_NORMAL,ZONE_MIGRATE)
 		.nodemask = nodemask,
-		.migratetype = gfpflags_to_migratetype(gfp_mask),
+		.migratetype = gfpflags_to_migratetype(gfp_mask), //分配行为
 	};
 
 	gfp_mask &= gfp_allowed_mask;
@@ -3200,7 +3200,7 @@ __alloc_pages_nodemask(gfp_t gfp_mask, unsigned int order,
 	 */
 	if (unlikely(!zonelist->_zonerefs->zone))
 		return NULL;
-
+	//如果定义了CMA且分配类型是可迁移类型，则可以从cma分配
 	if (IS_ENABLED(CONFIG_CMA) && ac.migratetype == MIGRATE_MOVABLE)
 		alloc_flags |= ALLOC_CMA;
 
@@ -3222,6 +3222,7 @@ retry_cpuset:
 	ac.classzone_idx = zonelist_zone_idx(preferred_zoneref);
 
 	/* First allocation attempt */
+	//首先从这里分配
 	alloc_mask = gfp_mask|__GFP_HARDWALL;
 	page = get_page_from_freelist(alloc_mask, order, alloc_flags, &ac);
 	if (unlikely(!page)) {
@@ -4140,6 +4141,10 @@ static int default_zonelist_order(void)
 
 static void set_zonelist_order(void)
 {
+ /*  zonelist_order:
+ *  0 = automatic detection of better ordering.
+ *  1 = order by ([node] distance, -zonetype)
+ *  2 = order by (-zonetype, [node] distance)*/
 	if (user_zonelist_order == ZONELIST_ORDER_DEFAULT)
 		current_zonelist_order = default_zonelist_order();
 	else
@@ -4183,12 +4188,13 @@ static void build_zonelists(pg_data_t *pgdat)
 
 		prev_node = node;
 		load--;
+		//节点优先排序
 		if (order == ZONELIST_ORDER_NODE)
 			build_zonelists_in_node_order(pgdat, node);
 		else
 			node_order[j++] = node;	/* remember order */
 	}
-
+	//zone 优先排序
 	if (order == ZONELIST_ORDER_ZONE) {
 		/* calculate node order -- i.e., DMA last! */
 		build_zonelists_in_zone_order(pgdat, j);
@@ -4357,6 +4363,9 @@ build_all_zonelists_init(void)
  */
 void __ref build_all_zonelists(pg_data_t *pgdat, struct zone *zone)
 {
+	 /*  设置zonelist中节点和内存域的组织形式
+     *  current_zonelist_order变量标识了当前系统的内存组织形式
+     *  zonelist_order_name以字符串存储了系统中内存组织形式的名称  */
 	set_zonelist_order();
 
 	if (system_state == SYSTEM_BOOTING) {
@@ -5190,7 +5199,7 @@ static void __paginginit free_area_init_core(struct pglist_data *pgdat)
 	pgdat->numabalancing_migrate_nr_pages = 0;
 	pgdat->numabalancing_migrate_next_window = jiffies;
 #endif
-	init_waitqueue_head(&pgdat->kswapd_wait);
+	init_waitqueue_head(&pgdat->kswapd_wait); //页面回收进程使用的等待队列
 	init_waitqueue_head(&pgdat->pfmemalloc_wait);
 	pgdat_page_ext_init(pgdat);
 
@@ -5208,6 +5217,7 @@ static void __paginginit free_area_init_core(struct pglist_data *pgdat)
 		 */
 		 //计算struct page * size 所占的页数
 		memmap_pages = calc_memmap_size(size, realsize);
+		//freesize减去memmap_pages的大小
 		if (!is_highmem_idx(j)) {
 			if (freesize >= memmap_pages) {
 				freesize -= memmap_pages;
@@ -5266,6 +5276,8 @@ static void __paginginit free_area_init_core(struct pglist_data *pgdat)
 		ret = init_currently_empty_zone(zone, zone_start_pfn, size);
 		BUG_ON(ret);
 		//初始化struct page。为什么要设置为可迁移类型呢?
+		/*函数主要是根据PFN，通过pfn_to_page找到对应的struct page结构，
+		并将该结构进行初始化处理，并设置MIGRATE_MOVABLE标志，表明可移动*/
 		memmap_init(size, nid, j, zone_start_pfn);
 		zone_start_pfn += size;
 	}
@@ -6021,7 +6033,7 @@ static void setup_per_zone_lowmem_reserve(void)
 	/* update totalreserve_pages */
 	calculate_totalreserve_pages();
 }
-
+//计算每个内存区域的极低水线，低水线和高水线。
 static void __setup_per_zone_wmarks(void)
 {
 	unsigned long pages_min = min_free_kbytes >> (PAGE_SHIFT - 10);

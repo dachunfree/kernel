@@ -408,7 +408,7 @@ static void __init map_mem(void)
 	memblock_set_current_limit(limit);
 
 	/* map all the memory banks */
-	/*对系统中所有的memory type的region建立对应的地址映射。由于reserved type的memory region是memory type的region的真子集，
+	/*对系统中所有的memory type的region建立对应的地址映射。由于reserved type的memory region是memory type的region的真子集(no-map?)，
 	  因此reserved memory 的地址映射也就一并建立了*/
 	for_each_memblock(memory, reg) {
 		phys_addr_t start = reg->base;  //确定该region的起始地址

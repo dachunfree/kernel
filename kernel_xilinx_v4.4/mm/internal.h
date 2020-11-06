@@ -142,13 +142,13 @@ extern pmd_t *mm_find_pmd(struct mm_struct *mm, unsigned long address);
  * by a const pointer.
  */
 struct alloc_context {
-	struct zonelist *zonelist;
-	nodemask_t *nodemask;
-	struct zone *preferred_zone;
+	struct zonelist *zonelist; //用于分配页面的区域列表；
+	nodemask_t *nodemask; //指定Node，如果没有指定，则在所有节点中进行分配
+	struct zone *preferred_zone; //指定要在快速路径中首先分配的区域，在慢路径中指定了zonelist中的第一个可用区域
 	int classzone_idx;
-	int migratetype;
-	enum zone_type high_zoneidx;
-	bool spread_dirty_pages;
+	int migratetype; //要分配的迁移页面类型；
+	enum zone_type high_zoneidx; //将分配限制为小于区域列表中指定的高区域；
+	bool spread_dirty_pages; //脏区平衡相关；
 };
 
 /*

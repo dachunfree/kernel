@@ -246,7 +246,7 @@ struct lruvec {
 typedef unsigned __bitwise__ isolate_mode_t;
 
 enum zone_watermarks {
-	WMARK_MIN,
+	WMARK_MIN, //最低水线，低于以下表示紧急保留内存，给承诺"给我少量内存，我可以释放更多内存"的进程使用
 	WMARK_LOW,
 	WMARK_HIGH,
 	NR_WMARK
@@ -343,7 +343,8 @@ struct zone {
 	/* Read-mostly fields */
 
 	/* zone watermarks, access with *_wmark_pages(zone) macros */
-	//页分配器使用的水位。
+	//水位值，WMARK_MIN/WMARK_LOV/WMARK_HIGH，页面分配器和kswapd页面回收中会用到
+	//首选的内存区域在什么情况下从备用区域借物理页呢?
 	unsigned long watermark[NR_WMARK];
 
 	unsigned long nr_reserved_highatomic;
@@ -369,9 +370,9 @@ struct zone {
 	 * this zone's LRU.  Maintained by the pageout code.
 	 */
 	unsigned int inactive_ratio;
-	//指向节点的 pglist_data 实例。
+	//指向节点的 pglist_data 实例。执行所属的pglist_data
 	struct pglist_data	*zone_pgdat;
-	//每处理器页集合。
+	//每处理器页集合。Per-CPU上的页面，减少自旋锁的争用
 	struct per_cpu_pageset __percpu *pageset;
 
 	/*
@@ -397,7 +398,7 @@ struct zone {
 #endif /* CONFIG_NUMA */
 
 	/* zone_start_pfn == zone_start_paddr >> PAGE_SHIFT */
-	//当前区域的起始物理页号。|||
+	//当前区域的起始物理页号。
 	unsigned long		zone_start_pfn;
 
 	/*
@@ -441,7 +442,7 @@ struct zone {
 	 * adjust_managed_page_count() should be used instead of directly
 	 * touching zone->managed_pages and totalram_pages.
 	 */
-	 //伙伴分配器管理的物理页数量
+	 //伙伴分配器管理的物理页数量。(出去memblock已经分配出去的?分配出去的不受伙伴管理?)
 	unsigned long		managed_pages;
 	//当前区域跨越的总页数，包括空洞
 	unsigned long		spanned_pages;
@@ -494,6 +495,7 @@ struct zone {
 
 	ZONE_PADDING(_pad1_)
 	/* free areas of different sizes */
+	//管理空闲页面的列表
 	struct free_area	free_area[MAX_ORDER]; //不同长度的空闲区域
 
 	/* zone flags, see below */
@@ -613,8 +615,8 @@ static inline bool zone_is_empty(struct zone *zone)
  * here to avoid dereferences into large structures and lookups of tables
  */
 struct zoneref {
-	struct zone *zone;	/* Pointer to actual zone */
-	int zone_idx;		/* zone_idx(zoneref->zone) */
+	struct zone *zone;	/* Pointer to actual zone 指向内存区域的数据结构*/
+	int zone_idx;		/* zone_idx(zoneref->zone) 成员zone指向的内存区域类型*/
 };
 
 /*
@@ -655,7 +657,9 @@ struct bootmem_data;
 typedef struct pglist_data {
 	//内存区域数组
 	struct zone node_zones[MAX_NR_ZONES];
-	//备用区域列表
+	/*备用区域列表。里面有两种排序算法，
+	1.节点优先顺序。节点距离从小到大排序，节点里面按区域类型
+	2.区域优先顺序。先根据区域从高到底，每个区域类型里面按照节点距离从小到大排序。*/
 	struct zonelist node_zonelists[MAX_ZONELISTS];
 	//内存数量数
 	int nr_zones;
@@ -691,8 +695,10 @@ typedef struct pglist_data {
 					     range, including holes */
 	//节点标识符
 	int node_id;
+	//页面回收进程使用的等待队列
 	wait_queue_head_t kswapd_wait;
 	wait_queue_head_t pfmemalloc_wait;
+	//页面回收进程
 	struct task_struct *kswapd;	/* Protected by
 					   mem_hotplug_begin/end() */
 	int kswapd_max_order;

@@ -533,7 +533,8 @@ asmlinkage __visible void __init start_kernel(void)
 	setup_nr_cpu_ids();
 	setup_per_cpu_areas();
 	smp_prepare_boot_cpu();	/* arch-specific boot-cpu hooks */
-
+	/*将所有Node中可用的zone全部添加到各个Node中的zonelist中，也就是对应的struct pglist_data
+	  结构体中的struct zonelist node_zonelists字段*/
 	build_all_zonelists(NULL, NULL);
 	page_alloc_init();
 

@@ -10,10 +10,13 @@
 struct vm_area_struct;
 
 /* Plain integer GFP bitmasks. Do not use this directly. */
+//此4个是表示从那个zone 分配
 #define ___GFP_DMA		0x01u
 #define ___GFP_HIGHMEM		0x02u
 #define ___GFP_DMA32		0x04u
 #define ___GFP_MOVABLE		0x08u
+
+//以下表示分配行为。
 #define ___GFP_RECLAIMABLE	0x10u
 #define ___GFP_HIGH		0x20u
 #define ___GFP_IO		0x40u
@@ -253,7 +256,8 @@ struct vm_area_struct;
 /* Convert GFP flags to their corresponding migrate type */
 #define GFP_MOVABLE_MASK (__GFP_RECLAIMABLE|__GFP_MOVABLE)
 #define GFP_MOVABLE_SHIFT 3
-
+//获取分配行为
+//#define GFP_KERNEL	(__GFP_RECLAIM | __GFP_IO | __GFP_FS)
 static inline int gfpflags_to_migratetype(const gfp_t gfp_flags)
 {
 	VM_WARN_ON((gfp_flags & GFP_MOVABLE_MASK) == GFP_MOVABLE_MASK);
@@ -356,7 +360,7 @@ static inline bool gfpflags_allow_blocking(const gfp_t gfp_flags)
 	| 1 << (___GFP_MOVABLE | ___GFP_DMA32 | ___GFP_HIGHMEM)		      \
 	| 1 << (___GFP_MOVABLE | ___GFP_DMA32 | ___GFP_DMA | ___GFP_HIGHMEM)  \
 )
-
+//根据分配标志位，得到首选区域类型
 static inline enum zone_type gfp_zone(gfp_t flags)
 {
 	enum zone_type z;
