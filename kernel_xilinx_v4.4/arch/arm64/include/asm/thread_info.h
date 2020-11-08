@@ -73,6 +73,12 @@ register unsigned long current_stack_pointer asm ("sp");
  */
 static inline struct thread_info *current_thread_info(void) __attribute_const__;
 
+/*
+thread_info 在 arm32与arm64区别：
+1. arm32 放在内核栈的栈顶（低地址，如下所示页对齐），内核的sp在高的地址像低地址增长。
+2. arm64 放在sp_el0中。陷入内核的时候将sp_el0的内容保存起来，并将thread_info存放到sp_el0，
+   而在退出内核态的时候将之前保存起来的sp_el0的内容恢复到sp_el0。
+*/
 static inline struct thread_info *current_thread_info(void)
 {
 	return (struct thread_info *)

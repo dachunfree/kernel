@@ -738,7 +738,7 @@ void *__init fixmap_remap_fdt(phys_addr_t dt_phys)
 	if (offset + size > SWAPPER_BLOCK_SIZE)
 		create_mapping(round_down(dt_phys, SWAPPER_BLOCK_SIZE), dt_virt_base,
 			       round_up(offset + size, SWAPPER_BLOCK_SIZE), prot);
-	//保留fdt占用的内存
+	//保留fdt占用的内存（不计入zone total pages）
 	memblock_reserve(dt_phys, size);
 
 	return dt_virt;

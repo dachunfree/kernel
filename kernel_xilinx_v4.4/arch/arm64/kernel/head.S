@@ -221,7 +221,7 @@ ENTRY(stext)
 	bl	preserve_boot_args   //进行blob 设备树地址的保存。
 	//进入EL2模式
 	bl	el2_setup			// Drop to EL1, w20=cpu_boot_mode
-	adrp	x24, __PHYS_OFFSET
+	adrp	x24, __PHYS_OFFSET //从符号地址获取物理地址
 	bl	set_cpu_boot_mode_flag      //svc mode
 	bl	__create_page_tables		// x25=TTBR0, x26=TTBR1
 	/*
@@ -259,7 +259,7 @@ preserve_boot_args:
 	mov	x21, x0				// 将dtb的地址暂存在x21寄存器中，释放出x0以便后续做临时变量使用
 
 	adr_l	x0, boot_args			// x0保存了boot_args变量的地址
-	//stp:把Xt1，Xt2两个双字/字数据写到Memory地址addr中
+	//stp(str变种，可操作2个寄存器):把Xt1，Xt2两个双字/字数据写到Memory地址addr中
 	stp	x21, x1, [x0]			//保存x0和x1的值到boot_args[0]和boot_args[1]
 	stp	x2, x3, [x0, #16]    //保存x2和x3的值到boot_args[2]和boot_args[3]
 
@@ -462,7 +462,7 @@ __create_page_tables:
 	create_table_entry x0, x3, EXTRA_SHIFT, EXTRA_PTRS, x5, x6
 1:
 #endif
-	//x0是pgd的地址(idmap_pg_dir)，具体要创建哪一个地址的描述符由x3指定(__idmap_text_start)，x5和x6是临时变量
+	//x0是pgd的地址(idmap_pg_dir，物理地址)，具体要创建哪一个地址的描述符由x3指定(__idmap_text_start，虚拟地址)，x5和x6是临时变量
 	//pgd+pud+(pmd+pte):pmd和pte合并，表示一个页表项。
 	//填充pgd和pud页表项
 	create_pgd_entry x0, x3, x5, x6 //建立中间level（也就是PGD和PUD）的描述符

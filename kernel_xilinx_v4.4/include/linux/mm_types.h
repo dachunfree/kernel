@@ -43,7 +43,9 @@ struct mem_cgroup;
  */
 struct page {
 	/* First double word block */
-	//Page flags: | [SECTION] | [NODE] | ZONE | [LAST_CPUPID] | ... | FLAGS | */
+	/*flags表示page frame的状态或者属性，包括和内存回收相关的PG_active, 
+	 PG_dirty, PG_writeback, PG_reserved, PG_locked, PG_highmem等
+	Page flags: | [SECTION] | [NODE] | ZONE | [LAST_CPUPID] | ... | FLAGS | */
 	unsigned long flags;		/* Atomic flags, some possibly
 					 * updated asynchronously */
 	union {
