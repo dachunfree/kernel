@@ -43,7 +43,7 @@ struct mem_cgroup;
  */
 struct page {
 	/* First double word block */
-	/*flags表示page frame的状态或者属性，包括和内存回收相关的PG_active, 
+	/*flags表示page frame的状态或者属性，包括和内存回收相关的PG_active,
 	 PG_dirty, PG_writeback, PG_reserved, PG_locked, PG_highmem等
 	Page flags: | [SECTION] | [NODE] | ZONE | [LAST_CPUPID] | ... | FLAGS | */
 	unsigned long flags;		/* Atomic flags, some possibly
@@ -163,9 +163,9 @@ struct page {
 		struct rcu_head rcu_head;	/* Used by SLAB
 						 * when destroying via RCU
 						 */
-		/* Tail pages of compound page */
+		/* Tail pages of compound page 复合页 */
 		struct {
-			unsigned long compound_head; /* If bit zero is set */
+			unsigned long compound_head; /*首页地址，并设置最低位 If bit zero is set */
 
 			/* First tail page only */
 #ifdef CONFIG_64BIT
@@ -175,8 +175,8 @@ struct page {
 			 * unsigned int. It can help compiler generate better or
 			 * smaller code on some archtectures.
 			 */
-			unsigned int compound_dtor;
-			unsigned int compound_order;
+			unsigned int compound_dtor;  //复合页释放函数数组索引。
+			unsigned int compound_order;  //复合页阶数
 #else
 			unsigned short int compound_dtor;
 			unsigned short int compound_order;

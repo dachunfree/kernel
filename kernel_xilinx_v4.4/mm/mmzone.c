@@ -61,6 +61,7 @@ struct zoneref *next_zones_zonelist(struct zoneref *z,
 	 * Only filter based on nodemask if it's set
 	 */
 	if (likely(nodes == NULL))
+		//有高到低排列? 2(1,0) > 1?below highest_zoneidx in a zonelist
 		while (zonelist_zone_idx(z) > highest_zoneidx)
 			z++;
 	else

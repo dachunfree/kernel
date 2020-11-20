@@ -28,9 +28,9 @@
 /* Bit indices that affect a whole block of pages */
 enum pageblock_bits {
 	PB_migrate,
-	PB_migrate_end = PB_migrate + 3 - 1,
+	PB_migrate_end = PB_migrate + 3 - 1, //迁移类型需要3位。
 			/* 3 bits required for migrate types */
-	PB_migrate_skip,/* If set the block is skipped by compaction */
+	PB_migrate_skip,/* 如果被设置，内存碎片整理跳过这个块;If set the block is skipped by compaction */
 
 	/*
 	 * Assume the bits will always align on a word. If this assumption
@@ -55,6 +55,7 @@ extern unsigned int pageblock_order;
 
 #else /* CONFIG_HUGETLB_PAGE */
 
+/*可以理解为一种迁移类型的一个页块最小长度。*/
 /* If huge pages are not used, group by MAX_ORDER_NR_PAGES */
 #define pageblock_order		(MAX_ORDER-1)
 

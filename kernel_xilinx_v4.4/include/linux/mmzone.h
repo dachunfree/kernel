@@ -45,6 +45,7 @@ enum {
 	MIGRATE_RECLAIMABLE,
 	 /* 用来表示每CPU页框高速缓存的数据结构中的链表的迁移类型数目 */
 	MIGRATE_PCPTYPES,	/* the number of types on the pcp lists */
+	//高阶原子分配
 	MIGRATE_HIGHATOMIC = MIGRATE_PCPTYPES,
 #ifdef CONFIG_CMA
 	/*
@@ -95,7 +96,7 @@ static inline int get_pfnblock_migratetype(struct page *page, unsigned long pfn)
 	return get_pfnblock_flags_mask(page, pfn, PB_migrate_end,
 					MIGRATETYPE_MASK);
 }
-
+//把空闲链表拆分成每种迁移类型一条空闲链表。
 struct free_area {
 	struct list_head	free_list[MIGRATE_TYPES];
 	unsigned long		nr_free;
@@ -257,12 +258,12 @@ enum zone_watermarks {
 #define high_wmark_pages(z) (z->watermark[WMARK_HIGH])
 
 struct per_cpu_pages {
-	int count;		/* number of pages in the list */
-	int high;		/* high watermark, emptying needed */
-	int batch;		/* chunk size for buddy add/remove */
+	int count;		/* 链表里面的页面数量number of pages in the list */
+	int high;		/* 如果页的数量达到高水线，需要反还给伙伴分配器。high watermark, emptying needed */
+	int batch;		/* 批量添加或者删除页数量。chunk size for buddy add/remove */
 
 	/* Lists of pages, one per migrate type stored on the pcp-lists */
-	struct list_head lists[MIGRATE_PCPTYPES];
+	struct list_head lists[MIGRATE_PCPTYPES]; //每种迁移类型一个页链表
 };
 
 struct per_cpu_pageset {
@@ -346,7 +347,7 @@ struct zone {
 	//水位值，WMARK_MIN/WMARK_LOV/WMARK_HIGH，页面分配器和kswapd页面回收中会用到
 	//首选的内存区域在什么情况下从备用区域借物理页呢?
 	unsigned long watermark[NR_WMARK];
-
+	//用来记录高阶原子类型的总页数。并限制其数量。nr_reserved_highatomic < managed_pages /100 + 分组阶数对应的页数。
 	unsigned long nr_reserved_highatomic;
 
 	/*
@@ -359,6 +360,7 @@ struct zone {
 	 * changes.
 	 */
 	 //页分配器使用，当前区域保留多少页不能借给高的区域类型。
+	 //sysctl_lowmem_reserve_ratio.如何计算呢?
 	long lowmem_reserve[MAX_NR_ZONES];
 
 #ifdef CONFIG_NUMA
@@ -386,6 +388,11 @@ struct zone {
 	 * Flags for a pageblock_nr_pages block. See pageblock-flags.h.
 	 * In SPARSEMEM, this map is stored in struct mem_section
 	 */
+/*
+内核如何知道物理页迁移类型?内存区域的zone结构中pageblock_flags指向页块标志位图，页块大小是分组阶数pageblock_order。分组页块
+如果使用稀疏内存模型，这个位图在结构体mem_section中。
+enum pageblock_bits;
+*/
 	unsigned long		*pageblock_flags;
 #endif /* CONFIG_SPARSEMEM */
 
@@ -614,6 +621,11 @@ static inline bool zone_is_empty(struct zone *zone)
  * This struct contains information about a zone in a zonelist. It is stored
  * here to avoid dereferences into large structures and lookups of tables
  */
+ /*
+ zone_idx:0 ZONE_DMA
+ zone_idx:1 ZONE_DMA32
+ zone_idx:2 ZONE_NORMAL
+*/
 struct zoneref {
 	struct zone *zone;	/* Pointer to actual zone 指向内存区域的数据结构*/
 	int zone_idx;		/* zone_idx(zoneref->zone) 成员zone指向的内存区域类型*/
@@ -633,6 +645,7 @@ struct zoneref {
  * zonelist_zone_idx()	- Return the index of the zone for an entry
  * zonelist_node_idx()	- Return the index of the node for an entry
  */
+ //第一个区域是目标区域，剩下区域是备选区域，优先级依次递减(初始时候有节点优先和区域优先)。
 struct zonelist {
 	struct zoneref _zonerefs[MAX_ZONES_PER_ZONELIST + 1];
 };
@@ -659,12 +672,19 @@ typedef struct pglist_data {
 	struct zone node_zones[MAX_NR_ZONES];
 	/*备用区域列表。里面有两种排序算法，
 	1.节点优先顺序。节点距离从小到大排序，节点里面按区域类型
-	2.区域优先顺序。先根据区域从高到底，每个区域类型里面按照节点距离从小到大排序。*/
+	2.区域优先顺序。先根据区域从高到底，每个区域类型里面按照节点距离从小到大排序。
+	ZONELIST_FALLBACK
+	ZONELIST_NOFALLBACK
+	MAX_ZONELISTS
+	node_zonelists:一个是由本node的zones组成，另一个是由从本node分配不到内存时可选的备用zones组成，
+					相当于是选择了一个退路，所以叫fallback
+	*/
 	struct zonelist node_zonelists[MAX_ZONELISTS];
 	//内存数量数
 	int nr_zones;
 #ifdef CONFIG_FLAT_NODE_MEM_MAP	/* means !SPARSEMEM 除了稀疏模型以外*/
 	//页描述符数组。每个物理页对应一个页描述符。 MAX_ORDER = 11.数组大小对齐到2^(11-1)
+	//alloc_node_mem_map
 	struct page *node_mem_map;
 #ifdef CONFIG_PAGE_EXTENSION
 	struct page_ext *node_page_ext;
@@ -1093,7 +1113,7 @@ struct mem_section {
 #define SECTIONS_PER_ROOT	1
 #endif
 
-#define SECTION_NR_TO_ROOT(sec)	((sec) / SECTIONS_PER_ROOT)
+#define SECTION_NR_TO_ROOT(sec)	((sec) / SECTIONS_PER_ROOT)  // 1个page里面包含多少个struct mem_section
 #define NR_SECTION_ROOTS	DIV_ROUND_UP(NR_MEM_SECTIONS, SECTIONS_PER_ROOT)
 #define SECTION_ROOT_MASK	(SECTIONS_PER_ROOT - 1)
 

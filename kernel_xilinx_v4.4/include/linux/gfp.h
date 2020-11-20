@@ -17,28 +17,29 @@ struct vm_area_struct;
 #define ___GFP_MOVABLE		0x08u
 
 //以下表示分配行为。
-#define ___GFP_RECLAIMABLE	0x10u
-#define ___GFP_HIGH		0x20u
+#define ___GFP_RECLAIMABLE	0x10u  //允许直接回收页和异步回收页
+#define ___GFP_HIGH		0x20u      //调用者是高优先级的，为了使系统向前推进，必须允许这个请求。
+//回收修饰符
 #define ___GFP_IO		0x40u
-#define ___GFP_FS		0x80u
-#define ___GFP_COLD		0x100u
-#define ___GFP_NOWARN		0x200u
-#define ___GFP_REPEAT		0x400u
-#define ___GFP_NOFAIL		0x800u
-#define ___GFP_NORETRY		0x1000u
-#define ___GFP_MEMALLOC		0x2000u
-#define ___GFP_COMP		0x4000u
-#define ___GFP_ZERO		0x8000u
-#define ___GFP_NOMEMALLOC	0x10000u
+#define ___GFP_FS		0x80u   //当文件系统申请页的时候，如果内存严重不足，直接回收页，把脏页写回到存储设备。
+#define ___GFP_COLD		0x100u  //调用者不希望分配的页很快被使用，尽可能分配缓存冷页(数据不在处理器缓存中)
+#define ___GFP_NOWARN		0x200u  //如果分配失败，不打印警告信息
+#define ___GFP_REPEAT		0x400u  //允许重试，重试多次以后放弃，分配可能失败
+#define ___GFP_NOFAIL		0x800u  //必须无限次重试，调用者不能分配失败。
+#define ___GFP_NORETRY		0x1000u //不要重试，当直接回收页和内存碎片整理不能分配成功时候，应该直接放弃。
+#define ___GFP_MEMALLOC		0x2000u //允许访问访问所有内存。承诺"给我少量内存，我将释放更多内存"
+#define ___GFP_COMP		0x4000u     //把分配的页块组成复合页
+#define ___GFP_ZERO		0x8000u     //把页初始化为0
+#define ___GFP_NOMEMALLOC	0x10000u  //禁止访问紧急保留内存
 #define ___GFP_HARDWALL		0x20000u
 #define ___GFP_THISNODE		0x40000u
-#define ___GFP_ATOMIC		0x80000u
+#define ___GFP_ATOMIC		0x80000u   //调用者是高优先级的，不能回收页或者睡眠。如中断中使用
 #define ___GFP_NOACCOUNT	0x100000u
 #define ___GFP_NOTRACK		0x200000u
-#define ___GFP_DIRECT_RECLAIM	0x400000u
+#define ___GFP_DIRECT_RECLAIM	0x400000u //调用者可直接回收页
 #define ___GFP_OTHER_NODE	0x800000u
 #define ___GFP_WRITE		0x1000000u
-#define ___GFP_KSWAPD_RECLAIM	0x2000000u
+#define ___GFP_KSWAPD_RECLAIM	0x2000000u //当空闲页数达到低水线的时候，调用者想要唤醒页回收线程kswap，异步回收。
 /* If the above are modified, __GFP_BITS_SHIFT may need updating */
 
 /*
@@ -237,6 +238,7 @@ struct vm_area_struct;
  *   that will fail quickly if memory is not available and will not wake
  *   kswapd on failure.
  */
+ //原子分配，高优先级+不能睡眠+允许异步回收
 #define GFP_ATOMIC	(__GFP_HIGH|__GFP_ATOMIC|__GFP_KSWAPD_RECLAIM)
 #define GFP_KERNEL	(__GFP_RECLAIM | __GFP_IO | __GFP_FS)
 #define GFP_NOWAIT	(__GFP_KSWAPD_RECLAIM)
@@ -254,6 +256,7 @@ struct vm_area_struct;
 			 ~__GFP_KSWAPD_RECLAIM)
 
 /* Convert GFP flags to their corresponding migrate type */
+//把分配标志换算为分配类型。
 #define GFP_MOVABLE_MASK (__GFP_RECLAIMABLE|__GFP_MOVABLE)
 #define GFP_MOVABLE_SHIFT 3
 //获取分配行为
@@ -263,7 +266,7 @@ static inline int gfpflags_to_migratetype(const gfp_t gfp_flags)
 	VM_WARN_ON((gfp_flags & GFP_MOVABLE_MASK) == GFP_MOVABLE_MASK);
 	BUILD_BUG_ON((1UL << GFP_MOVABLE_SHIFT) != ___GFP_MOVABLE);
 	BUILD_BUG_ON((___GFP_MOVABLE >> GFP_MOVABLE_SHIFT) != MIGRATE_MOVABLE);
-
+	//如果禁用根据可移动性分组，那么总是分配不可移动页。
 	if (unlikely(page_group_by_mobility_disabled))
 		return MIGRATE_UNMOVABLE;
 

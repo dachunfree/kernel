@@ -295,6 +295,7 @@ void __init mem_init(void)
 	free_unused_memmap();
 #endif
 	/* this will put all unused low memory onto the freelists */
+	//将memblock中reserved之外的regions返还给内核的buddy allocator使用
 	free_all_bootmem();
 
 	mem_init_print_info(NULL);
