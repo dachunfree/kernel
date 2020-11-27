@@ -40,6 +40,7 @@ static inline void pmd_free(struct mm_struct *mm, pmd_t *pmd)
 
 static inline void pud_populate(struct mm_struct *mm, pud_t *pud, pmd_t *pmd)
 {
+	//*pud = (u64)(__pa(pmd) | PMD_TYPE_TABLE)
 	set_pud(pud, __pud(__pa(pmd) | PMD_TYPE_TABLE));
 }
 

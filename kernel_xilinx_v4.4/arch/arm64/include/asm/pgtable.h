@@ -503,6 +503,7 @@ static inline pud_t *pgd_page_vaddr(pgd_t pgd)
 
 static inline pud_t *pud_offset(pgd_t *pgd, unsigned long addr)
 {
+	//注意pgd里面的pud是物理地址，需要转换成虚拟地址，再加上偏移
 	return (pud_t *)pgd_page_vaddr(*pgd) + pud_index(addr);
 }
 

@@ -418,7 +418,7 @@ static inline struct page *compound_head(struct page *page)
 		return (struct page *) (head - 1);
 	return page;
 }
-
+//判断是不是复合页
 static inline int PageCompound(struct page *page)
 {
 	return PageHead(page) || PageTail(page);

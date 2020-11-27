@@ -597,6 +597,13 @@ static inline void rmv_page_order(struct page *page)
  *
  * For recording page's order, we use page_private(page).
  */
+ /*
+ Õâ¸öº¯Êı¼ì²âpageÊÇ·ñÊÇfreeÇÒÔÚ»ï°éÖĞ£¬ÎÒÃÇ¿ÉÒÔºÏ²¢:
+ 1.»ï°éÃ»ÓĞÔÚ¿Õ¶´ÖĞ;
+ 2.ÔÙ»ï°éÏµÍ³ÖĞ
+ 3.ÓµÓĞÍ¬ÑùµÄorder
+ 4.ÔÚÏàÍ¬µÄzoneÖĞ
+*/
 static inline int page_is_buddy(struct page *page, struct page *buddy,
 							unsigned int order)
 {
@@ -652,7 +659,11 @@ static inline int page_is_buddy(struct page *page, struct page *buddy,
  *
  * -- nyc
  */
-
+/*
+_free_one_page()"µÄÃû×ÖÓĞÒ»¶¨µÄÎóµ¼ĞÔ£¬ËüÆäÊµ¼È¿ÉÒÔ´¦Àísingle pageµÄÊÍ·Å£¬Ò²¿ÉÒÔ´¦Àícompound pageµÄÊÍ·Å£¬
+Æä¹¦ÄÜÊÇ£ºÔÚÒ»¸ösingle/compound pageÊÍ·Åºó£¬²éÑ¯ÏàÁÚµÄbuddyÊÇ·ñÊÇ¿ÕÏĞµÄ£¬Èç¹ûÊÇ¾ÍĞèÒªºÏ²¢³ÉÒ»¸ö¸ü´óµÄcompound page¡£
+ºÏ²¢¿ÉÄÜ»á½øĞĞ¶à´Î£¬Ö±µ½²»ÔÙÂú×ãºÏ²¢µÄÌõ¼şÎªÖ¹£¬ÔÚ´Î¹ı³ÌÖĞ£¬"order"µÄÖµ²»¶ÏÔö´ó
+*/
 static inline void __free_one_page(struct page *page,
 		unsigned long pfn,
 		struct zone *zone, unsigned int order,
@@ -675,19 +686,23 @@ static inline void __free_one_page(struct page *page,
 		 * pageblock. Without this, pageblock isolation
 		 * could cause incorrect freepage accounting.
 		 */
+		//pageblock_orderÊÇ°´¿ÉÒÆ¶¯·Ö×éµÄ½×Êı
 		max_order = min_t(unsigned int, MAX_ORDER, pageblock_order + 1);
 	} else {
 		__mod_zone_freepage_state(zone, 1 << order, migratetype);
 	}
-
+	/*½«Ò³Ãæ×ª»¯ÎªÈ«¾ÖÒ³ÃæÊı×éµÄÏÂ±ê*/
 	page_idx = pfn & ((1 << max_order) - 1);
 
 	VM_BUG_ON_PAGE(page_idx & ((1 << order) - 1), page);
 	VM_BUG_ON_PAGE(bad_range(zone, page), page);
-
+	//Èç¹û»ï°éÊÇ¿ÕÏĞµÄ£¬ºÍ»ï°éºÏ²¢£¬ÖØ¸´Õâ¸ö²Ù×÷Ö±½Óµ½½×ÊıµÈÓÚ(max_order - 1)
 	while (order < max_order - 1) {
+		//¸ù¾İpage_idxµÃµ½»ï°éÆğÊ¼ÎïÀíÒ³ºÅ.
 		buddy_idx = __find_buddy_index(page_idx, order);
+		//µÃµ½»ï°éµÄµÚÒ»Ò³µÄpageÊµÀı
 		buddy = page + (buddy_idx - page_idx);
+		//¼ì²é»ï°éÊÇ·ñ¿ÕÏĞµÄ²¢ÇÒÔÚÏàÍ¬µÄÇøÓò.²»ÄÜºÏ²¢
 		if (!page_is_buddy(page, buddy, order))
 			break;
 		/*
@@ -696,7 +711,7 @@ static inline void __free_one_page(struct page *page,
 		 */
 		if (page_is_guard(buddy)) {
 			clear_page_guard(zone, buddy, order, migratetype);
-		} else {
+		} else { //»ï°éÊÇ¿ÕÏĞµÄ£¬°Ñ»ï°é´Ó¿ÕÏĞÁ´±íÖĞÉ¾³ı¡£
 			list_del(&buddy->lru);
 			zone->free_area[order].nr_free--;
 			rmv_page_order(buddy);
@@ -716,6 +731,11 @@ static inline void __free_one_page(struct page *page,
 	 * so it's less likely to be used soon and more likely to be merged
 	 * as a higher order page
 	 */
+	 /*
+	 ×îºóºÏ²¢³ÅµÃÒ³¿é½×ÊıÊÇorder£¬Èç¹ûorderĞ¡ÓÚ(MAX_ORDER-2),Ôò¼ì²é(order+1)µÄ½×µÄ»ï°éÊÇ·ñ¿ÕÏĞ£¬Èç¹û¿ÕÏĞ£¬
+	 ÄÇÃ´order½×µÄ»ï°éÕıÔÚ±»ÊÍ·Å£¬ºÜ¿ì¾Í¿ÉÒÔºÏ²¢³É(order+2)½×µÄÒ³¿é¡£ÎªÁË·ÀÖ¹µ±Ç°Ò³¿éºÜ¿ì·ÖÅä³öÈ¥£¬Ôò°Ñµ±Ç°
+	 Ò³¿éÌí¼ÓµÄ¿ÕÏĞÁ´±íÎ²²¿
+	*/
 	if ((order < MAX_ORDER-2) && pfn_valid_within(page_to_pfn(buddy))) {
 		struct page *higher_page, *higher_buddy;
 		combined_idx = buddy_idx & page_idx;
@@ -986,7 +1006,8 @@ static bool free_pages_prepare(struct page *page, unsigned int order)
 
 	return true;
 }
-
+/*Èç¹û»ï°éÊÇ¿ÕÏĞµÄ£¬²¢ÇÒ»ï°éÔÚÍ¬Ò»ÇøÓòÄÚ£¬ÄÇÃ´ºÍ»ï°éºÏ²¢£»isolateÀàĞÍµÄÒ³¿é²»ÄÜºÏ²¢
+*/
 static void __free_pages_ok(struct page *page, unsigned int order)
 {
 	unsigned long flags;
@@ -1298,16 +1319,19 @@ void __init init_cma_reserved_pageblock(struct page *page)
  *
  * -- nyc
  */
+ /*ÔÚ¸ß½×·ÖÅäµÃµ½ÄÚ´æ¿éÊ±£¬±ÈÈç 8½×·ÖÅäµÃµ½ÄÚ´æ¿éÊ±¡£¶øÎÒÃÇĞèÒªµÄÊÇµÍ¼ÛµÄ£¬±ÈÈç 6£»
+ ÄÇÃ´¾ÍÒªµ÷ÓÃÏÂÃæ¸Ãº¯Êı£¬°Ñ8½×·ÖÅäµÃµ½µÄÄÚ´æ¿é£¬¹Òµ½7½×ÉÏ£¬È»ºó´Ó¸ÃÄÚ´æ¿éÉÏ½ØÈ¡Ò»°ë£¬
+ ÔÙµ½6½×ÉÏ£¬ÕâÊ±ºòÔÙ±È½Ï·¢ÏÖÕıÊÇÎÒÃÇĞèÒª·ÖÅäµÄÄÚ´æ½×£¬¾ÍÖ±½Ó·µ»ØÁË*/
 static inline void expand(struct zone *zone, struct page *page,
 	int low, int high, struct free_area *area,
 	int migratetype)
 {
 	unsigned long size = 1 << high;
-
+	//Èç¹ûÔÚÍ¬½×ÉÏ·ÖÅäµÃµ½ÁËÄÚ´æÒ³¾Í²»ĞèÒªÖ´ĞĞ¸Ãº¯ÊıÁË
 	while (high > low) {
-		area--;
-		high--;
-		size >>= 1;
+		area--; //´Ó¸ß½×¿ÕÏĞÊı×éÔªËØ£¬µİ¼õµ½ÏÂÒ»¸ö½×µÄ¿ÕÏĞÊı×éÔªËØ
+		high--; //ÏÂÒ»¸ö½×
+		size >>= 1; //ÄÚ´æ´óĞ¡µÄÒ»°ë
 		VM_BUG_ON_PAGE(bad_range(zone, &page[size]), &page[size]);
 
 		if (IS_ENABLED(CONFIG_DEBUG_PAGEALLOC) &&
@@ -1322,9 +1346,9 @@ static inline void expand(struct zone *zone, struct page *page,
 			set_page_guard(zone, &page[size], high, migratetype);
 			continue;
 		}
-		list_add(&page[size].lru, &area->free_list[migratetype]);
-		area->nr_free++;
-		set_page_order(&page[size], high);
+		list_add(&page[size].lru, &area->free_list[migratetype]); //¹ÒÈë¸Ã½×µÄ¶ÔÓ¦Ç¨ÒÆÀàĞÍÏÂµÄÁ´±íÖĞ.
+		area->nr_free++; //¸Ã½×ÉÏµÄÄÚ´æ¿éÔö¼Ó
+		set_page_order(&page[size], high);//ÉèÖÃprivateÎª¸ß½×£¬Çå³ıµôbuddy±êÊ¶£¬ÒòÎª¸ÃÒ³ÒÑ¾­²»ÊÇ»ï°éÏµÍ³µÄÒ³ÁË
 	}
 }
 
@@ -1410,7 +1434,7 @@ static inline
 struct page *__rmqueue_smallest(struct zone *zone, unsigned int order,
 						int migratetype)
 {
-	unsigned int current_order;
+	unsigned int current_order; //µ±Ç°order(´óÓÚµÈÓÚ ÒªÇóµÄorder)
 	struct free_area *area;
 	struct page *page;
 
@@ -1421,10 +1445,10 @@ struct page *__rmqueue_smallest(struct zone *zone, unsigned int order,
 		//Èç¹ûÖ¸¶¨Ç¨ÒÆÀàĞÍµÄ¿ÕÁ´±í²»ÊÇ¿Õ£¬´ÓÖĞÈ¡³öµÚÒ»¸öÒ³¿é¡£
 		if (list_empty(&area->free_list[migratetype]))
 			continue;
-
 		page = list_entry(area->free_list[migratetype].next,
 							struct page, lru);
-		list_del(&page->lru);
+		list_del(&page->lru); //´ÓlruÖĞÉ¾³ıµ±Ç°page»¹ÊÇorder?
+		//ÉèÖÃÊôĞÔ£¬Çå³ıbuddy±êÊ¶£¬Ò²¾ÍÊÇÉèÖÃ page->_mapcount = -1
 		rmv_page_order(page);
 		area->nr_free--;
 		//Èç¹ûÒ³¿é½×Êı±ÈÉêÇëµÄ½×Êı´ó£¬ÄÇÃ´ÖØ¸´·ÖÁÑÒ³¿é£¬°ÑºóÒ»°ë²åÈëµÍÒ»½×µÄ¿ÕÏĞÁ´±í£¬Ö±µ½»ñÈ¡Ò»¸ö´óĞ¡ÎªÉêÇë½×ÊıµÄÒ³¿é
@@ -1622,6 +1646,7 @@ int find_suitable_fallback(struct free_area *area, unsigned int order,
 
 	*can_steal = false;
 	for (i = 0;; i++) {
+		//±éÀú±¸ÓÃÁĞ±í¡£
 		fallback_mt = fallbacks[migratetype][i];
 		if (fallback_mt == MIGRATE_TYPES)
 			break;
@@ -1740,6 +1765,8 @@ static void unreserve_highatomic_pageblock(const struct alloc_context *ac)
 /* Remove an element from the buddy allocator from the fallback list */
 /*
 ĞèÒª´Ó±¸ÓÃÀàĞÍµÁÓÃÎïÀíÒ³£¬ÄÇÃ´´Ó×î´ó¿é¿ªÊ¼µÁÓÃ£¬±ÜÃâ²úÉúËéÆ¬
+¸ºÔğ´Ó±¸ÓÃÇ¨ÒÆÀàĞÍµÁÓÃÒ³£¬´Ó×î´ó·ÖÅäÏòÏÂµ½ÉêÇë½×ÊıÖğ¸ö³¢ÊÔ£¬ÒÀ´Î²é¿´±¸ÓÃÀàĞÍÓÅÏÈ¼¶ÁĞ±íÖĞµÄÃ¿ÖÖÇ¨ÒÆÀàĞÍÊÇ·ñÓĞ
+ ¿ÕÏĞÒ³¿é£¬Èç¹ûÓĞ£¬¾Í´ÓÕâÖÖÇ¨ÒÆÀàĞÍµÁÓÃÒ³
 */
 static inline struct page *
 __rmqueue_fallback(struct zone *zone, unsigned int order, int start_migratetype)
@@ -1799,13 +1826,13 @@ static struct page *__rmqueue(struct zone *zone, unsigned int order,
 				int migratetype, gfp_t gfp_flags)
 {
 	struct page *page;
-
+	// 1.Ö¸¶¨Ç¨ÒÆÀàĞÍ·ÖÅäÒ³£¬Èç¹û·ÖÅä³É¹¦£¬ÄÇÃ´´¦Àí½áÊø£»
 	page = __rmqueue_smallest(zone, order, migratetype);
 	if (unlikely(!page)) {
 		if (migratetype == MIGRATE_MOVABLE)
+			// 2.Èç¹ûÖ¸¶¨Ç¨ÒÆÀàĞÍÊÇ¿ÉÒÆ¶¯ÀàĞÍ£¬ÄÇÃ´´ÓCMAµÁÓÃÒ³£»
 			page = __rmqueue_cma_fallback(zone, order);
-	/*¸ºÔğ´Ó±¸ÓÃÇ¨ÒÆÀàĞÍµÁÓÃÒ³£¬´Ó×î´ó·ÖÅäÏòÏÂµ½ÉêÇë½×ÊıÖğ¸ö³¢ÊÔ£¬ÒÀ´Î²é¿´±¸ÓÃÀàĞÍÓÅÏÈ¼¶ÁĞ±íÖĞµÄÃ¿ÖÖÇ¨ÒÆÀàĞÍÊÇ·ñÓĞ
-	 ¿ÕÏĞÒ³¿é£¬Èç¹ûÓĞ£¬¾Í´ÓÕâÖÖÇ¨ÒÆÀàĞÍµÁÓÃÒ³*/
+			//3.´Ó±¸ÓÃÇ¨ÒÆÀàĞÍµÁÓÃÒ³
 		if (!page)
 			page = __rmqueue_fallback(zone, order, migratetype);
 	}
@@ -1826,7 +1853,7 @@ static int rmqueue_bulk(struct zone *zone, unsigned int order,
 	int i;
 
 	spin_lock(&zone->lock);
-	for (i = 0; i < count; ++i) {
+	for (i = 0; i < count; ++i) {  //Ò»¸öÒ³ÃæÒ»¸öÒ³Ãæ´¦Àí
 		struct page *page = __rmqueue(zone, order, migratetype, 0);
 		if (unlikely(page == NULL))
 			break;
@@ -2030,6 +2057,10 @@ void mark_free_pages(struct zone *zone)
  * Free a 0-order page
  * cold == true ? free a cold page : free a hot page
  */
+ /*
+ °ÑÒ»Ò³Ìí¼Óµ½Ã¿´¦ÀíÆ÷¼¯ºÏÖĞ£¬Èç¹û¼¯ºÏÒ³ÊıÊıÁ¿´óÓÚµÈÓÚ¸ßË®Ïß£¬ÄÇÃ´ÅúÁ¿·´»¹¸ø»ï°é·ÖÅäÆ÷
+ cold:±íÊ¾»º´æÀäÈÈ³Ì¶È£¬Ö÷¶¯ÊÍ·ÅµÄÒ³×÷Îª»º´æÈÈÒ³;»ØÊÕµÄÒ³×÷Îª»º´æÀäÒ³£¬ÒòÎª»ØÊÕµÄÊÇ×îÉÙÊ¹ÓÃµÄÒ³¡£
+*/
 void free_hot_cold_page(struct page *page, bool cold)
 {
 	struct zone *zone = page_zone(page);
@@ -2040,8 +2071,9 @@ void free_hot_cold_page(struct page *page, bool cold)
 
 	if (!free_pages_prepare(page, 0))
 		return;
-
+	//µÃµ½Ò³¿éËùÊôµÄÇ¨ÒÆÀàĞÍ.Õâ¾ÍÓÃµ½ÁË¿ªÊ¼³õÊ¼µÄmem_section
 	migratetype = get_pfnblock_migratetype(page, pfn);
+	//±£´æÕæÊµµÄÇ¨ÒÆÀàĞÍ
 	set_pcppage_migratetype(page, migratetype);
 	local_irq_save(flags);
 	__count_vm_event(PGFREE);
@@ -2053,6 +2085,12 @@ void free_hot_cold_page(struct page *page, bool cold)
 	 * areas back if necessary. Otherwise, we may have to free
 	 * excessively into the page allocator
 	 */
+	 /*
+	 Ã¿´¦ÀíÆ÷¼¯ºÏÖ»´æ·Å²»¿ÉÒÆ¶¯£¬¿É»ØÊÕºÍ¿ÉÒÆ¶¯Õâ3ÖÖÀàĞÍµÄÒ³¡£
+	 Èç¹ûÒ³ÀàĞÍ²»ÊôÓÚÕâÈıÖÖ:
+	 1.¸ôÀëÒ³£¬²»ĞèÒªÌí¼Óµ½Ã¿´¦ÀíÆ÷¼¯ºÏ£¬Ö±½ÓÊÍ·Å£»
+	 2.ÆäËûÀàĞÍµÄÒ³¿ÉÌí¼Óµ½¿ÉÒÆ¶¯ÀàĞÍµÄÁ´±íÖĞ£¬page->index±£´æÕæÊµµÄÀàĞÍ
+	*/
 	if (migratetype >= MIGRATE_PCPTYPES) {
 		if (unlikely(is_migrate_isolate(migratetype))) {
 			free_one_page(zone, page, pfn, 0, migratetype);
@@ -2062,11 +2100,13 @@ void free_hot_cold_page(struct page *page, bool cold)
 	}
 
 	pcp = &this_cpu_ptr(zone->pageset)->pcp;
+	//»º´æÈÈÒ³£¬Ìí¼Óµ½Ê×²¿£»»º´æÀäÒ³£¬Ìí¼Óµ½Î²²¿
 	if (!cold)
 		list_add(&page->lru, &pcp->lists[migratetype]);
 	else
 		list_add_tail(&page->lru, &pcp->lists[migratetype]);
 	pcp->count++;
+	//Èç¹ûÒ³¼¯ºÏÖĞµÄÒ³ÊıÁ¿´óÓÚµÈÓÚ¸ßË®Ïß£¬ÄÇÃ´ÅúÁ¿·´»¹¸ø»ï°é·ÖÅäÆ÷
 	if (pcp->count >= pcp->high) {
 		unsigned long batch = READ_ONCE(pcp->batch);
 		free_pcppages_bulk(zone, batch, pcp);
@@ -2205,6 +2245,9 @@ struct page *buffered_rmqueue(struct zone *preferred_zone,
 	struct page *page;
 	bool cold = ((gfp_flags & __GFP_COLD) != 0);
 	//Èç¹ûÉêÇë½×ÊıÊÇ0£¬ÄÇÃ´´ÓÃ¿´¦ÀíÆ÷Ò³¼¯ºÏ·ÖÅäÆ÷
+    /*Ê×ÏÈÅĞ¶ÏÒª·ÖÅäµÄÒ³ÃæÊıÊÇ·ñÎª 1£¬Èç¹ûÎª1 µÄÇé¿öÏÂ£¬ÄÇÃ´²¢²»ĞèÒª´ÓbuddyÏµÍ³»ñÈ¡£¬
+    ÒòÎªper-CPUµÄÒ³»º´æÌá¹©ÁË¸ü¿ìµÄ·ÖÅäºÍÊÍ·Å»úÖÆ¡£per-CPU cacheÌá¹©ÁËÁ½¸öÁ´±í£¬Ò»¸öÊÇcold pageÁ´±í£¬
+    ÁíÍâÒ»¸öÊÇhot pageÁ´±í¡£´Óhot-cold Á´±í»ñÈ¡pageÊ±Òª¿¼ÂÇÇ¨ÒÆÀàĞÍ¡£*/
 	if (likely(order == 0)) {
 		struct per_cpu_pages *pcp;
 		struct list_head *list;
@@ -2240,6 +2283,7 @@ struct page *buffered_rmqueue(struct zone *preferred_zone,
 			 * allocate greater than order-1 page units with
 			 * __GFP_NOFAIL.
 			 */
+			 //ÉêÇë½×ÊıÈç¹û´óÓÚ1£¬²»ÒªÊÔÍ¼ÎŞÏŞ´ÎÉêÇë
 			WARN_ON_ONCE(order > 1);
 		}
 		spin_lock_irqsave(&zone->lock, flags);
@@ -2247,7 +2291,7 @@ struct page *buffered_rmqueue(struct zone *preferred_zone,
 		page = NULL;
 		//Èç¹ûµ÷ÓÃÕßÒªÇó¸üÅ¬Á¦·ÖÅä£¬³¢ÊÔ´Ó¸ß½×Ô­×ÓÀàĞÍ·ÖÅäÒ³¡£
 		if (alloc_flags & ALLOC_HARDER) {
-			//´ÓÖ¸¶¨Ç¨ÒÆÀàĞÍ·ÖÅäÒ³
+			//´ÓÖ¸¶¨Ç¨ÒÆÀàĞÍ·ÖÅäÒ³.²¢°Ñ¸ß½×µÄ²ğ·Ö³ÉµÍ½×µÄ¡£
 			page = __rmqueue_smallest(zone, order, MIGRATE_HIGHATOMIC);
 			if (page)
 				trace_mm_page_alloc_zone_locked(page, order, migratetype);
@@ -2606,7 +2650,7 @@ zonelist_scan:
 				continue;
 			}
 		}
-
+		//Ë®Î»¼ì²âOk,¿ªÊ¼½øĞĞÄÚ´æ·ÖÅä
 try_this_zone:
 		//´Óµ±Ç°ÇøÓò·ÖÅäÒ³¡£
 		page = buffered_rmqueue(ac->preferred_zone, zone, order,
@@ -2945,6 +2989,7 @@ static void wake_all_kswapds(unsigned int order, const struct alloc_context *ac)
 static inline int
 gfp_to_alloc_flags(gfp_t gfp_mask)
 {
+	//Ê¹ÓÃ×îµÍË®Ïß£¬²¢¼ì²écpusetÊÇ·ñÔÊĞíµ±Ç°½ø³Ì´ÓÄ³¸öÄÚ´æ½Úµã·ÖÅäÒ³¡£
 	int alloc_flags = ALLOC_WMARK_MIN | ALLOC_CPUSET;
 
 	/* __GFP_HIGH is assumed to be the same as ALLOC_HIGH to save a branch. */
@@ -2956,13 +3001,17 @@ gfp_to_alloc_flags(gfp_t gfp_mask)
 	 * policy or is asking for __GFP_HIGH memory.  GFP_ATOMIC requests will
 	 * set both ALLOC_HARDER (__GFP_ATOMIC) and ALLOC_HIGH (__GFP_HIGH).
 	 */
+	 //°Ñ·ÖÅä±êÖ¾Î»×ª»»³ÉÄÚ²¿·ÖÅä±êÖ¾Î»
 	alloc_flags |= (__force int) (gfp_mask & __GFP_HIGH);
 
-	if (gfp_mask & __GFP_ATOMIC) {
+	if (gfp_mask & __GFP_ATOMIC) { //Ô­×Ó·ÖÅä
 		/*
 		 * Not worth trying to allocate harder for __GFP_NOMEMALLOC even
 		 * if it can't schedule.
 		 */
+		 /*
+		 Èç¹ûÃ»ÓĞÒªÇó½ûÖ¹Ê¹ÓÃ½ô¼±±£ÁôÄÚ´æ£¬ÄÇÃ´ĞèÒª¸üÅ¬Á¦µÄ·ÖÅä¡£
+		*/
 		if (!(gfp_mask & __GFP_NOMEMALLOC))
 			alloc_flags |= ALLOC_HARDER;
 		/*
@@ -2970,6 +3019,7 @@ gfp_to_alloc_flags(gfp_t gfp_mask)
 		 * comment for __cpuset_node_allowed().
 		 */
 		alloc_flags &= ~ALLOC_CPUSET;
+		//Èç¹ûµ±Ç°½ø³ÌÊÇÊµÊ±½ø³Ç£¬²¢ÇÒÃ»ÓĞÖĞ¶ÏÇÀÕ¼£¬ÄÇÃ´ĞèÒª¸üÅ¬Á¦·ÖÅä¡£
 	} else if (unlikely(rt_task(current)) && !in_interrupt())
 		alloc_flags |= ALLOC_HARDER;
 
@@ -2983,6 +3033,7 @@ gfp_to_alloc_flags(gfp_t gfp_mask)
 				 unlikely(test_thread_flag(TIF_MEMDIE))))
 			alloc_flags |= ALLOC_NO_WATERMARKS;
 	}
+	//¿ÉÒÆ¶¯ÀàĞÍ¿ÉÒÔ´ÓCMAµÁÓÃÒ³
 #ifdef CONFIG_CMA
 	if (gfpflags_to_migratetype(gfp_mask) == MIGRATE_MOVABLE)
 		alloc_flags |= ALLOC_CMA;
@@ -3019,6 +3070,7 @@ __alloc_pages_slowpath(gfp_t gfp_mask, unsigned int order,
 	 * be using allocators in order of preference for an area that is
 	 * too large.
 	 */
+	 //ÉêÇë½×Êı²»ÄÜ³¬¹ıÒ³·ÖÅäÆ÷Ö§³ÖµÄ×î´ó·ÖÅä½×Êı
 	if (order >= MAX_ORDER) {
 		WARN_ON_ONCE(!(gfp_mask & __GFP_NOWARN));
 		return NULL;
@@ -3041,6 +3093,7 @@ __alloc_pages_slowpath(gfp_t gfp_mask, unsigned int order,
 		goto nopage;
 
 retry:
+	//È·±£Ò³»ØÊÕÏß³ÌÔÚÎÒÃÇÑ­»·µÄÊ±ºò²»±»ÒâÍâ»½ĞÑ
 	if (gfp_mask & __GFP_KSWAPD_RECLAIM)
 		wake_all_kswapds(order, ac);
 
@@ -3049,6 +3102,7 @@ retry:
 	 * reclaim. Now things get more complex, so set up alloc_flags according
 	 * to how we want to proceed.
 	 */
+	 //°Ñ·ÖÅä±êÖ¾Î»×ª»»³ÉÄÚ²¿·ÖÅä±êÖ¾Î»¡£
 	alloc_flags = gfp_to_alloc_flags(gfp_mask);
 
 	/*
@@ -3057,12 +3111,14 @@ retry:
 	 */
 	if (!(alloc_flags & ALLOC_CPUSET) && !ac->nodemask) {
 		struct zoneref *preferred_zoneref;
+		//»ñÈ¡Ê×Ñ¡µÄÄÚ´æÇøÓò
 		preferred_zoneref = first_zones_zonelist(ac->zonelist,
 				ac->high_zoneidx, NULL, &ac->preferred_zone);
 		ac->classzone_idx = zonelist_zone_idx(preferred_zoneref);
 	}
 
 	/* This is the last chance, in general, before the goto nopage. */
+	//Ê¹ÓÃ×îµÍË®Ïß·ÖÅäÒ³¡£
 	page = get_page_from_freelist(gfp_mask, order,
 				alloc_flags & ~ALLOC_NO_WATERMARKS, ac);
 	if (page)
@@ -3085,21 +3141,26 @@ retry:
 	}
 
 	/* Caller is not willing to reclaim, we can't balance anything */
+	// 1.²»ÔÊĞíÖ±½Ó»ØÊÕÒ³£¬ÔòÊ§°Ü
 	if (!can_direct_reclaim) {
 		/*
 		 * All existing users of the deprecated __GFP_NOFAIL are
 		 * blockable, so warn of any new users that actually allow this
 		 * type of allocation to fail.
 		 */
+		//²»ÈÃÖ±½Ó»ØÊÕÒ³£¬È´²»ÓèĞíÊ§°Ü!
 		WARN_ON_ONCE(gfp_mask & __GFP_NOFAIL);
 		goto nopage;
 	}
 
 	/* Avoid recursion of direct reclaim */
+	//Ö±½Ó»ØÊÕÒ³µÄÊ±ºò½ø³ÌÉèÖÃÁËPF_MEMALLOC£¬ÔÚÖ±½Ó»ØÊÕÒ³µÄ¹ı³ÌÖĞ¿ÉÄÜÉêÇëÒ³£¬ÎªÁË·ÀÖ¹Ö±½Ó»ØÊÕµİ¹é£¬
+	//ÕâÀï·¢ÏÖ½ø³ÌÉèÖÃÁË±êÖ¾Î»PF_MEMALLOCÓ¦¸ÃÁ¢¼´·ÅÆú
 	if (current->flags & PF_MEMALLOC)
 		goto nopage;
 
 	/* Avoid allocations with no watermarks from looping endlessly */
+	//
 	if (test_thread_flag(TIF_MEMDIE) && !(gfp_mask & __GFP_NOFAIL))
 		goto nopage;
 
@@ -3107,6 +3168,7 @@ retry:
 	 * Try direct compaction. The first pass is asynchronous. Subsequent
 	 * attempts after direct reclaim are synchronous
 	 */
+	//Õë¶ÔÉêÇë½×Êı´óÓÚ0£¬Ö´ĞĞÍ¬²½Ä£Ê½µÄÄÚ´æËéÆ¬ÕûÀí
 	page = __alloc_pages_direct_compact(gfp_mask, order, alloc_flags, ac,
 					migration_mode,
 					&contended_compaction,
@@ -3154,12 +3216,14 @@ retry:
 		migration_mode = MIGRATE_SYNC_LIGHT;
 
 	/* Try direct reclaim and then allocating */
+	//Ö±½Ó»ØÊÕÒ³
 	page = __alloc_pages_direct_reclaim(gfp_mask, order, alloc_flags, ac,
 							&did_some_progress);
 	if (page)
 		goto got_pg;
 
 	/* Do not loop if specifically requested */
+	//Èç¹ûµ÷ÓÃÕßÒªÇó²»Òª³¢ÊÔ£¬ÄÇÃ´·ÅÆú
 	if (gfp_mask & __GFP_NORETRY)
 		goto noretry;
 
@@ -3172,12 +3236,14 @@ retry:
 		goto retry;
 	}
 
-	/* Reclaim has failed us, start killing things */
+	/* Reclaim has failed us, start killing things */¡
+	//Ê¹ÓÃÄÚ´æºÄ¾¡É±ÊÖÑ¡ÔñÒ»¸ö½ø³ÌÉ±ËÀ
 	page = __alloc_pages_may_oom(gfp_mask, order, ac, &did_some_progress);
 	if (page)
 		goto got_pg;
 
 	/* Retry as long as the OOM killer is making progress */
+	//Èç¹ûÄÚ´æºÄ¾¡É±ÊÖÈ¡µÃ½øÕ¹£¬ÄÇÃ´ÖØÊÔ¡£
 	if (did_some_progress)
 		goto retry;
 
@@ -3255,10 +3321,10 @@ retry_cpuset:
 	ac.classzone_idx = zonelist_zone_idx(preferred_zoneref);
 
 	/* First allocation attempt */
-	//Ê×ÏÈ´ÓÕâÀï·ÖÅä
+	//Ê×ÏÈ´ÓÕâÀï×ß¿ìËÙ·ÖÅä
 	alloc_mask = gfp_mask|__GFP_HARDWALL;
 	page = get_page_from_freelist(alloc_mask, order, alloc_flags, &ac);
-	//Èç¹û·ÖÅäÊ§°Ü£¬½øÈëÂıËÙÂ·¾¶
+	//Èç¹ûÊ¹ÓÃµÍË®Ïß·ÖÅäÊ§°Ü£¬½øÈëÂıËÙÂ·¾¶
 	if (unlikely(!page)) {
 		/*
 		 * Runtime PM, block IO and its error handling path
@@ -3318,10 +3384,13 @@ EXPORT_SYMBOL(get_zeroed_page);
 
 void __free_pages(struct page *page, unsigned int order)
 {
+	//Ê×ÏÈ°ÑÒ³ÒıÓÃ¼ÆÊı¼õ1£¬Ö»ÓĞÒ³ÒıÓÃ¼ÆÊı¼õµ½0£¬²ÅÕæÕıÊÍ·ÅÒ³
 	if (put_page_testzero(page)) {
+		//Èç¹û½×ÊıÊÇ0£¬²»»¹¸ø»ï°é·ÖÅäÆ÷£¬¶øÊÇµ±×ö»º´æÈÈÒ³Ìí¼Óµ½Ã¿´¦ÀíÆ÷¼¯ºÏÖĞ
 		if (order == 0)
 			free_hot_cold_page(page, false);
 		else
+		//¸ºÔğÊÍ·Å½×Êı´óÓÚ0µÄÒ³¿é¡£
 			__free_pages_ok(page, order);
 	}
 }
@@ -6497,9 +6566,11 @@ unsigned long get_pfnblock_flags_mask(struct page *page, unsigned long pfn,
 	unsigned long *bitmap;
 	unsigned long bitidx, word_bitidx;
 	unsigned long word;
-
+	//¸ù¾İpage»ñÈ¡ËùÔÚµÄzone
 	zone = page_zone(page);
+	//¸ù¾İzoneÕÒµ½Ï¡ÊèÄÚ´æÄ£ĞÍ¶ÔÓ¦µÄmem_section£¬²¢ÕÒµ½ÒÔpageblockÎªµ¥Î»¹ÜÀíµÄbitmapÇ¨ÒÆÀàĞÍ
 	bitmap = get_pageblock_bitmap(zone, pfn);
+	//¸ù¾İpfnÕÒµ½¶ÔÓ¦µÄbitmapË÷Òı
 	bitidx = pfn_to_bitidx(zone, pfn);
 	word_bitidx = bitidx / BITS_PER_LONG;
 	bitidx &= (BITS_PER_LONG-1);

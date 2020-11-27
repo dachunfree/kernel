@@ -168,6 +168,14 @@ struct alloc_context {
  *
  * Assumption: *_mem_map is contiguous at least up to MAX_ORDER
  */
+/*
+首先是根据"pfn"查找buddy page，因为一个page和它的buddy在物理内存上是连续的，确定"order"之后，
+就可以根据其中一个的物理页面号，计算出另一个的。比如一个compound page的起始pfn是8，order是1，
+那么它的其中一个buddy的pfn就是10。
+
+要成为buddy，除了两者的大小（即order）相同，还必须属于同一个zone
+https://blog.csdn.net/geshifei/article/details/81914115
+*/
 static inline unsigned long
 __find_buddy_index(unsigned long page_idx, unsigned int order)
 {

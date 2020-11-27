@@ -623,6 +623,7 @@ void __init early_init_fdt_scan_reserved_mem(void)
 				……
 			};
 		*/
+		//获取reserved memory的大小和起始地址
 		fdt_get_mem_rsv(initial_boot_params, n, &base, &size);
 		if (!size)
 			break;

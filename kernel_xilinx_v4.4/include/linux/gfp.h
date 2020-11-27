@@ -104,9 +104,9 @@ struct vm_area_struct;
  *
  * __GFP_NOACCOUNT ignores the accounting for kmemcg limit enforcement.
  */
-#define __GFP_ATOMIC	((__force gfp_t)___GFP_ATOMIC)
-#define __GFP_HIGH	((__force gfp_t)___GFP_HIGH)
-#define __GFP_MEMALLOC	((__force gfp_t)___GFP_MEMALLOC)
+#define __GFP_ATOMIC	((__force gfp_t)___GFP_ATOMIC) //不允许回收和睡眠，并且是高优先级，经常和___GFP_HIGH一起使用
+#define __GFP_HIGH	((__force gfp_t)___GFP_HIGH)  //高优先级的
+#define __GFP_MEMALLOC	((__force gfp_t)___GFP_MEMALLOC) //承诺给我少量内存，我将释放更多内存
 #define __GFP_NOMEMALLOC ((__force gfp_t)___GFP_NOMEMALLOC)
 #define __GFP_NOACCOUNT	((__force gfp_t)___GFP_NOACCOUNT)
 
@@ -426,6 +426,12 @@ __alloc_pages(gfp_t gfp_mask, unsigned int order,
  * Allocate pages, preferring the node given as nid. The node must be valid and
  * online. For more general interface, see alloc_pages_node().
  */
+
+/*
+a. per-CPU机制，分配单个页面，per-CPU的页缓存提供了更快的分配和释放机制；
+b. 伙伴算法，适用于分配大块连续页面（至少一个页面），解决了外碎片问题；
+c. slab机制，分配小内存，访问频率较高的内存，解决了内碎片问题。
+*/
 static inline struct page *
 __alloc_pages_node(int nid, gfp_t gfp_mask, unsigned int order)
 {

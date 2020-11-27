@@ -85,6 +85,7 @@ static int __meminit sparse_index_init(unsigned long section_nr, int nid)
       //__pfn_to_section(unsigned long pfn);
       /*
 	  mem_section[root][array_size]
+	  mem_section[0][0]如下指示，mem_setction[1]-mem_section[0] = array_size;
 
 	  page 0-------------------------------------------->  |mem_section 0
 	  page 1											   |mem_section 1
@@ -187,6 +188,7 @@ void __init memory_present(int nid, unsigned long start, unsigned long end)
 	start &= PAGE_SECTION_MASK;// = 30 -12 = 18.(1个settion是2^30 = 1G)
 	//验证start，end是否超过最大限制地址
 	mminit_validate_memmodel_limits(&start, &end);
+	//按照1G进行建立?
 	for (pfn = start; pfn < end; pfn += PAGES_PER_SECTION) {
 		unsigned long section = pfn_to_section_nr(pfn);
 		struct mem_section *ms;
@@ -388,6 +390,13 @@ static void __init sparse_early_usemaps_alloc_node(void *data,
 	pageblock，一个pageblock需要NR_PAGEBLOCK_BITS个bits来表示*/
 	int size = usemap_size();
 	//分配所需要的usemap空间
+	/*						1G空间           pageblock_order为单位进行页管理，NR_PAGEBLOCK_BITS共需要4bytes管理
+		usemap_map[0]-----------------------> usemap_count
+		usemap_map[1]
+		usemap_map[2]
+		usemap_map[3]
+
+	*/
 	usemap = sparse_early_usemaps_alloc_pgdat_section(NODE_DATA(nodeid),
 							  size * usemap_count);
 	if (!usemap) {
@@ -515,7 +524,7 @@ static void __init alloc_usemap_and_memmap(void (*alloc_func)
 	unsigned long map_count;
 	int nodeid_begin = 0;
 	unsigned long pnum_begin = 0;
-
+	//之前函数分配的mmsection和
 	for (pnum = 0; pnum < NR_MEM_SECTIONS; pnum++) {
 		struct mem_section *ms;
 

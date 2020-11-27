@@ -210,7 +210,7 @@ static void alloc_init_pud(struct mm_struct *mm, pgd_t *pgd,
 	/*如果当前pgd entry是全0的话，说明还没有对应的下级PUD页表内存，因此需要进行PUD页表内存
 	的分配。需要说明的是这时候，伙伴系统没有ready，分配内存仍然使用memblock模块*/
 	if (pgd_none(*pgd)) {
-		pud = alloc(PTRS_PER_PUD * sizeof(pud_t)); //物理地址
+		pud = alloc(PTRS_PER_PUD * sizeof(pud_t)); //物理地址.一页
 		pgd_populate(mm, pgd, pud); //建立pgd entry中填入 PUD 页表(物理地址)
 	}
 	BUG_ON(pgd_bad(*pgd));
@@ -643,7 +643,7 @@ void __init early_fixmap_init(void)
 	pgd = pgd_offset_k(addr); //获取addr地址对应pgd全局页表中的entry，而这个pgd全局页表正是swapper_pg_dir全局页表；。
 	pgd_populate(&init_mm, pgd, bm_pud); //将bm_pud的物理地址写到pgd全局页目录表中
 	pud = pud_offset(pgd, addr);
-	pud_populate(&init_mm, pud, bm_pud);//将bm_pmd的物理地址写到pud页目录表中
+	pud_populate(&init_mm, pud, bm_pmd);//将bm_pmd的物理地址写到pud页目录表中
 	pmd = pmd_offset(pud, addr);
 	pmd_populate_kernel(&init_mm, pmd, bm_pte); //将bm_pte的物理地址写到pmd页表目录表中
 
