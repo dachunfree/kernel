@@ -517,6 +517,15 @@ enum pageblock_bits;
 
 	/* Fields commonly accessed by the page reclaim scanner */
 	spinlock_t		lru_lock;
+	/*
+	lru链表.enum lru_list 
+	struct lruvec {
+	struct list_head lists[NR_LRU_LISTS];
+	struct zone_reclaim_stat reclaim_stat;
+	};
+	处于此两个链表中的页框标志位也需要相应设置：PG_lru,PG_active。前者的标志表明页在活动或
+	非活动页链表中，而后者是页在活动链表中。当是属于非活动链表时，标志位要清。
+	*/
 	struct lruvec		lruvec;
 
 	/* Evictions & activations on the inactive file list */

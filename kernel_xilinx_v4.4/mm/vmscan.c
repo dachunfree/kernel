@@ -2514,6 +2514,11 @@ static inline bool compaction_ready(struct zone *zone, int order)
  *
  * Returns true if a zone was reclaimable.
  */
+ /*
+ 将某些页面从 active 链表移到 inactive 链表，这是由函数 shrink_active_list() 实现的。
+从 inactive 链表中选定一定数目的页面，将其放到一个临时链表中，这由函数 shrink_inactive_list() 完成。
+该函数最终会调用 shrink_page_list() 去回收这些页面。函数 shrink_page_list() 返回的是回收成功的页面数目。
+*/
 static bool shrink_zones(struct zonelist *zonelist, struct scan_control *sc)
 {
 	struct zoneref *z;

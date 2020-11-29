@@ -13,7 +13,11 @@
 
 struct page;
 struct address_space;
-
+/*页面根据其活跃程度会在active链表和 inactive链表之间来回移动，如果要将某个页面插入到这两个链表中去，
+必须要通过自旋锁以保证对链表的并发访问操作不会出错。为了降低锁的竞争，Linux提供了一种特殊
+的缓存：LRU缓存，用以批量地向 LRU链表中快速地添加页面。有了 LRU缓存之后，新页不会被马上添加
+到相应的链表上去，而是先被放到一个缓冲区中去，当该缓冲区缓存了足够多的页面之后，缓冲区中的页
+面才会被一次性地全部添加到相应的 LRU链表中去。Linux采用这种方法降低了锁的竞争，极大地提升了系统的性能*/
 struct pagevec {
 	unsigned long nr;
 	unsigned long cold;

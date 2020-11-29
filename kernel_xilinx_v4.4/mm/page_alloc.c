@@ -607,6 +607,7 @@ static inline void rmv_page_order(struct page *page)
 static inline int page_is_buddy(struct page *page, struct page *buddy,
 							unsigned int order)
 {
+	//¼ì²âÊÇ·ñÔÚmemblockÖĞ£¬Ò²¾ÍÊÇÊÇ·ñÔÚ¿Õ¶´ÖĞ
 	if (!pfn_valid_within(page_to_pfn(buddy)))
 		return 0;
 
@@ -618,13 +619,14 @@ static inline int page_is_buddy(struct page *page, struct page *buddy,
 
 		return 1;
 	}
-
+	//±íÊ¾Ò³ÒÑ¾­´¦ÓÚfree×´Ì¬ÇÒorderÒ»Ñù
 	if (PageBuddy(buddy) && page_order(buddy) == order) {
 		/*
 		 * zone check is done late to avoid uselessly
 		 * calculating zone/node ids for pages that could
 		 * never merge.
 		 */
+		 //ÊÇ·ñÔÚÍ¬Ò»¸özoneÖĞ
 		if (page_zone_id(page) != page_zone_id(buddy))
 			return 0;
 
@@ -709,6 +711,7 @@ static inline void __free_one_page(struct page *page,
 		 * Our buddy is free or it is CONFIG_DEBUG_PAGEALLOC guard page,
 		 * merge with it and move up one order.
 		 */
+		 //ÊØÎÀ£¿£¿
 		if (page_is_guard(buddy)) {
 			clear_page_guard(zone, buddy, order, migratetype);
 		} else { //»ï°éÊÇ¿ÕÏĞµÄ£¬°Ñ»ï°é´Ó¿ÕÏĞÁ´±íÖĞÉ¾³ı¡£
@@ -716,11 +719,13 @@ static inline void __free_one_page(struct page *page,
 			zone->free_area[order].nr_free--;
 			rmv_page_order(buddy);
 		}
+		//ºÏ²¢Á½¸öbuddyµÃµ½ºÏ²¢ºóbuddyµÄÆğÊ¼Ò³index
 		combined_idx = buddy_idx & page_idx;
 		page = page + (combined_idx - page_idx);
 		page_idx = combined_idx;
 		order++;
 	}
+	//¿ÕÏĞÒ³±í¼¯½áÍê±Ï£¬¿ªÊ¼ÉèÖÃhead pageµÄorder
 	set_page_order(page, order);
 
 	/*
@@ -748,7 +753,7 @@ static inline void __free_one_page(struct page *page,
 			goto out;
 		}
 	}
-
+	//½«Õû¸öºÏ²¢µÄÒ³¿é¼ÓÈëµ½zone->free_area[order].free_list[migratetype]
 	list_add(&page->lru, &zone->free_area[order].free_list[migratetype]);
 out:
 	zone->free_area[order].nr_free++;
@@ -3216,7 +3221,8 @@ retry:
 		migration_mode = MIGRATE_SYNC_LIGHT;
 
 	/* Try direct reclaim and then allocating */
-	//Ö±½Ó»ØÊÕÒ³
+	/*inuxÖĞÒ³Ãæ»ØÊÕÖ÷ÒªÊÇÍ¨¹ıÁ½ÖÖ·½Ê½´¥·¢µÄ£¬Ò»ÖÖÊÇÓÉ¡°ÄÚ´æÑÏÖØ²»×ã¡±ÊÂ¼ş´¥·¢µÄ£»
+	Ò»ÖÖÊÇÓÉºóÌ¨½ø³Ì kswapd´¥·¢µÄ£¬¸Ã½ø³ÌÖÜÆÚĞÔµØÔËĞĞ£¬Ò»µ©¼ì²âµ½ÄÚ´æ²»×ã£¬¾Í»á´¥·¢Ò³Ãæ»ØÊÕ²Ù×÷*/
 	page = __alloc_pages_direct_reclaim(gfp_mask, order, alloc_flags, ac,
 							&did_some_progress);
 	if (page)
@@ -3236,7 +3242,7 @@ retry:
 		goto retry;
 	}
 
-	/* Reclaim has failed us, start killing things */¡
+	/* Reclaim has failed us, start killing things */?
 	//Ê¹ÓÃÄÚ´æºÄ¾¡É±ÊÖÑ¡ÔñÒ»¸ö½ø³ÌÉ±ËÀ
 	page = __alloc_pages_may_oom(gfp_mask, order, ac, &did_some_progress);
 	if (page)
