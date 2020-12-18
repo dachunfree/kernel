@@ -63,6 +63,7 @@
  *		only require the D-TLB to be invalidated.
  *		- kaddr - Kernel virtual memory address
  */
+ //TLBI <type> <level> {IS(smp is share)} {xt}
 static inline void local_flush_tlb_all(void)
 {
 	dsb(nshst);
@@ -73,9 +74,16 @@ static inline void local_flush_tlb_all(void)
 
 static inline void flush_tlb_all(void)
 {
+	//确保屏障前面的存储指令执行完
+	/*ish 表示共享域是内部共享，st表示存储
+	ishst:表示数据同步屏障指令对所有核的存储指令起作用
+	*/
 	dsb(ishst);
+	//使所有核上匹配当前VMID，阶段1和异常级别1的所有TLB表失效
 	asm("tlbi	vmalle1is");
+	//确保前面的TLB失效指令执行完。ish表示数据同步屏障指令对所有核起作用。
 	dsb(ish);
+	//指令同步屏障，冲刷处理器的流水线，重新读取屏蔽指令后面的所有命令。
 	isb();
 }
 

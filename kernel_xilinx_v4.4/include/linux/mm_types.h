@@ -482,7 +482,7 @@ struct mm_struct {
 	cpumask_var_t cpu_vm_mask_var;
 
 	/* Architecture-specific MM context */
-	//处理器架构特定的内存管理上下文
+	//处理器架构特定的内存管理上下文。里面存放ASID，和TLB切换相关
 	mm_context_t context;
 
 	unsigned long flags; /* Must use atomic bitops to access the bits */

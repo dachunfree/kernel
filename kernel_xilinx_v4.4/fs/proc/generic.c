@@ -3,7 +3,7 @@
  *
  * This file contains generic proc-fs routines for handling
  * directories and files.
- * 
+ *
  * Copyright (C) 1991, 1992 Linus Torvalds.
  * Copyright (C) 1997 Theodore Ts'o
  */
@@ -456,6 +456,7 @@ struct proc_dir_entry *proc_mkdir(const char *name,
 		struct proc_dir_entry *parent)
 {
 	return proc_mkdir_data(name, 0, parent, NULL);
+
 }
 EXPORT_SYMBOL(proc_mkdir);
 
@@ -511,7 +512,7 @@ out:
 	return NULL;
 }
 EXPORT_SYMBOL(proc_create_data);
- 
+
 void proc_set_size(struct proc_dir_entry *de, loff_t size)
 {
 	de->size = size;

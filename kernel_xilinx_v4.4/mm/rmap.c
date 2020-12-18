@@ -985,7 +985,7 @@ static int page_mkclean_one(struct page *page, struct vm_area_struct *vma,
 	pte = page_check_address(page, mm, address, &ptl, 1);
 	if (!pte)
 		goto out;
-
+	//检查页是不是脏的，即页数据是否被修改过
 	if (pte_dirty(*pte) || pte_write(*pte)) {
 		pte_t entry;
 
@@ -1071,9 +1071,9 @@ void page_move_anon_rmap(struct page *page,
 
 /**
  * __page_set_anon_rmap - set up new anonymous rmap
- * @page:	Page to add to rmap	
+ * @page:	Page to add to rmap
  * @vma:	VM area to add page to.
- * @address:	User virtual address of the mapping	
+ * @address:	User virtual address of the mapping
  * @exclusive:	the page is exclusively owned by the current process
  */
 static void __page_set_anon_rmap(struct page *page,
@@ -1596,7 +1596,7 @@ static int rmap_walk_anon(struct page *page, struct rmap_walk_control *rwc)
 
 		if (rwc->invalid_vma && rwc->invalid_vma(vma, rwc->arg))
 			continue;
-
+		//remove_migration_pte
 		ret = rwc->rmap_one(page, vma, address, rwc->arg);
 		if (ret != SWAP_AGAIN)
 			break;

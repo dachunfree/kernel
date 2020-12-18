@@ -645,12 +645,13 @@ static void fill_contig_page_info(struct zone *zone,
 		unsigned long blocks;
 
 		/* Count number of free blocks */
+		//计算该zone各个order空闲页块的个数
 		blocks = zone->free_area[order].nr_free;
 		info->free_blocks_total += blocks;
-
+		//计算空闲页的个数
 		/* Count free base pages */
 		info->free_pages += blocks << order;
-
+		//计算适合页的个数
 		/* Count the suitable free blocks */
 		if (order >= suitable_order)
 			info->free_blocks_suitable += blocks <<
@@ -668,11 +669,12 @@ static void fill_contig_page_info(struct zone *zone,
 static int __fragmentation_index(unsigned int order, struct contig_page_info *info)
 {
 	unsigned long requested = 1UL << order;
-
+	//不存在空闲页块，那么指数为0
 	if (!info->free_blocks_total)
 		return 0;
 
 	/* Fragmentation index only makes sense when a request would fail */
+	//如果只是存在一个足够大的空闲块，碎片指数=-1000
 	if (info->free_blocks_suitable)
 		return -1000;
 
@@ -681,7 +683,9 @@ static int __fragmentation_index(unsigned int order, struct contig_page_info *in
 	 *
 	 * 0 => allocation would fail due to lack of memory
 	 * 1 => allocation would fail due to fragmentation
+	   碎片指数 = 1000 - (1000+1000*空闲页数/申请页数) /空闲页块总数
 	 */
+
 	return 1000 - div_u64( (1000+(div_u64(info->free_pages * 1000ULL, requested))), info->free_blocks_total);
 }
 
@@ -689,8 +693,9 @@ static int __fragmentation_index(unsigned int order, struct contig_page_info *in
 int fragmentation_index(struct zone *zone, unsigned int order)
 {
 	struct contig_page_info info;
-
+	//计算空闲页的个数和suitable页的个数
 	fill_contig_page_info(zone, order, &info);
+	//计算内存碎片指数
 	return __fragmentation_index(order, &info);
 }
 #endif

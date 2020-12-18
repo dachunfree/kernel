@@ -518,7 +518,7 @@ enum pageblock_bits;
 	/* Fields commonly accessed by the page reclaim scanner */
 	spinlock_t		lru_lock;
 	/*
-	lru链表.enum lru_list 
+	lru链表.enum lru_list
 	struct lruvec {
 	struct list_head lists[NR_LRU_LISTS];
 	struct zone_reclaim_stat reclaim_stat;
@@ -540,8 +540,10 @@ enum pageblock_bits;
 
 #if defined CONFIG_COMPACTION || defined CONFIG_CMA
 	/* pfn where compaction free scanner should start */
+	//空闲扫描器起始地址。默认是zone endpfn
 	unsigned long		compact_cached_free_pfn;
 	/* pfn where async and sync compaction migration scanner should start */
+	// 1表示同步模式，0表示异步模式。migrate_pfn迁移扫描器起始地址，默认zone startpfn
 	unsigned long		compact_cached_migrate_pfn[2];
 #endif
 
@@ -551,8 +553,14 @@ enum pageblock_bits;
 	 * are skipped before trying again. The number attempted since
 	 * last failure is tracked with compact_considered.
 	 */
+	//记录推迟的次数
 	unsigned int		compact_considered;
+	/*是推迟的最大次数以2为底的对数，当推迟次数达到(1<<compact_defer_shift),不能推迟.
+	  每次内存碎片整理失败，把成员compact_defer_shift+1，不允许超过COMPACT_MAX_DEFER_SHIFT.
+	  即把推迟的最大次数翻倍，但是不能超过64。
+	*/
 	unsigned int		compact_defer_shift;
+	//记录内存碎片整理失败时的申请阶数。
 	int			compact_order_failed;
 #endif
 

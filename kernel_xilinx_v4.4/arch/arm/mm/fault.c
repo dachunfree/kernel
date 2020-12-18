@@ -266,7 +266,7 @@ do_page_fault(unsigned long addr, unsigned int fsr, struct pt_regs *regs)
 		return 0;
 
 	tsk = current;
-	mm  = tsk->mm;
+	mm  = tsk->mm; //内核线程mm为空；contex switch的时候借用用户线程的mm到active mm
 
 	/* Enable interrupts if they were enabled in the parent context. */
 	if (interrupts_enabled(regs))
@@ -276,9 +276,10 @@ do_page_fault(unsigned long addr, unsigned int fsr, struct pt_regs *regs)
 	 * If we're in an interrupt or have no user
 	 * context, we must not take the fault..
 	 */
+	 //是否处于中断上下文或者禁止抢占状态。没有mm说明是一个内核线程
 	if (faulthandler_disabled() || !mm)
 		goto no_context;
-
+	//是否处于用户模式进行置位
 	if (user_mode(regs))
 		flags |= FAULT_FLAG_USER;
 	if (fsr & FSR_WRITE)

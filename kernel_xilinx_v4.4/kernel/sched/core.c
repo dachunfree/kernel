@@ -2714,7 +2714,7 @@ context_switch(struct rq *rq, struct task_struct *prev,
 		尚未切换，而进程的地址空间已经切换到了B进程了。这样会不会造成问题呢?还好，呵呵，这时候代码执行在
 		kernel space，A和B进程的kernel space都是一样一样的啊，即便是切了进程地址空间，不过内核空间实际上保持不变的。
 	*/
-		switch_mm(oldmm, mm, next);
+		switch_mm(oldmm, mm, next); //TLB和页表已经切换到新的地址空间B了。虽然用户空间页表变了，但是现在是内核空间。。。
 	/*
 	如果切出的A进程是内核线程，那么其借用的那个地址空间（active_mm）已经不需要继续使用了（内核线程A被挂起了，
 	根本不需要地址空间了）。除此之外，我们这里还设定了run queue上一次使用的mm struct（rq->prev_mm）为oldmm。
@@ -2739,6 +2739,7 @@ context_switch(struct rq *rq, struct task_struct *prev,
 	（我们称之CPUx）完成从X进程（就是last进程）到A进程切换的时候，switch_to返回到A进程的现场。
 	switch_to完成了具体prev到next进程的切换，当switch_to返回的时候，说明A进程再次被调度执行了。
 	*/
+	//里面完成了cpu的进程栈的切换。
 	switch_to(prev, next, prev); //返回值pre。上一进程。
 	barrier();
 
@@ -3146,20 +3147,22 @@ again:
  *
  *   3. Wakeups don't really cause entry into schedule(). They add a
  *      task to the run-queue and that's it.
+ 		唤醒操作并没有显示的调用schedule()，他们只是把task加入到运行队列中
  *
  *      Now, if the new task added to the run-queue preempts the current
  *      task, then the wakeup sets TIF_NEED_RESCHED and schedule() gets
  *      called on the nearest possible occasion:
+ 		如果新的任务加入到运行队列准备抢占当前任务，会设置TIF_NEED_RESCHED并在最近的抢占点发生抢占
  *
  *       - If the kernel is preemptible (CONFIG_PREEMPT=y):
- *
+ *		  //如果是可抢占内核:preempt_enable时候会发有抢占点schedule的调用
  *         - in syscall or exception context, at the next outmost
  *           preempt_enable(). (this might be as soon as the wake_up()'s
  *           spin_unlock()!)
- *
+ *			//中断上下文时候
  *         - in IRQ context, return from interrupt-handler to
  *           preemptible context
- *
+ *		 //如果是非抢占内核
  *       - If the kernel is not preemptible (CONFIG_PREEMPT is not set)
  *         then at the next:
  *

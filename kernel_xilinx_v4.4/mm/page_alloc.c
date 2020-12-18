@@ -2843,7 +2843,7 @@ __alloc_pages_direct_compact(gfp_t gfp_mask, unsigned int order,
 
 	if (!order)
 		return NULL;
-
+	//给我少量内存，我可以释放更多内存。
 	current->flags |= PF_MEMALLOC;
 	compact_result = try_to_compact_pages(gfp_mask, order, alloc_flags, ac,
 						mode, contended_compaction);
@@ -3098,7 +3098,7 @@ __alloc_pages_slowpath(gfp_t gfp_mask, unsigned int order,
 		goto nopage;
 
 retry:
-	//确保页回收线程在我们循环的时候不被意外唤醒
+	//唤醒页回收线程。
 	if (gfp_mask & __GFP_KSWAPD_RECLAIM)
 		wake_all_kswapds(order, ac);
 
@@ -3173,7 +3173,7 @@ retry:
 	 * Try direct compaction. The first pass is asynchronous. Subsequent
 	 * attempts after direct reclaim are synchronous
 	 */
-	//针对申请阶数大于0，执行同步模式的内存碎片整理
+	//针对申请阶数大于0，执行内存碎片整理
 	page = __alloc_pages_direct_compact(gfp_mask, order, alloc_flags, ac,
 					migration_mode,
 					&contended_compaction,
@@ -6572,7 +6572,7 @@ unsigned long get_pfnblock_flags_mask(struct page *page, unsigned long pfn,
 	unsigned long *bitmap;
 	unsigned long bitidx, word_bitidx;
 	unsigned long word;
-	//根据page获取所在的zone
+	//根据page flags找到对应的section，然后找到对应的pglist，再根据page flags 获取所在的zone
 	zone = page_zone(page);
 	//根据zone找到稀疏内存模型对应的mem_section，并找到以pageblock为单位管理的bitmap迁移类型
 	bitmap = get_pageblock_bitmap(zone, pfn);

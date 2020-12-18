@@ -604,11 +604,16 @@ static inline void clean_pmd_entry(void *pmd)
 #define local_flush_tlb_kernel_range(s,e)	__cpu_flush_kern_tlb_range(s,e)
 
 #ifndef CONFIG_SMP
+//使所有TLB表项失效
 #define flush_tlb_all		local_flush_tlb_all
+//使指定用户空间的所有TLB失效，mm是进程的内存描述符
 #define flush_tlb_mm		local_flush_tlb_mm
+//使指定用户空间里面的指定虚拟页的TLB表项失效。参数vma是虚拟内存区域，uaddr是一个虚拟页中的任意虚拟地址
 #define flush_tlb_page		local_flush_tlb_page
 #define flush_tlb_kernel_page	local_flush_tlb_kernel_page
+//使指定用户空间的某个范围的TLB失效。参数vma是虚拟内存区域
 #define flush_tlb_range		local_flush_tlb_range
+//使内核的某个虚拟地址范围的TLB表项失效。参数start是其实地址;end是结束地址
 #define flush_tlb_kernel_range	local_flush_tlb_kernel_range
 #define flush_bp_all		local_flush_bp_all
 #else

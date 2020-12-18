@@ -129,7 +129,7 @@ switch_mm(struct mm_struct *prev, struct mm_struct *next,
 	    !cpumask_empty(mm_cpumask(next)) &&
 	    !cpumask_test_cpu(cpu, mm_cpumask(next)))
 		__flush_icache_all();
-
+	//根据进程的ASID，进行TLB相关的操作及ttrb0的页表地址
 	if (!cpumask_test_and_set_cpu(cpu, mm_cpumask(next)) || prev != next) {       //pre == next没意义不用切换
 		check_and_switch_context(next, tsk);
 		if (cache_is_vivt())

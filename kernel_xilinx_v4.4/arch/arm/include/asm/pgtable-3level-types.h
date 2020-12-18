@@ -40,12 +40,12 @@ typedef struct { pteval_t pgprot; } pgprot_t;
 
 #define pte_val(x)      ((x).pte)
 #define pmd_val(x)      ((x).pmd)
-#define pgd_val(x)	((x).pgd)
+#define pgd_val(x)	((x).pgd)    //把pgd类型转换成无符号长整型
 #define pgprot_val(x)   ((x).pgprot)
 
 #define __pte(x)        ((pte_t) { (x) } )
 #define __pmd(x)        ((pmd_t) { (x) } )
-#define __pgd(x)	((pgd_t) { (x) } )
+#define __pgd(x)	((pgd_t) { (x) } ) //把无符号长整型转换成pgd_t类型
 #define __pgprot(x)     ((pgprot_t) { (x) } )
 
 #else	/* !STRICT_MM_TYPECHECKS */

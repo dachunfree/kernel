@@ -140,7 +140,10 @@ switch_mm(struct mm_struct *prev, struct mm_struct *next,
 		cpu_set_reserved_ttbr0();
 		return;
 	}
-
+	/*当进程切换时，可以将页表基地址和ASID(可以从task_struct获得)共同存储在页表基地址寄存器中。
+	当查找TLB时，硬件可以对比tag以及ASID是否相等(对比页表基地址寄存器存储的ASID和TLB表项存储的ASID)。
+	如果都相等，代表TLB hit。否则TLB miss。
+	*/
 	check_and_switch_context(next, cpu);
 }
 

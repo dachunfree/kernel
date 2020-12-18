@@ -9,8 +9,10 @@
 /* compaction should continue to another pageblock */
 #define COMPACT_CONTINUE	2
 /* direct compaction partially compacted a zone and there are suitable pages */
+//部分
 #define COMPACT_PARTIAL		3
 /* The full zone was compacted */
+//扫描整个区域
 #define COMPACT_COMPLETE	4
 /* For more detailed tracepoint output */
 #define COMPACT_NO_SUITABLE_PAGE	5

@@ -132,6 +132,8 @@ ENDPROC(cpu_do_resume)
  *
  *	- pgd_phys - physical address of new TTB
  */
+ /*tbr1_el1是内核空间的页表基址寄存器，访问内核空间地址时使用，所有进程共享，不需要切换)。
+ msr	ttbr0_el1, x0，也就完成了进程的地址空间切换，确切的说是进程的虚拟地址空间切换。*/
 ENTRY(cpu_do_switch_mm)
 	mmid	x1, x1				// get mm->context.id
 	bfi	x0, x1, #48, #16		// set the ASID

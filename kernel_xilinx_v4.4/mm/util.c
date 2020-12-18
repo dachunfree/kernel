@@ -360,14 +360,14 @@ struct address_space *page_mapping(struct page *page)
 	/* This happens if someone calls flush_dcache_page on slab page */
 	if (unlikely(PageSlab(page)))
 		return NULL;
-
+	//swap区则返回swap空间
 	if (unlikely(PageSwapCache(page))) {
 		swp_entry_t entry;
 
 		entry.val = page_private(page);
 		return swap_address_space(entry);
 	}
-
+	//其它直接返回mapping
 	mapping = (unsigned long)page->mapping;
 	if (mapping & PAGE_MAPPING_FLAGS)
 		return NULL;

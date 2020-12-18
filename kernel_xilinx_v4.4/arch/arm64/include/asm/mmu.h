@@ -17,7 +17,7 @@
 #define __ASM_MMU_H
 
 typedef struct {
-	atomic64_t	id;
+	atomic64_t	id; //id存放内核给进程分配的软件ASID
 	void		*vdso;
 } mm_context_t;
 

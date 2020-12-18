@@ -23,9 +23,10 @@
 #define sev()		asm volatile("sev" : : : "memory")
 #define wfe()		asm volatile("wfe" : : : "memory")
 #define wfi()		asm volatile("wfi" : : : "memory")
-
+//指令同步屏障，冲刷处理器的流水线，重新读取屏蔽指令后面的所有命令。
 #define isb()		asm volatile("isb" : : : "memory")
 #define dmb(opt)	asm volatile("dmb " #opt : : : "memory")
+//确保前面的TLB失效指令执行完。ish表示数据同步屏障指令对所有核起作用。
 #define dsb(opt)	asm volatile("dsb " #opt : : : "memory")
 
 #define mb()		dsb(sy)

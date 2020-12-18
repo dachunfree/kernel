@@ -578,10 +578,29 @@ ENDPROC(el0_irq)
  *   x1 = next task_struct
  * Previous and next are guaranteed not to be the same.
  *
+ 其中x19-x28是arm64 架构规定需要调用保存的寄存器，可以看到处理器状态切换的时候将前一个进程（prev）
+ 的x19-x28，fp,sp,pc保存到了进程描述符的cpu_contex中，然后将即将执行的进程(next)描述符的cpu_contex的x19-x28，
+ fp,sp,pc恢复到相应寄存器中，而且将next进程的进程描述符task_struct地址存放在sp_el0中，用于通过current找到当前进程，
+ 这样就完成了处理器的状态切换。
+ struct cpu_context {
+	unsigned long x19;
+	unsigned long x20;
+	unsigned long x21;
+	unsigned long x22;
+	unsigned long x23;
+	unsigned long x24;
+	unsigned long x25;
+	unsigned long x26;
+	unsigned long x27;
+	unsigned long x28;
+	unsigned long fp;
+	unsigned long sp;
+	unsigned long pc;
+};
  */
 ENTRY(cpu_switch_to)
-	mov	x10, #THREAD_CPU_CONTEXT
-	add	x8, x0, x10
+	mov	x10, #THREAD_CPU_CONTEXT   //task_struct.thread.cpu_context
+	add	x8, x0, x10   //x8 = previous task_struct + cpu_context.pre进程的cpu_context
 	mov	x9, sp
 	stp	x19, x20, [x8], #16		// store callee-saved registers
 	stp	x21, x22, [x8], #16
@@ -590,15 +609,15 @@ ENTRY(cpu_switch_to)
 	stp	x27, x28, [x8], #16
 	stp	x29, x9, [x8], #16
 	str	lr, [x8]
-	add	x8, x1, x10
+	add	x8, x1, x10  //x8为next进程的寄存器
 	ldp	x19, x20, [x8], #16		// restore callee-saved registers
 	ldp	x21, x22, [x8], #16
 	ldp	x23, x24, [x8], #16
 	ldp	x25, x26, [x8], #16
 	ldp	x27, x28, [x8], #16
 	ldp	x29, x9, [x8], #16
-	ldr	lr, [x8]
-	mov	sp, x9
+	ldr	lr, [x8]  //恢复lr到pc中，即开始执行下一个进程了
+	mov	sp, x9   //切换下一个进程的sp
 	ret
 ENDPROC(cpu_switch_to)
 

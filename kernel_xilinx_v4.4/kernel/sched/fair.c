@@ -216,6 +216,7 @@ static void __update_inv_weight(struct load_weight *lw)
  1.计算进程运行时间转换成虚拟时间(weight = 1024)
  2.计算调度实体se的权重占整个就绪队列权重的比例，然后乘以调度周期时间即可得到当前调度实体应该运行的时间
  delta_exec * weight / lw.weight，要么是(delta_exec * (weight * lw->inv_weight)) >> WMULT_SHIFT
+ inv_weight  = 2^32 / task_weight
 */
 static u64 __calc_delta(u64 delta_exec, unsigned long weight, struct load_weight *lw)
 {
@@ -4256,6 +4257,7 @@ static void set_next_buddy(struct sched_entity *se);
  * decreased. We remove the task from the rbtree and
  * update the fair scheduling stats:
  */
+ //再nr_running减少之前调用。把整个task从rb tree中移除，并更新公平调度信息。
 static void dequeue_task_fair(struct rq *rq, struct task_struct *p, int flags)
 {
 	struct cfs_rq *cfs_rq;
@@ -4491,6 +4493,7 @@ void update_cpu_load_nohz(void)
  */
 void update_cpu_load_active(struct rq *this_rq)
 {
+	//获取平局负载
 	unsigned long load = weighted_cpuload(cpu_of(this_rq));
 	/*
 	 * See the mess around update_idle_cpu_load() / update_cpu_load_nohz().
@@ -17004,4 +17007,5 @@ __init void init_sched_fair_class(void)
 #endif /* SMP */
 
 }
->>>>>>> ccafd2ea5b3ad10b49328357ce43c96940650f5d
+
+
