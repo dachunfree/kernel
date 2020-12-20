@@ -182,8 +182,8 @@ tsk	.req	x28		// current thread_info
 /*
  * Interrupt handling.
  */
-	.macro	irq_handler
-	adrp	x1, handle_arch_irq
+	.macro	irq_handler   
+	adrp	x1, handle_arch_irq    //set_handle_irq
 	ldr	x1, [x1, #:lo12:handle_arch_irq]
 	mov	x0, sp
 	blr	x1
@@ -194,6 +194,10 @@ tsk	.req	x28		// current thread_info
 /*
  * Exception vectors.
  */
+/*（1）EL1的异常向量表保存在VBAR_EL1寄存器中（Vector Base Address Register (EL1)），
+该寄存器的低11bit是reserve的，11～63表示了Vector Base Address，因此这里的异常向量表是2K对齐的。
+el2在kvm时候开始。
+*/
 
 	.align	11
 ENTRY(vectors)
