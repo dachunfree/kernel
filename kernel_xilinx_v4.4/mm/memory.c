@@ -2660,6 +2660,11 @@ static inline int check_stack_guard_page(struct vm_area_struct *vma, unsigned lo
  * but allow concurrent faults), and pte mapped but not yet locked.
  * We return with mmap_sem still held, but pte unmapped and unlocked.
  */
+ /*
+ 1.malloc
+ 2.mmap
+ 3.扩大栈
+*/
 static int do_anonymous_page(struct mm_struct *mm, struct vm_area_struct *vma,
 		unsigned long address, pte_t *page_table, pmd_t *pmd,
 		unsigned int flags)
@@ -2672,6 +2677,7 @@ static int do_anonymous_page(struct mm_struct *mm, struct vm_area_struct *vma,
 	pte_unmap(page_table);
 
 	/* File mapping without ->vm_ops ? */
+	//如果是共享的匿名映射&&虚拟内存区域没有提供虚拟内存操作集合
 	if (vma->vm_flags & VM_SHARED)
 		return VM_FAULT_SIGBUS;
 
@@ -2680,9 +2686,10 @@ static int do_anonymous_page(struct mm_struct *mm, struct vm_area_struct *vma,
 		return VM_FAULT_SIGSEGV;
 
 	/* Use the zero-page for reads */
+	//如果缺页异常是由读触发的，并且进程允许使用0页，那么把虚拟页映射到第一个0页
 	if (!(flags & FAULT_FLAG_WRITE) && !mm_forbids_zeropage(mm)) {
-		entry = pte_mkspecial(pfn_pte(my_zero_pfn(address),
-						vma->vm_page_prot));
+		//生成特殊的页表项，映射到专用的0页
+		entry = pte_mkspecial(pfn_pte(my_zero_pfn(address),vma->vm_page_prot));
 		page_table = pte_offset_map_lock(mm, pmd, address, &ptl);
 		if (!pte_none(*page_table))
 			goto unlock;
@@ -2696,8 +2703,10 @@ static int do_anonymous_page(struct mm_struct *mm, struct vm_area_struct *vma,
 	}
 
 	/* Allocate our own private page. */
+	//关联一个anon_vma实例到虚拟内存区域
 	if (unlikely(anon_vma_prepare(vma)))
 		goto oom;
+	//分配物理页，优先从高端内存区域分配，并且用0初始化
 	page = alloc_zeroed_user_highpage_movable(vma, address);
 	if (!page)
 		goto oom;
@@ -2710,12 +2719,14 @@ static int do_anonymous_page(struct mm_struct *mm, struct vm_area_struct *vma,
 	 * preceeding stores to the page contents become visible before
 	 * the set_pte_at() write.
 	 */
+	 //设置页描述符的标志位为PG_uptodate，表示物理页中包含有效的数据
 	__SetPageUptodate(page);
-
+	//使用页帧号和访问权限生成页表项
 	entry = mk_pte(page, vma->vm_page_prot);
 	if (vma->vm_flags & VM_WRITE)
+		//设置页表项脏标志位和写权限。
 		entry = pte_mkwrite(pte_mkdirty(entry));
-
+	//在直接页表中查找虚拟地址对应的页表项，并且锁住页表
 	page_table = pte_offset_map_lock(mm, pmd, address, &ptl);
 	if (!pte_none(*page_table))
 		goto release;
@@ -2730,15 +2741,19 @@ static int do_anonymous_page(struct mm_struct *mm, struct vm_area_struct *vma,
 	}
 
 	inc_mm_counter_fast(mm, MM_ANONPAGES);
+	//反向映射
 	page_add_new_anon_rmap(page, vma, address);
 	mem_cgroup_commit_charge(page, memcg, false);
+	//把物理页添加到活动LRU链表或者不可回收LRU链表中，页回收算法需要从LRU链表中选择需要回收物理页
 	lru_cache_add_active_or_unevictable(page, vma);
 setpte:
+	//设置页表项
 	set_pte_at(mm, address, page_table, entry);
-
+	//更新处理器页表缓存
 	/* No need to invalidate - it was non-present before */
 	update_mmu_cache(vma, address, page_table);
 unlock:
+	//释放页表的锁
 	pte_unmap_unlock(page_table, ptl);
 	return 0;
 release:
@@ -3284,36 +3299,52 @@ static int handle_pte_fault(struct mm_struct *mm,
 	 * we later double check anyway with the ptl lock held. So here
 	 * a barrier will do.
 	 */
+	 //entry为pte的内容
 	entry = *pte;
 	barrier();
+	 //检查页是否在内存中。如果不在内存中:
 	if (!pte_present(entry)) {
+		//物理页不存在，PTE页表为空
 		if (pte_none(entry)) {
-			if (vma_is_anonymous(vma))
+			if (vma_is_anonymous(vma)) //如果是私有匿名页
 				return do_anonymous_page(mm, vma, address,
 							 pte, pmd, flags);
 			else
+				//文件映射或者共享匿名页
 				return do_fault(mm, vma, address, pte, pmd,
 						flags, entry);
 		}
+		//如果页不在物理内存中，但是页表存在，说明页被换出到交换区
 		return do_swap_page(mm, vma, address,
 					pte, pmd, flags, entry);
 	}
 
 	if (pte_protnone(entry))
 		return do_numa_page(mm, vma, address, entry, pte, pmd);
-
+	//粗粒度的锁:一个进程一个页表锁;细粒度的锁:每个直接页一个锁
 	ptl = pte_lockptr(mm, pmd);
+	//锁住页面
 	spin_lock(ptl);
+	/*重新读取页表的值，如果和上次没有锁住页表时候读取的值不同，说明其他处理器可能
+	正在修改同一页表项，那么当前处理器只需要等着使用其他处理器设置的页表项，没必要继续
+	处理页错误异常*/
 	if (unlikely(!pte_same(*pte, entry)))
 		goto unlock;
+	//如果页错误异常是由写触发的
 	if (flags & FAULT_FLAG_WRITE) {
+		//如果没有写权限
 		if (!pte_write(entry))
+			//执行 写时候复制
 			return do_wp_page(mm, vma, address,
 					pte, pmd, ptl, entry);
+		//如果页表有写权限，设置脏标志位，表示页的数据被修改
 		entry = pte_mkdirty(entry);
 	}
+	//设置页表的访问标志，表示页刚被访问过
 	entry = pte_mkyoung(entry);
+	//设置页表项
 	if (ptep_set_access_flags(vma, address, pte, entry, flags & FAULT_FLAG_WRITE)) {
+		//如果页表项发生变化，更新处理器内存管理单元的页表缓存
 		update_mmu_cache(vma, address, pte);
 	} else {
 		/*
@@ -3322,6 +3353,10 @@ static int handle_pte_fault(struct mm_struct *mm,
 		 * This still avoids useless tlb flushes for .text page faults
 		 * with threads.
 		 */
+		 /*
+		 如果页表项没有变化，并且页错误处理异常是由写操作触发的，说明页错误可能是TLB和
+		 页表项不一致导致的，使TLB失效
+		*/
 		if (flags & FAULT_FLAG_WRITE)
 			flush_tlb_fix_spurious_fault(vma, address);
 	}
@@ -3346,11 +3381,13 @@ static int __handle_mm_fault(struct mm_struct *mm, struct vm_area_struct *vma,
 
 	if (unlikely(is_vm_hugetlb_page(vma)))
 		return hugetlb_fault(mm, vma, address, flags);
-
+	//在页全局目录中查找虚拟地址对应的页表项。
 	pgd = pgd_offset(mm, address);
+	//在页四级目录中查找虚拟地址对应的表项，如果页4级目录不存在，那么就创建页4级目录。
 	pud = pud_alloc(mm, pgd, address);
 	if (!pud)
 		return VM_FAULT_OOM;
+	//在页上层目录中查找虚拟地址对应的表项，若不存在，先创建
 	pmd = pmd_alloc(mm, pud, address);
 	if (!pmd)
 		return VM_FAULT_OOM;
@@ -3408,6 +3445,7 @@ static int __handle_mm_fault(struct mm_struct *mm, struct vm_area_struct *vma,
 	 * read mode and khugepaged takes it in write mode. So now it's
 	 * safe to run pte_offset_map().
 	 */
+	 //获取va对应的pte的地址
 	pte = pte_offset_map(pmd, address);
 
 	return handle_pte_fault(mm, vma, address, pte, pmd, flags);
@@ -3419,6 +3457,12 @@ static int __handle_mm_fault(struct mm_struct *mm, struct vm_area_struct *vma,
  * The mmap_sem may have been released depending on flags and our
  * return value.  See filemap_fault() and __lock_page_or_retry().
  */
+ /*
+ 1.进程在用户模式下访问用户虚拟地址，生成页错误异常。
+2.进程在内核模式下访问用户虚拟地址，生成页错误异常。进程通过系统调用进入到
+  内核模式，系统调用传入到用户空间的缓冲区，进程在内核模式下访问用户空间缓冲区
+
+*/
 int handle_mm_fault(struct mm_struct *mm, struct vm_area_struct *vma,
 		    unsigned long address, unsigned int flags)
 {
@@ -3474,6 +3518,7 @@ int __pud_alloc(struct mm_struct *mm, pgd_t *pgd, unsigned long address)
 	if (pgd_present(*pgd))		/* Another has populated it */
 		pud_free(mm, new);
 	else
+		//*pgd =  __pa(pud) | PUD_TYPE_TABLE
 		pgd_populate(mm, pgd, new);
 	spin_unlock(&mm->page_table_lock);
 	return 0;

@@ -48,7 +48,7 @@
  * The module space lives between the addresses given by TASK_SIZE
  * and PAGE_OFFSET - it must be within 128MB of the kernel text.
  */
-#define VA_BITS			(CONFIG_ARM64_VA_BITS)
+#define VA_BITS			(CONFIG_ARM64_VA_BITS)  //48bits
 #define VA_START		(UL(0xffffffffffffffff) << VA_BITS)
 #define PAGE_OFFSET		(UL(0xffffffffffffffff) << (VA_BITS - 1))
 #define MODULES_END		(PAGE_OFFSET)

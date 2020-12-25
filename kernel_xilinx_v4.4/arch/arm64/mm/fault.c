@@ -144,9 +144,11 @@ static void do_bad_area(unsigned long addr, unsigned int esr, struct pt_regs *re
 	 * If we are in kernel mode at this point, we have no context to
 	 * handle this fault with.
 	 */
+	 //用户模式生成异常
 	if (user_mode(regs))
 		__do_user_fault(tsk, addr, esr, SIGSEGV, SEGV_MAPERR, regs);
 	else
+	//内核模式生成异常
 		__do_kernel_fault(mm, addr, esr, regs);
 }
 
@@ -159,11 +161,14 @@ static int __do_page_fault(struct mm_struct *mm, unsigned long addr,
 {
 	struct vm_area_struct *vma;
 	int fault;
-
+	//根据触发异常的虚拟地址在进程的虚拟内存区的红黑树中找到一个满足条件的虚拟内存区:
+	//触发异常的虚拟地址小于vma结束地址
 	vma = find_vma(mm, addr);
 	fault = VM_FAULT_BADMAP;
+	//如果没有找到虚拟内存区域，说明内核没有把触发异常的虚拟地址分配给进程，虚拟地址违法
 	if (unlikely(!vma))
 		goto out;
+	//如果找到的虚拟内存区域的起始地址比触发异常的虚拟地址大，那么跳转
 	if (unlikely(vma->vm_start > addr))
 		goto check_stack;
 
@@ -181,10 +186,11 @@ good_area:
 		fault = VM_FAULT_BADACCESS;
 		goto out;
 	}
-
+	//处理用户空间页错误异常
 	return handle_mm_fault(mm, vma, addr & PAGE_MASK, mm_flags);
 
 check_stack:
+	//如果这个区域是栈，那么调用expand_stack，扩大栈的虚拟内存区。如果扩大栈成功，那么检查访问权限。
 	if (vma->vm_flags & VM_GROWSDOWN && !expand_stack(vma, addr))
 		goto good_area;
 out:
@@ -199,10 +205,10 @@ static int __kprobes do_page_fault(unsigned long addr, unsigned int esr,
 	int fault, sig, code;
 	unsigned long vm_flags = VM_READ | VM_WRITE | VM_EXEC;
 	unsigned int mm_flags = FAULT_FLAG_ALLOW_RETRY | FAULT_FLAG_KILLABLE;
-	unsigned long esr_ec = esr >> ESR_ELx_EC_SHIFT;
+	unsigned long esr_ec = esr >> ESR_ELx_EC_SHIFT; //expection class.引起异常的原因
 
 	tsk = current;
-	mm  = tsk->mm;
+	mm  = tsk->mm; //当前进程的用户空间
 
 	/* Enable interrupts if they were enabled in the parent context. */
 	if (interrupts_enabled(regs))
@@ -212,14 +218,20 @@ static int __kprobes do_page_fault(unsigned long addr, unsigned int esr,
 	 * If we're in an interrupt or have no user context, we must not take
 	 * the fault.
 	 */
+	 /*如果禁止执行页错误异常处理程序，或者处于原子上下文，或者当前进程是内存线程。跳转no_context
+		原子上下文:执行硬中断，执行软中断，禁止硬中断，禁止软中断，禁止内核抢占
+	 */
 	if (faulthandler_disabled() || !mm)
 		goto no_context;
-
+	//如果用户模式生成的异常
 	if (user_mode(regs))
 		mm_flags |= FAULT_FLAG_USER;
-
+	//如果用户模式下取指令时生成的页错误异常
 	if (esr_ec == ESR_ELx_EC_IABT_LOW || esr_ec == ESR_ELx_EC_IABT_CUR) {
 		vm_flags = VM_EXEC;
+	//如果是写数据时候生成的页错误异常。
+	//WNR:1表示写，0表示读
+	//CM:cache maintenance,缓存维护。1表示执行缓存维护指令或地址转换指令生成的;0表示中指是其他原因。
 	} else if ((esr & ESR_ELx_WNR) && !(esr & ESR_ELx_CM)) {
 		vm_flags = VM_WRITE;
 		mm_flags |= FAULT_FLAG_WRITE;
@@ -237,10 +249,13 @@ static int __kprobes do_page_fault(unsigned long addr, unsigned int esr,
 	 * validly references user space from well defined areas of the code,
 	 * we can bug out early if this is from code which shouldn't.
 	 */
+	 //尝试以读模式申请内存描述符的读写信号量mmap_sem
 	if (!down_read_trylock(&mm->mmap_sem)) {
+		//如果是内核模式下生成的异常，并根据触发异常的指令的虚拟地址在异常表中没有找到表项。
 		if (!user_mode(regs) && !search_exception_tables(regs->pc))
 			goto no_context;
 retry:
+		//以读模式申请内存描述符的读写信号量mmap_sem，可能挂起等待
 		down_read(&mm->mmap_sem);
 	} else {
 		/*
@@ -253,7 +268,7 @@ retry:
 			goto no_context;
 #endif
 	}
-
+	//处理页错误异常
 	fault = __do_page_fault(mm, addr, mm_flags, vm_flags, tsk);
 
 	/*
@@ -271,7 +286,10 @@ retry:
 	 */
 
 	perf_sw_event(PERF_COUNT_SW_PAGE_FAULTS, 1, regs, addr);
+	//如果允许重新尝试处理页错误处理异常。
 	if (mm_flags & FAULT_FLAG_ALLOW_RETRY) {
+		//表示主要页错误，即页错误异常处理程序需要从存储设备读文件，那么把进程描述符的主要
+		//页错误技术maj_flt加1;否则表示次要错误，即不需要从存储设备读文件
 		if (fault & VM_FAULT_MAJOR) {
 			tsk->maj_flt++;
 			perf_sw_event(PERF_COUNT_SW_PAGE_FAULTS_MAJ, 1, regs,
@@ -281,6 +299,7 @@ retry:
 			perf_sw_event(PERF_COUNT_SW_PAGE_FAULTS_MIN, 1, regs,
 				      addr);
 		}
+		//表示页错误异常处理程序被阻塞，必须重试。
 		if (fault & VM_FAULT_RETRY) {
 			/*
 			 * Clear FAULT_FLAG_ALLOW_RETRY to avoid any risk of
@@ -297,6 +316,7 @@ retry:
 	/*
 	 * Handle the "normal" case first - VM_FAULT_MAJOR / VM_FAULT_MINOR
 	 */
+	 //如果成功处理页错误异常，那么返回
 	if (likely(!(fault & (VM_FAULT_ERROR | VM_FAULT_BADMAP |
 			      VM_FAULT_BADACCESS))))
 		return 0;
@@ -305,9 +325,10 @@ retry:
 	 * If we are in kernel mode at this point, we have no context to
 	 * handle this fault with.
 	 */
+	 //内核模式生成的异常
 	if (!user_mode(regs))
 		goto no_context;
-
+	//如果内存耗尽，页错误异常处理程序申请内存失败，那么使用内存耗尽杀手选择进程杀死
 	if (fault & VM_FAULT_OOM) {
 		/*
 		 * We ran out of memory, call the OOM killer, and return to
@@ -317,7 +338,7 @@ retry:
 		pagefault_out_of_memory();
 		return 0;
 	}
-
+	//如果是用户模式下生成的异常，发送总线地址错误信号SIGBUS
 	if (fault & VM_FAULT_SIGBUS) {
 		/*
 		 * We had some memory, but were unable to successfully fix up
@@ -337,7 +358,7 @@ retry:
 
 	__do_user_fault(tsk, addr, esr, sig, code, regs);
 	return 0;
-
+//处理内核模式生成的也错误异常。
 no_context:
 	__do_kernel_fault(mm, addr, esr, regs);
 	return 0;
@@ -350,7 +371,7 @@ no_context:
  * entry for the address.
  *
  * If the address is in kernel space (>= TASK_SIZE), then we are probably
- * faulting in the vmalloc() area.
+ * faulting in the vmalloc() area. 内核区域
  *
  * If the init_task's first level page tables contains the relevant entry, we
  * copy the it to this task.  If not, we send the process a signal, fixup the
@@ -364,9 +385,10 @@ static int __kprobes do_translation_fault(unsigned long addr,
 					  unsigned int esr,
 					  struct pt_regs *regs)
 {
-	if (addr < TASK_SIZE)
+	//如果触发异常的虚拟地址是用户虚拟空间
+	if (addr < TASK_SIZE)    // 1<<48bit
 		return do_page_fault(addr, esr, regs);
-
+	//如果触发异常是内核地址或者不规范地址
 	do_bad_area(addr, esr, regs);
 	return 0;
 }
@@ -378,7 +400,12 @@ static int do_bad(unsigned long addr, unsigned int esr, struct pt_regs *regs)
 {
 	return 1;
 }
-
+/*
+1. el0,el1,el2转换表中匹配项是无效描述符，调用 do_translation_fault。
+2. el1,el2,el3转换表中匹配表项是块描述符或页描述符，但是没有设置访问标志，do_page_fault处理。
+	页回收算法需要根据页表的访问标志来判断是不是刚刚访问过。
+3. 权限错误do_page_fault。
+*/
 static struct fault_info {
 	int	(*fn)(unsigned long addr, unsigned int esr, struct pt_regs *regs);
 	int	sig;
@@ -460,13 +487,14 @@ static const char *fault_name(unsigned int esr)
 /*
  * Dispatch a data abort to the relevant handler.
  */
+  //x0:far_el1; x1:esr_el1; x2:sp。保存被打断的进程的寄存器集合 // struct pt_regs
 asmlinkage void __exception do_mem_abort(unsigned long addr, unsigned int esr,
 					 struct pt_regs *regs)
 {
-	const struct fault_info *inf = fault_info + (esr & 63);
+	const struct fault_info *inf = fault_info + (esr & 63); //根据 esr_el1中的0-5位调用fault_info中处理函数
 	struct siginfo info;
 
-	if (!inf->fn(addr, esr, regs))
+	if (!inf->fn(addr, esr, regs)) //do_translation_fault等等
 		return;
 
 	pr_alert("Unhandled fault: %s (0x%08x) at 0x%016lx\n",

@@ -2040,12 +2040,13 @@ struct vm_area_struct *find_vma(struct mm_struct *mm, unsigned long addr)
 	struct vm_area_struct *vma;
 
 	/* Check the cache first. */
+	//首先查看最近访问过的。cache保留
 	vma = vmacache_find(mm, addr);
 	if (likely(vma))
 		return vma;
 
 	rb_node = mm->mm_rb.rb_node;
-
+	//rb tree找到合适的地址
 	while (rb_node) {
 		struct vm_area_struct *tmp;
 
@@ -2061,6 +2062,7 @@ struct vm_area_struct *find_vma(struct mm_struct *mm, unsigned long addr)
 	}
 
 	if (vma)
+		//更新vma cache。保留最近访问的
 		vmacache_update(addr, vma);
 	return vma;
 }
@@ -2868,6 +2870,7 @@ void exit_mmap(struct mm_struct *mm)
  * and into the inode's i_mmap tree.  If vm_file is non-NULL
  * then i_mmap_rwsem is taken here.
  */
+ //向VMA链表和红黑树插入一个新的VMA
 int insert_vm_struct(struct mm_struct *mm, struct vm_area_struct *vma)
 {
 	struct vm_area_struct *prev;

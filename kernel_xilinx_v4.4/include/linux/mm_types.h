@@ -329,7 +329,7 @@ struct vm_area_struct {
 	/* linked list of VM areas per task, sorted by address */
 	struct vm_area_struct *vm_next, *vm_prev;
 
-	struct rb_node vm_rb;
+	struct rb_node vm_rb; //作为一个结点插入红黑树
 
 	/*
 	 * Largest free memory gap in bytes to the left of this VMA.
@@ -342,7 +342,7 @@ struct vm_area_struct {
 	/* Second cache line starts here. */
 
 	struct mm_struct *vm_mm;	/* The address space we belong to. */
-	pgprot_t vm_page_prot;		/* Access permissions of this VMA. */
+	pgprot_t vm_page_prot;		/* Access permissions of this VMA. vma访问权限*/
 	unsigned long vm_flags;		/* Flags, see mm.h. */
 
 	/*
@@ -360,7 +360,7 @@ struct vm_area_struct {
 	 * can only be in the i_mmap tree.  An anonymous MAP_PRIVATE, stack
 	 * or brk vma (with NULL file) can only be in an anon_vma list.
 	 */
-	struct list_head anon_vma_chain; /* Serialized by mmap_sem &
+	struct list_head anon_vma_chain; /* Serialized by mmap_sem &   反向映射相关
 					  * page_table_lock */
 	struct anon_vma *anon_vma;	/* Serialized by page_table_lock */
 
@@ -368,9 +368,9 @@ struct vm_area_struct {
 	const struct vm_operations_struct *vm_ops;
 
 	/* Information about our backing store: */
-	unsigned long vm_pgoff;		/* Offset (within vm_file) in PAGE_SIZE
+	unsigned long vm_pgoff;		/* Offset (within vm_file) in PAGE_SIZE  文件偏移
 					   units, *not* PAGE_CACHE_SIZE */
-	struct file * vm_file;		/* File we map to (can be NULL). */
+	struct file * vm_file;		/* File we map to (can be NULL).指向file的实例 ，描述被映射*/
 	void * vm_private_data;		/* was vm_pte (shared mem) */
 
 #ifndef CONFIG_MMU
@@ -416,8 +416,8 @@ struct mm_rss_stat {
 struct kioctx_table;
 struct mm_struct {
 	//虚拟内存区链表
-	struct vm_area_struct *mmap;		/* list of VMAs */
-	struct rb_root mm_rb;
+	struct vm_area_struct *mmap;		/* list of VMAs形成一个单链表，进程中vma都在这链表中 */
+	struct rb_root mm_rb;				//每个进程有一个vma红黑树
 	u32 vmacache_seqnum;                   /* per-thread vmacache */
 #ifdef CONFIG_MMU
 	//在内存区域找到一个没有映射的区域

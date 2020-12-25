@@ -182,7 +182,7 @@ tsk	.req	x28		// current thread_info
 /*
  * Interrupt handling.
  */
-	.macro	irq_handler   
+	.macro	irq_handler
 	adrp	x1, handle_arch_irq    //set_handle_irq
 	ldr	x1, [x1, #:lo12:handle_arch_irq]
 	mov	x0, sp
@@ -201,22 +201,22 @@ el2在kvm时候开始。
 
 	.align	11
 ENTRY(vectors)
-	ventry	el1_sync_invalid		// Synchronous EL1t
-	ventry	el1_irq_invalid			// IRQ EL1t
-	ventry	el1_fiq_invalid			// FIQ EL1t
-	ventry	el1_error_invalid		// Error EL1t
+	ventry	el1_sync_invalid		// Synchronous EL1t  0x000
+	ventry	el1_irq_invalid			// IRQ EL1t          0x080
+	ventry	el1_fiq_invalid			// FIQ EL1t		   0x100
+	ventry	el1_error_invalid		// Error EL1t		   0x180
 
-	ventry	el1_sync			// Synchronous EL1h
-	ventry	el1_irq				// IRQ EL1h
-	ventry	el1_fiq_invalid			// FIQ EL1h
-	ventry	el1_error_invalid		// Error EL1h
+	ventry	el1_sync			// Synchronous EL1h	   0x200
+	ventry	el1_irq				// IRQ EL1h			   0x280
+	ventry	el1_fiq_invalid			// FIQ EL1h		   0x300
+	ventry	el1_error_invalid		// Error EL1h		   0x380
 
-	ventry	el0_sync			// Synchronous 64-bit EL0
-	ventry	el0_irq				// IRQ 64-bit EL0
-	ventry	el0_fiq_invalid			// FIQ 64-bit EL0
-	ventry	el0_error_invalid		// Error 64-bit EL0
+	ventry	el0_sync			// Synchronous 64-bit EL0   0x400
+	ventry	el0_irq				// IRQ 64-bit EL0			 0x480
+	ventry	el0_fiq_invalid			// FIQ 64-bit EL0		 0x500
+	ventry	el0_error_invalid		// Error 64-bit EL0	 0x580
 
-#ifdef CONFIG_COMPAT
+#ifdef CONFIG_COMPAT //32位
 	ventry	el0_sync_compat			// Synchronous 32-bit EL0
 	ventry	el0_irq_compat			// IRQ 32-bit EL0
 	ventry	el0_fiq_invalid_compat		// FIQ 32-bit EL0
@@ -284,14 +284,21 @@ ENDPROC(el1_error_invalid)
 
 /*
  * EL1 mode handlers.
- */
+
+ 异常状态寄存器 esr_el1
+The ESR_ELx fields are:
+EC, bits[31:26]:异常类别，指示异常引起的原因
+IL, bit[25] The Instruction length bit, for synchronous exceptions, that indicates whether a trapped
+			instruction was a 16-bit or a 32-bit instruction.
+ISS, bits[24:0]:指令特定症状(The Instruction specific syndrome field.)。每种异常类别独立定义这个字段
+*/
 	.align	6
 el1_sync:
 	kernel_entry 1
 	mrs	x1, esr_el1			// read the syndrome register
-	lsr	x24, x1, #ESR_ELx_EC_SHIFT	// exception class
-	cmp	x24, #ESR_ELx_EC_DABT_CUR	// data abort in EL1
-	b.eq	el1_da
+	lsr	x24, x1, #ESR_ELx_EC_SHIFT	// exception class.异常类别，指示异常引起的原因
+	cmp	x24, #ESR_ELx_EC_DABT_CUR	// data abort in EL1 .为0x25
+	b.eq	el1_da					 //访问数据时候生成的异常
 	cmp	x24, #ESR_ELx_EC_SYS64		// configurable trap
 	b.eq	el1_undef
 	cmp	x24, #ESR_ELx_EC_SP_ALIGN	// stack alignment exception
@@ -307,6 +314,8 @@ el1_da:
 	/*
 	 * Data abort handling
 	 */
+	 /*官方解释Holds the faulting Virtual Address for all synchronous Instruction or Data Abort, PC alignment fault
+		and Watchpoint exceptions that are taken to EL1.*/
 	mrs	x0, far_el1
 	enable_dbg
 	// re-enable interrupts if they were enabled in the aborted context
@@ -346,7 +355,7 @@ el1_dbg:
 	bl	do_debug_exception
 	kernel_exit 1
 el1_inv:
-	// TODO: add support for undefined instructions in kernel mode
+	//  TODO: add support for undefined instructions in kernel mode
 	enable_dbg
 	mov	x0, sp
 	mov	x2, x1

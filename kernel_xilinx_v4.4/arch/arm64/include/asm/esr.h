@@ -44,11 +44,11 @@
 #define ESR_ELx_EC_SYS64	(0x18)
 /* Unallocated EC: 0x19 - 0x1E */
 #define ESR_ELx_EC_IMP_DEF	(0x1f)
-#define ESR_ELx_EC_IABT_LOW	(0x20)
+#define ESR_ELx_EC_IABT_LOW	(0x20)  //Instruction Aborts (EC 0x20 or 0x21),
 #define ESR_ELx_EC_IABT_CUR	(0x21)
-#define ESR_ELx_EC_PC_ALIGN	(0x22)
+#define ESR_ELx_EC_PC_ALIGN	(0x22)  //PC alignment faults (EC 0x22)
 /* Unallocated EC: 0x23 */
-#define ESR_ELx_EC_DABT_LOW	(0x24)
+#define ESR_ELx_EC_DABT_LOW	(0x24) //Data Aborts (EC 0x24 or 0x25),
 #define ESR_ELx_EC_DABT_CUR	(0x25)
 #define ESR_ELx_EC_SP_ALIGN	(0x26)
 /* Unallocated EC: 0x27 */
@@ -61,7 +61,7 @@
 #define ESR_ELx_EC_BREAKPT_CUR	(0x31)
 #define ESR_ELx_EC_SOFTSTP_LOW	(0x32)
 #define ESR_ELx_EC_SOFTSTP_CUR	(0x33)
-#define ESR_ELx_EC_WATCHPT_LOW	(0x34)
+#define ESR_ELx_EC_WATCHPT_LOW	(0x34) //Watchpoints (EC 0x34 or 0x35).
 #define ESR_ELx_EC_WATCHPT_CUR	(0x35)
 /* Unallocated EC: 0x36 - 0x37 */
 #define ESR_ELx_EC_BKPT32	(0x38)

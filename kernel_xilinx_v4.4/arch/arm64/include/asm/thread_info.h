@@ -82,7 +82,7 @@ thread_info 在 arm32与arm64区别：
 static inline struct thread_info *current_thread_info(void)
 {
 	return (struct thread_info *)
-		(current_stack_pointer & ~(THREAD_SIZE - 1));
+		(current_stack_pointer & ~(THREAD_SIZE - 1)); //current_stack_pointer 为sp(上)
 }
 
 #define thread_saved_pc(tsk)	\
