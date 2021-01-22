@@ -42,16 +42,20 @@ struct mem_cgroup;
  * and lru list pointers also.
  */
 struct page {
-	/* First double word block */
-	/*flags表示page frame的状态或者属性，包括和内存回收相关的PG_active,
-	 PG_dirty, PG_writeback, PG_reserved, PG_locked, PG_highmem等
-	Page flags: | [SECTION] | [NODE] | ZONE | [LAST_CPUPID] | ... | FLAGS | */
+    /* 用于页描述符，一组标志(如PG_locked、PG_error)，同时页框所在的管理区和node的编号也保存在当中 */
+    /* 在lru算法中主要用到的标志
+     * PG_active: 表示此页当前是否活跃，当放到或者准备放到活动lru链表时，被置位
+     * PG_referenced: 表示此页最近是否被访问，每次页面访问都会被置位
+     * PG_lru: 表示此页是处于lru链表中的
+     * PG_mlocked: 表示此页被mlock()锁在内存中，禁止换出和释放
+     * PG_swapbacked: 表示此页依靠swap，可能是进程的匿名页(堆、栈、数据段)，匿名mmap共享内存映射，shmem共享内存映射
+     */
 	unsigned long flags;		/* Atomic flags, some possibly
 					 * updated asynchronously */
 	union {
 	/*
 	 a: 如果mapping = 0，说明该page属于交换缓存（swap cache）；当需要使用地址空间时会指定交换分区的地址空间swapper_space。
-     b: 如果mapping != 0，bit[0] = 0，说明该page属于页缓存或文件映射，mapping指向文件的地址空间address_space。
+     b: 如果mapping != 0，bit[0] = 0，说明该page属于页缓存或文件映射，mapping指向文件的地址空间address_space.file。
      c: 如果mapping != 0，bit[0] != 0，说明该page为匿名映射，mapping指向struct anon_vma对象。
      通过mapping恢复anon_vma的方法：anon_vma = (struct anon_vma *)(mapping - PAGE_MAPPING_ANON)。
 	*/
@@ -123,7 +127,7 @@ struct page {
 					};
 					int units;	/* SLOB */
 				};
-				/*引用计数，表示内核中引用该page的次数，如果要操作该page，引用计数会+1，操作完成-1。当该值为0时，
+				/*引用计数，表示内核中引用该page的次数，如果要操作该page，引用计数会+1，操作完成-1。当该值为0时(放回buddy中)，
 				  表示没有引用该page的位置，所以该page可以被解除映射，这往往在内存回收时是有用的*/
 				atomic_t _count;		/* Usage count, see below. */
 			};
@@ -360,7 +364,7 @@ struct vm_area_struct {
 	 * can only be in the i_mmap tree.  An anonymous MAP_PRIVATE, stack
 	 * or brk vma (with NULL file) can only be in an anon_vma list.
 	 */
-	struct list_head anon_vma_chain; /* Serialized by mmap_sem &   反向映射相关
+	struct list_head anon_vma_chain; /* Serialized by mmap_sem & 反向映射相关.把所有的anon_vma实例放在一条链表中
 					  * page_table_lock */
 	struct anon_vma *anon_vma;	/* Serialized by page_table_lock */
 

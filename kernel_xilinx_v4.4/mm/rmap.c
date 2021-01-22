@@ -168,7 +168,7 @@ static void anon_vma_chain_link(struct vm_area_struct *vma,
  */
 int anon_vma_prepare(struct vm_area_struct *vma)
 {
-	struct anon_vma *anon_vma = vma->anon_vma;
+	struct anon_vma *anon_vma = vma->anon_vma; //vma->anon_vma指向struct anon_vma数据结构
 	struct anon_vma_chain *avc;
 
 	might_sleep();
@@ -176,14 +176,14 @@ int anon_vma_prepare(struct vm_area_struct *vma)
 		struct mm_struct *mm = vma->vm_mm;
 		struct anon_vma *allocated;
 
-		avc = anon_vma_chain_alloc(GFP_KERNEL);
+		avc = anon_vma_chain_alloc(GFP_KERNEL); //分配一个struct anon_vma_chain结构
 		if (!avc)
 			goto out_enomem;
 
-		anon_vma = find_mergeable_anon_vma(vma);
+		anon_vma = find_mergeable_anon_vma(vma); //是否可以和前后vma合并
 		allocated = NULL;
 		if (!anon_vma) {
-			anon_vma = anon_vma_alloc();
+			anon_vma = anon_vma_alloc(); //如果无法合并，则重新分配一个结构体
 			if (unlikely(!anon_vma))
 				goto out_enomem_free_avc;
 			allocated = anon_vma;
@@ -193,8 +193,8 @@ int anon_vma_prepare(struct vm_area_struct *vma)
 		/* page_table_lock to protect against threads */
 		spin_lock(&mm->page_table_lock);
 		if (likely(!vma->anon_vma)) {
-			vma->anon_vma = anon_vma;
-			anon_vma_chain_link(vma, avc, anon_vma);
+			vma->anon_vma = anon_vma; //建立struct vm_area_struct和struct anon_vma关联
+			anon_vma_chain_link(vma, avc, anon_vma); //建立struct anon_vma_chain和其他结构体的关系。
 			/* vma reference or self-parent link for new root */
 			anon_vma->degree++;
 			allocated = NULL;
@@ -1079,7 +1079,7 @@ void page_move_anon_rmap(struct page *page,
 static void __page_set_anon_rmap(struct page *page,
 	struct vm_area_struct *vma, unsigned long address, int exclusive)
 {
-	struct anon_vma *anon_vma = vma->anon_vma;
+	struct anon_vma *anon_vma = vma->anon_vma; //vma->anon_vma指向struct anon_vma数据结构。
 
 	BUG_ON(!anon_vma);
 
@@ -1095,7 +1095,7 @@ static void __page_set_anon_rmap(struct page *page,
 		anon_vma = anon_vma->root;
 
 	anon_vma = (void *) anon_vma + PAGE_MAPPING_ANON;
-	page->mapping = (struct address_space *) anon_vma;
+	page->mapping = (struct address_space *) anon_vma; //建立反向映射
 	page->index = linear_page_index(vma, address);
 }
 
@@ -1190,13 +1190,13 @@ void page_add_new_anon_rmap(struct page *page,
 	struct vm_area_struct *vma, unsigned long address)
 {
 	VM_BUG_ON_VMA(address < vma->vm_start || address >= vma->vm_end, vma);
-	SetPageSwapBacked(page);
-	atomic_set(&page->_mapcount, 0); /* increment count (starts at -1) */
+	SetPageSwapBacked(page); //设置PG_SwapBacked表示这个页面可以swap到磁盘
+	atomic_set(&page->_mapcount, 0); /* increment count (starts at -1) 设置_mapcount引用计数为0*/
 	if (PageTransHuge(page))
 		__inc_zone_page_state(page, NR_ANON_TRANSPARENT_HUGEPAGES);
 	__mod_zone_page_state(page_zone(page), NR_ANON_PAGES,
 			hpage_nr_pages(page));
-	__page_set_anon_rmap(page, vma, address, 1);
+	__page_set_anon_rmap(page, vma, address, 1); //设置这个页面位匿名映射
 }
 
 /**
@@ -1464,18 +1464,18 @@ static int page_not_mapped(struct page *page)
  * page, used in the pageout path.  Caller must hold the page lock.
  * Return values are:
  *
- * SWAP_SUCCESS	- we succeeded in removing all mappings
- * SWAP_AGAIN	- we missed a mapping, try again later
- * SWAP_FAIL	- the page is unswappable
- * SWAP_MLOCK	- page is mlocked.
+ * SWAP_SUCCESS	- we succeeded in removing all mappings 成功解除了所有映射的PTE。
+ * SWAP_AGAIN	- we missed a mapping, try again later可能错过了一个映射的PTE，需要重来一次
+ * SWAP_FAIL	- the page is unswappable失败
+ * SWAP_MLOCK	- page is mlocked. 页面被锁住了
  */
 int try_to_unmap(struct page *page, enum ttu_flags flags)
 {
 	int ret;
 	struct rmap_walk_control rwc = {
-		.rmap_one = try_to_unmap_one,
+		.rmap_one = try_to_unmap_one, //具体断开某个VMA上映射的pte
 		.arg = (void *)flags,
-		.done = page_not_mapped,
+		.done = page_not_mapped, //判断一个页面是否断开成功的条件
 		.anon_lock = page_lock_anon_vma_read,
 	};
 
@@ -1491,7 +1491,7 @@ int try_to_unmap(struct page *page, enum ttu_flags flags)
 	 */
 	if ((flags & TTU_MIGRATION) && !PageKsm(page) && PageAnon(page))
 		rwc.invalid_vma = invalid_migration_vma;
-
+	//三种页面，匿名页，文件页，KSM页
 	ret = rmap_walk(page, &rwc);
 
 	if (ret != SWAP_MLOCK && !page_mapped(page))
@@ -1583,11 +1583,12 @@ static int rmap_walk_anon(struct page *page, struct rmap_walk_control *rwc)
 	struct anon_vma_chain *avc;
 	int ret = SWAP_AGAIN;
 
-	anon_vma = rmap_walk_anon_lock(page, rwc);
+	anon_vma = rmap_walk_anon_lock(page, rwc); //获取页面page->mapping指向的anon_vma数据结构，并申请一个读者锁。
 	if (!anon_vma)
 		return ret;
 
 	pgoff = page_to_pgoff(page);
+	//遍历anon_vma->rb_root红黑树中的AVC，从AVC得到相应的VMA
 	anon_vma_interval_tree_foreach(avc, &anon_vma->rb_root, pgoff, pgoff) {
 		struct vm_area_struct *vma = avc->vma;
 		unsigned long address = vma_address(page, vma);
@@ -1597,7 +1598,7 @@ static int rmap_walk_anon(struct page *page, struct rmap_walk_control *rwc)
 		if (rwc->invalid_vma && rwc->invalid_vma(vma, rwc->arg))
 			continue;
 		//remove_migration_pte
-		ret = rwc->rmap_one(page, vma, address, rwc->arg);
+		ret = rwc->rmap_one(page, vma, address, rwc->arg); //实际的断开用户PTE页表项操作try_to_unmap_one
 		if (ret != SWAP_AGAIN)
 			break;
 		if (rwc->done && rwc->done(page))

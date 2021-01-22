@@ -542,6 +542,7 @@ __clear_user(void __user *addr, unsigned long n)
 
 static inline unsigned long __must_check copy_from_user(void *to, const void __user *from, unsigned long n)
 {
+	//(u65)addr + (u65)size <= current->addr_limit.进行地址的检测
 	if (access_ok(VERIFY_READ, from, n))
 		n = __copy_from_user(to, from, n);
 	else /* security hole - plug it */

@@ -41,9 +41,13 @@
 
 /* How many pages do we try to swap or page in/out together? */
 int page_cluster;
-
+/* 这部分的lru缓存是用于那些原来不属于lru链表的，新加入进来的页 */
 static DEFINE_PER_CPU(struct pagevec, lru_add_pvec);
+/* 在这个lru_rotate_pvecs中的页都是非活动页并且在非活动lru链表中，将这些页移动到非活动lru链表的末尾 */
 static DEFINE_PER_CPU(struct pagevec, lru_rotate_pvecs);
+/* 在这个lru缓存的页原本应属于活动lru链表中的页，会强制清除PG_activate和PG_referenced，并加入到非活动lru链表的链表表头中
+ * 这些页一般从活动lru链表中的尾部拿出来的
+ */
 static DEFINE_PER_CPU(struct pagevec, lru_deactivate_file_pvecs);
 
 /*
@@ -427,29 +431,37 @@ static void pagevec_lru_move_fn(struct pagevec *pvec,
 	for (i = 0; i < pagevec_count(pvec); i++) {
 		struct page *page = pvec->pages[i];
 		struct zone *pagezone = page_zone(page);
-
+		/* 由于不同页可能加入到的zone不同，这样就是判断是否是同一个zone，是的话就不需要上锁了
+         * 不是的话要先把之前上锁的zone解锁，再对此zone的lru_lock上锁*/
 		if (pagezone != zone) {
+			/* 对之前的zone进行解锁，如果是第一次循环则不需要 */
 			if (zone)
 				spin_unlock_irqrestore(&zone->lru_lock, flags);
 			zone = pagezone;
+			/* 这里会上锁，因为当前zone没有上锁，后面加入lru的时候就不需要上锁 */
 			spin_lock_irqsave(&zone->lru_lock, flags);
 		}
-
+		/* 获取zone的lru链表 */
 		lruvec = mem_cgroup_page_lruvec(page, zone);
 		(*move_fn)(page, lruvec, arg);
 	}
+	/* 遍历结束，对zone解锁 */
 	if (zone)
 		spin_unlock_irqrestore(&zone->lru_lock, flags);
+	/* 对pagevec中所有页的page->_count-- */
 	release_pages(pvec->pages, pvec->nr, pvec->cold);
 	pagevec_reinit(pvec);
 }
-
+/* 将lru缓存pvec中的页移动到非活动lru链表尾部操作的回调函数
+ * 这些页原本就属于非活动lru链表
+ */
 static void pagevec_move_tail_fn(struct page *page, struct lruvec *lruvec,
 				 void *arg)
 {
 	int *pgmoved = arg;
-
+	/* 页属于非活动页 */
 	if (PageLRU(page) && !PageActive(page) && !PageUnevictable(page)) {
+		/* 获取页应该放入匿名页lru链表还是文件页lru链表，通过页的PG_swapbacked标志判断 */
 		enum lru_list lru = page_lru_base_type(page);
 		list_move_tail(&page->lru, &lruvec->lists[lru]);
 		(*pgmoved)++;
@@ -473,13 +485,21 @@ static void pagevec_move_tail(struct pagevec *pvec)
  * reclaim.  If it still appears to be reclaimable, move it to the tail of the
  * inactive list.
  */
+ //将处于非活动链表中的页移动到非活动链表尾部
+
+/* 将处于非活动lru链表中的页移动到非活动lru链表尾部
+ * 如果页是处于非活动匿名页lru链表，那么就加入到非活动匿名页lru链表尾部
+ * 如果页是处于非活动文件页lru链表，那么就加入到非活动文件页lru链表尾部
+ */
 void rotate_reclaimable_page(struct page *page)
 {
-	if (!PageLocked(page) && !PageDirty(page) && !PageActive(page) &&
+	if (!PageLocked(page) && !PageDirty(page) && !PageActive(page)/*非活动页*/ &&
 	    !PageUnevictable(page) && PageLRU(page)) {
 		struct pagevec *pvec;
 		unsigned long flags;
-
+		 /* page->_count++，因为这里会加入到lru_rotate_pvecs这个lru缓存中
+         * lru缓存中的页移动到lru时，会对移动的页page->_count--
+         */
 		page_cache_get(page);
 		local_irq_save(flags);
 		pvec = this_cpu_ptr(&lru_rotate_pvecs);
@@ -498,26 +518,35 @@ static void update_page_reclaim_stat(struct lruvec *lruvec,
 	if (rotated)
 		reclaim_stat->recent_rotated[file]++;
 }
-
+/* 设置页为活动页，并加入到对应的活动页lru链表中 */
 static void __activate_page(struct page *page, struct lruvec *lruvec,
 			    void *arg)
 {
 	if (PageLRU(page) && !PageActive(page) && !PageUnevictable(page)) {
+		/* 是否为文件页 */
 		int file = page_is_file_cache(page);
+		/* 获取lru类型 */
 		int lru = page_lru_base_type(page);
-
+		 /* 将此页从lru链表中移除 */
 		del_page_from_lru_list(page, lruvec, lru);
+		 /* 设置page的PG_active标志，此标志说明此页在活动页的lru链表中 */
 		SetPageActive(page);
+		/* 获取类型，lru在这里一般是lru_inactive_file或者lru_inactive_anon
+         * 加上LRU_ACTIVE就变成了lru_active_file或者lru_active_anon
+         */
 		lru += LRU_ACTIVE;
+		/* 将此页加入到活动页lru链表头 */
 		add_page_to_lru_list(page, lruvec, lru);
 		trace_mm_lru_activate(page);
 
 		__count_vm_event(PGACTIVATE);
+		 /* 更新lruvec中zone_reclaim_stat->recent_scanned[file]++和zone_reclaim_stat->recent_rotated[file]++ */
 		update_page_reclaim_stat(lruvec, file, 1);
 	}
 }
 
 #ifdef CONFIG_SMP
+//当一个非活动lru链表的页被转移到活动lru链表中时，就会加入到cpu的activate_page_pvecs缓存。
 static DEFINE_PER_CPU(struct pagevec, activate_page_pvecs);
 
 static void activate_page_drain(int cpu)
@@ -532,7 +561,7 @@ static bool need_activate_page_drain(int cpu)
 {
 	return pagevec_count(&per_cpu(activate_page_pvecs, cpu)) != 0;
 }
-
+//将非活动lru链表的页加入到活动lru链表
 void activate_page(struct page *page)
 {
 	if (PageLRU(page) && !PageActive(page) && !PageUnevictable(page)) {
@@ -631,14 +660,17 @@ void mark_page_accessed(struct page *page)
 }
 EXPORT_SYMBOL(mark_page_accessed);
 
+/* 加入到lru_add_pvec缓存中 */
 static void __lru_cache_add(struct page *page)
 {
 	struct pagevec *pvec = &get_cpu_var(lru_add_pvec);
 
 	page_cache_get(page);
-	//页向量是否还用空间。
+	/* 检查LRU缓存是否已满，如果满则将此lru缓存中的页放到lru链表中 */
 	if (!pagevec_space(pvec))
 		__pagevec_lru_add(pvec);
+	/* 将page加入到此cpu的lru缓存中，注意，加入pagevec实际上只是将pagevec中的pages数组
+	 中的某个指针指向此页，如果此页原本属于lru链表，那么现在实际还是在原来的lru链表中 */
 	pagevec_add(pvec, page);
 	put_cpu_var(lru_add_pvec);
 }
@@ -1037,14 +1069,28 @@ void lru_add_page_tail(struct page *page, struct page *page_tail,
 static void __pagevec_lru_add_fn(struct page *page, struct lruvec *lruvec,
 				 void *arg)
 {
+	 /* 判断此页是否是page cache页(映射文件的页) */
 	int file = page_is_file_cache(page);
+	 /* 是否是活跃的页
+     * 主要判断page的PG_active标志
+     * 如果此标志置位了，则将此页加入到活动lru链表中
+     * 如果没置位，则加入到非活动lru链表中
+     */
 	int active = PageActive(page);
+	  /* 获取page所在的lru链表，里面会检测是映射页还是文件页，并且检查PG_active，最后能得出该page应该放到哪个lru链表中
+     * 里面就可以判断出此页需要加入到哪个lru链表中
+     * 如果PG_active置位，则加入到活动lru链表，否则加入到非活动lru链表
+     * 如果PG_swapbacked置位，则加入到匿名页lru链表，否则加入到文件页lru链表
+     * 如果PG_unevictable置位，则加入到LRU_UNEVICTABLE链表中
+     */
 	enum lru_list lru = page_lru(page);
 
 	VM_BUG_ON_PAGE(PageLRU(page), page);
 
 	SetPageLRU(page);
+	/* 将page加入到lru中 */
 	add_page_to_lru_list(page, lruvec, lru);
+	/* 更新lruvec中的reclaim_stat */
 	update_page_reclaim_stat(lruvec, file, active);
 	trace_mm_lru_insertion(page, lru);
 }

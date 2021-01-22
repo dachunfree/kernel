@@ -91,20 +91,26 @@ static void __do_kernel_fault(struct mm_struct *mm, unsigned long addr,
 	/*
 	 * Are we prepared to handle this kernel fault?
 	 */
+	 //根据指令地址在异常表中查找，然后把保存在内核栈中的异常链接寄存器得值修改为异常修正程序虚拟地址
 	if (fixup_exception(regs))
 		return;
 
 	/*
 	 * No handler, we'll have to terminate things with extreme prejudice.
 	 */
+	 //清除任何可能组值在终端打印信息的自旋锁
 	bust_spinlocks(1);
+	//触发打印页错误异常的原因
 	pr_alert("Unable to handle kernel %s at virtual address %08lx\n",
 		 (addr < PAGE_SIZE) ? "NULL pointer dereference" :
 		 "paging request", addr);
-
+	//打印页表信息
 	show_pte(mm, addr);
+	//调用函数die打印寄存器信息
 	die("Oops", regs, esr);
+	//停止清除任何可能组织打印信息的自旋锁
 	bust_spinlocks(0);
+	//终止当前进程
 	do_exit(SIGKILL);
 }
 
@@ -218,8 +224,9 @@ static int __kprobes do_page_fault(unsigned long addr, unsigned int esr,
 	 * If we're in an interrupt or have no user context, we must not take
 	 * the fault.
 	 */
-	 /*如果禁止执行页错误异常处理程序，或者处于原子上下文，或者当前进程是内存线程。跳转no_context
+	 /*如果禁止执行页错误异常处理程序，或者处于原子上下文，或者当前进程是内核线程。跳转no_context
 		原子上下文:执行硬中断，执行软中断，禁止硬中断，禁止软中断，禁止内核抢占
+		思考:为甚中断上下文要禁止执行页错误异常程序呢?
 	 */
 	if (faulthandler_disabled() || !mm)
 		goto no_context;

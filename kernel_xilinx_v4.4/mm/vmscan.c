@@ -2060,6 +2060,7 @@ static void get_scan_count(struct lruvec *lruvec, int swappiness,
 	 * With swappiness at 100, anonymous and file have the same priority.
 	 * This scanning priority is essentially the inverse of IO cost.
 	 */
+	 //如果swapiness设置为100，匿名页和文件页降用同样的优先级进行回收
 	anon_prio = swappiness;
 	file_prio = 200 - anon_prio;
 
@@ -2074,9 +2075,10 @@ static void get_scan_count(struct lruvec *lruvec, int swappiness,
 	 *
 	 * anon in [0], file in [1]
 	 */
-
+	//lru链表中匿名页的数量
 	anon  = get_lru_size(lruvec, LRU_ACTIVE_ANON) +
 		get_lru_size(lruvec, LRU_INACTIVE_ANON);
+	//lru链表文件页的数量
 	file  = get_lru_size(lruvec, LRU_ACTIVE_FILE) +
 		get_lru_size(lruvec, LRU_INACTIVE_FILE);
 
@@ -2190,7 +2192,8 @@ static void shrink_lruvec(struct lruvec *lruvec, int swappiness,
 	unsigned long nr_to_reclaim = sc->nr_to_reclaim;
 	struct blk_plug plug;
 	bool scan_adjusted;
-
+	//计算要扫描多少个不活动的匿名页，活动匿名页，不活动文件页和活动文件页
+	//swappiness:表示回收时候更倾向回收匿名页还是文件页
 	get_scan_count(lruvec, swappiness, sc, nr, lru_pages);
 
 	/* Record the original scan target for proportional adjustments later */
@@ -2402,8 +2405,10 @@ static bool shrink_zone(struct zone *zone, struct scan_control *sc,
 					continue;
 				mem_cgroup_events(memcg, MEMCG_LOW, 1);
 			}
-
+			//zone->lruvec.5种:匿名(活动，不活动)，文件(活动，不活动)链表头;
 			lruvec = mem_cgroup_zone_lruvec(zone, memcg);
+			//用来定义swap的积极程度(百分比)。值越高，越会积极的使用swap
+			//问题:什么时候多回收匿名页?什么时候多回收文件页?
 			swappiness = mem_cgroup_swappiness(memcg);
 			scanned = sc->nr_scanned;
 
@@ -3186,9 +3191,10 @@ static unsigned long balance_pgdat(pg_data_t *pgdat, int order,
 		 * Scan in the highmem->dma direction for the highest
 		 * zone which needs scanning
 		 */
+		 //从高端zone往低端zone查找第一个处于不平衡状态的endzone
 		for (i = pgdat->nr_zones - 1; i >= 0; i--) {
 			struct zone *zone = pgdat->node_zones + i;
-
+			//判断是否还存在物理页
 			if (!populated_zone(zone))
 				continue;
 
@@ -3414,6 +3420,7 @@ static void kswapd_try_to_sleep(pg_data_t *pgdat, int order, int classzone_idx)
  * If there are applications that are active memory-allocators
  * (most normal use), this basically shouldn't matter.
  */
+ //p传参为pg_data_t.看kswapd_run
 static int kswapd(void *p)
 {
 	unsigned long order, new_order;
@@ -3604,6 +3611,16 @@ static int cpu_callback(struct notifier_block *nfb, unsigned long action,
  * This kswapd start function will be called by init and node-hot-add.
  * On node-hot-add, kswapd will moved to proper cpus if cpus are hot-added.
  */
+ /*
+ #define kthread_run(threadfn, data, namefmt, ...)			   \
+({									   \
+	struct task_struct *__k						   \
+		= kthread_create(threadfn, data, namefmt, ## __VA_ARGS__); \
+	if (!IS_ERR(__k))						   \
+		wake_up_process(__k);					   \
+	__k;								   \
+})
+*/
 int kswapd_run(int nid)
 {
 	pg_data_t *pgdat = NODE_DATA(nid);

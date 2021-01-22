@@ -401,6 +401,7 @@ static inline int gfp_zonelist(gfp_t flags)
  */
 static inline struct zonelist *node_zonelist(int nid, gfp_t flags)
 {
+	//contig_page_data->node_zonelists
 	return NODE_DATA(nid)->node_zonelists + gfp_zonelist(flags);
 }
 

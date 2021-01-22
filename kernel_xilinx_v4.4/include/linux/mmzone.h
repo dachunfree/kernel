@@ -124,7 +124,7 @@ enum zone_stat_item {
 	NR_FREE_PAGES,
 	NR_ALLOC_BATCH,
 	NR_LRU_BASE,
-	NR_INACTIVE_ANON = NR_LRU_BASE, /* must match order of LRU_[IN]ACTIVE */
+	NR_INACTIVE_ANON = NR_LRU_BASE, /* must match order of LRU_[IN]ACTIVE 记录大小?*/
 	NR_ACTIVE_ANON,		/*  "     "     "   "       "         */
 	NR_INACTIVE_FILE,	/*  "     "     "   "       "         */
 	NR_ACTIVE_FILE,		/*  "     "     "   "       "         */
@@ -181,8 +181,8 @@ enum zone_stat_item {
 #define LRU_FILE 2
 
 enum lru_list {
-	LRU_INACTIVE_ANON = LRU_BASE,
-	LRU_ACTIVE_ANON = LRU_BASE + LRU_ACTIVE,
+	LRU_INACTIVE_ANON = LRU_BASE,			  //PG_active标志为0
+	LRU_ACTIVE_ANON = LRU_BASE + LRU_ACTIVE,  //PG_active标志为1
 	LRU_INACTIVE_FILE = LRU_BASE + LRU_FILE,
 	LRU_ACTIVE_FILE = LRU_BASE + LRU_FILE + LRU_ACTIVE,
 	LRU_UNEVICTABLE,
@@ -516,6 +516,7 @@ enum pageblock_bits;
 	/* Write-intensive fields used by page reclaim */
 
 	/* Fields commonly accessed by the page reclaim scanner */
+	//当需要修改lru链表描述符中任何一个链表时，都需要持有此锁，也就是说，不会有两个不同的lru链表
 	spinlock_t		lru_lock;
 	/*
 	lru链表.enum lru_list
@@ -571,7 +572,7 @@ enum pageblock_bits;
 
 	ZONE_PADDING(_pad3_)
 	/* Zone statistics */
-	atomic_long_t		vm_stat[NR_VM_ZONE_STAT_ITEMS];
+	atomic_long_t		vm_stat[NR_VM_ZONE_STAT_ITEMS]; //里面包含NR_FREE_PAGES等基本信息。
 } ____cacheline_internodealigned_in_smp;
 
 enum zone_flags {

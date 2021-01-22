@@ -2068,15 +2068,17 @@ static int wp_page_copy(struct mm_struct *mm, struct vm_area_struct *vma,
 	const unsigned long mmun_start = address & PAGE_MASK;	/* For mmu_notifiers */
 	const unsigned long mmun_end = mmun_start + PAGE_SIZE;	/* For mmu_notifiers */
 	struct mem_cgroup *memcg;
-
+	//关联一个anon_vma的实例到虚拟内存区域。匿名页的反向映射
 	if (unlikely(anon_vma_prepare(vma)))
 		goto oom;
 
 	if (is_zero_pfn(pte_pfn(orig_pte))) {
+		//如果是0页，那么分配一个物理页，然后用0初始化
 		new_page = alloc_zeroed_user_highpage_movable(vma, address);
 		if (!new_page)
 			goto oom;
 	} else {
+		//如果不是0页，那么分配一个物理页，然后把数据复制到物理页
 		new_page = alloc_page_vma(GFP_HIGHUSER_MOVABLE, vma, address);
 		if (!new_page)
 			goto oom;
@@ -2085,7 +2087,7 @@ static int wp_page_copy(struct mm_struct *mm, struct vm_area_struct *vma,
 
 	if (mem_cgroup_try_charge(new_page, mm, GFP_KERNEL, &memcg))
 		goto oom_free_new;
-
+	//表示物理页含有有效数据
 	__SetPageUptodate(new_page);
 
 	mmu_notifier_invalidate_range_start(mm, mmun_start, mmun_end);
@@ -2093,6 +2095,7 @@ static int wp_page_copy(struct mm_struct *mm, struct vm_area_struct *vma,
 	/*
 	 * Re-check the pte - we dropped the lock
 	 */
+	//锁住页表。锁住以后重新读取页表项，如果页表项和锁住之前的页表项不同，说明其他处理器改了这个页表项，当前处理器放弃
 	page_table = pte_offset_map_lock(mm, pmd, address, &ptl);
 	if (likely(pte_same(*page_table, orig_pte))) {
 		if (old_page) {
@@ -2103,7 +2106,9 @@ static int wp_page_copy(struct mm_struct *mm, struct vm_area_struct *vma,
 		} else {
 			inc_mm_counter_fast(mm, MM_ANONPAGES);
 		}
+		//从缓存中冲刷页
 		flush_cache_page(vma, address, pte_pfn(orig_pte));
+		//使用新的物理页和访问权限生成页表项值
 		entry = mk_pte(new_page, vma->vm_page_prot);
 		entry = maybe_mkwrite(pte_mkdirty(entry), vma);
 		/*
@@ -2112,16 +2117,21 @@ static int wp_page_copy(struct mm_struct *mm, struct vm_area_struct *vma,
 		 * seen in the presence of one thread doing SMC and another
 		 * thread doing COW.
 		 */
+		//把页表项清除，并且冲刷页表缓存
 		ptep_clear_flush_notify(vma, address, page_table);
+		//反向映射
 		page_add_new_anon_rmap(new_page, vma, address);
 		mem_cgroup_commit_charge(new_page, memcg, false);
+		//把物理页添加到活跃的LRU链表或者不可回收LRU链表中，页回收算法需要从LRU链表中选择需要回收的物理页
 		lru_cache_add_active_or_unevictable(new_page, vma);
 		/*
 		 * We call the notify macro here because, when using secondary
 		 * mmu page tables (such as kvm shadow page tables), we want the
 		 * new page to be mapped directly into the secondary page table.
 		 */
+		 //修改页表项
 		set_pte_at_notify(mm, address, page_table, entry);
+		//更新页表缓存
 		update_mmu_cache(vma, address, page_table);
 		if (old_page) {
 			/*
@@ -2161,6 +2171,7 @@ static int wp_page_copy(struct mm_struct *mm, struct vm_area_struct *vma,
 
 	pte_unmap_unlock(page_table, ptl);
 	mmu_notifier_invalidate_range_end(mm, mmun_start, mmun_end);
+	/*如果页表项映射到新的物理页，并且旧的物理页被锁定在内存中，那么把旧的物理页解除锁定*/
 	if (old_page) {
 		/*
 		 * Don't let another task, with possibly unlocked vma,
@@ -2288,7 +2299,7 @@ static int do_wp_page(struct mm_struct *mm, struct vm_area_struct *vma,
 	__releases(ptl)
 {
 	struct page *old_page;
-
+	//从页表中得到页帧号，然后通过页帧号找到对应的页描述符
 	old_page = vm_normal_page(vma, address, orig_pte);
 	if (!old_page) {
 		/*
@@ -2298,11 +2309,12 @@ static int do_wp_page(struct mm_struct *mm, struct vm_area_struct *vma,
 		 * We should not cow pages in a shared writeable mapping.
 		 * Just mark the pages writable and/or call ops->pfn_mkwrite.
 		 */
+		 //如果是共享的可写映射，不需要复制物理页，调用wp_pfn_shared来设置页表的写权限位
 		if ((vma->vm_flags & (VM_WRITE|VM_SHARED)) ==
 				     (VM_WRITE|VM_SHARED))
 			return wp_pfn_shared(mm, vma, address, page_table, ptl,
 					     orig_pte, pmd);
-
+		//如果是私有的可写映射，调用wp_page_copy复制物理页，然后把虚拟页映射到新的物理页
 		pte_unmap_unlock(page_table, ptl);
 		return wp_page_copy(mm, vma, address, page_table, pmd,
 				    orig_pte, old_page);
@@ -2664,6 +2676,13 @@ static inline int check_stack_guard_page(struct vm_area_struct *vma, unsigned lo
  1.malloc
  2.mmap
  3.扩大栈
+
+ 0页:
+ paging_init
+ 	early_alloc(PAGE_SIZE)
+ 那么为什么使用０页呢？一个是它的数据都是被０填充，读的时候数据都是０，二是节约内存，
+ 匿名页面第一次读的时候数据都是０都会映射到这页中从而节约内存(共享０页)，那么如果有进
+ 程要去写这个这个页会怎样呢？答案是发生ＣＯＷ重新分配页来写.
 */
 static int do_anonymous_page(struct mm_struct *mm, struct vm_area_struct *vma,
 		unsigned long address, pte_t *page_table, pmd_t *pmd,
@@ -2688,7 +2707,7 @@ static int do_anonymous_page(struct mm_struct *mm, struct vm_area_struct *vma,
 	/* Use the zero-page for reads */
 	//如果缺页异常是由读触发的，并且进程允许使用0页，那么把虚拟页映射到第一个0页
 	if (!(flags & FAULT_FLAG_WRITE) && !mm_forbids_zeropage(mm)) {
-		//生成特殊的页表项，映射到专用的0页
+		//生成特殊的页表项，映射到专用的0页.只读属性
 		entry = pte_mkspecial(pfn_pte(my_zero_pfn(address),vma->vm_page_prot));
 		page_table = pte_offset_map_lock(mm, pmd, address, &ptl);
 		if (!pte_none(*page_table))
@@ -2701,7 +2720,7 @@ static int do_anonymous_page(struct mm_struct *mm, struct vm_area_struct *vma,
 		}
 		goto setpte;
 	}
-
+/******************************************************************************************/
 	/* Allocate our own private page. */
 	//关联一个anon_vma实例到虚拟内存区域
 	if (unlikely(anon_vma_prepare(vma)))
@@ -2747,7 +2766,7 @@ static int do_anonymous_page(struct mm_struct *mm, struct vm_area_struct *vma,
 	//把物理页添加到活动LRU链表或者不可回收LRU链表中，页回收算法需要从LRU链表中选择需要回收物理页
 	lru_cache_add_active_or_unevictable(page, vma);
 setpte:
-	//设置页表项
+	//设置页表项 *page_table = entry;设置属性(可读?)。
 	set_pte_at(mm, address, page_table, entry);
 	//更新处理器页表缓存
 	/* No need to invalidate - it was non-present before */
@@ -2783,8 +2802,8 @@ static int __do_fault(struct vm_area_struct *vma, unsigned long address,
 	vmf.flags = flags;
 	vmf.page = NULL;
 	vmf.cow_page = cow_page;
-
-	ret = vma->vm_ops->fault(vma, &vmf);
+	//把文件页读到内存中。
+	ret = vma->vm_ops->fault(vma, &vmf); //filemap_fault
 	if (unlikely(ret & (VM_FAULT_ERROR | VM_FAULT_NOPAGE | VM_FAULT_RETRY)))
 		return ret;
 	if (!vmf.page)
@@ -2826,9 +2845,11 @@ void do_set_pte(struct vm_area_struct *vma, unsigned long address,
 		struct page *page, pte_t *pte, bool write, bool anon)
 {
 	pte_t entry;
-
+	//从指令缓存中冲刷页
 	flush_icache_page(vma, page);
+	//从页帧号和访问权限生成页表项的值
 	entry = mk_pte(page, vma->vm_page_prot);
+	//如果是写访问，设置页表项的脏标志位和写权限位
 	if (write)
 		entry = maybe_mkwrite(pte_mkdirty(entry), vma);
 	if (anon) {
@@ -2908,6 +2929,10 @@ late_initcall(fault_around_debugfs);
  * fault_around_pages() value (and therefore to page order).  This way it's
  * easier to guarantee that we don't cross page table boundaries.
  */
+ /*
+ 为了减少页错误异常的次数，如果正在访问的文件页后面几个文件页也被映射到进程的虚拟地址空间，
+ 那么预先读到页缓存中。fault_around_bytes为总长度，默认值为64kb。4kb页就一次性读取16页。
+*/
 static void do_fault_around(struct vm_area_struct *vma, unsigned long address,
 		pte_t *pte, pgoff_t pgoff, unsigned int flags)
 {
@@ -2915,11 +2940,12 @@ static void do_fault_around(struct vm_area_struct *vma, unsigned long address,
 	pgoff_t max_pgoff;
 	struct vm_fault vmf;
 	int off;
-
+	//nr_pages为16页。
 	nr_pages = READ_ONCE(fault_around_bytes) >> PAGE_SHIFT;
 	mask = ~(nr_pages * PAGE_SIZE - 1) & PAGE_MASK;
-
+	//start_addr 为16页对齐的起始地址
 	start_addr = max(address & mask, vma->vm_start);
+	//addr到起始地址的offset
 	off = ((address - start_addr) >> PAGE_SHIFT) & (PTRS_PER_PTE - 1);
 	pte -= off;
 	pgoff -= off;
@@ -2934,6 +2960,7 @@ static void do_fault_around(struct vm_area_struct *vma, unsigned long address,
 			pgoff + nr_pages - 1);
 
 	/* Check if it makes any sense to call ->map_pages */
+	//从start addr到  max_pgoff，检查pte是否为空，为空就去调用map_pages去映射
 	while (!pte_none(*pte)) {
 		if (++pgoff > max_pgoff)
 			return;
@@ -2948,6 +2975,7 @@ static void do_fault_around(struct vm_area_struct *vma, unsigned long address,
 	vmf.pgoff = pgoff;
 	vmf.max_pgoff = max_pgoff;
 	vmf.flags = flags;
+	//可以围绕缺页异常地址周围提前映射更可能多的页面，减少缺页异常的发生。
 	vma->vm_ops->map_pages(vma, &vmf);
 }
 
@@ -2972,11 +3000,11 @@ static int do_read_fault(struct mm_struct *mm, struct vm_area_struct *vma,
 			goto unlock_out;
 		pte_unmap_unlock(pte, ptl);
 	}
-
+	//把文件页读到文件的页缓存中。
 	ret = __do_fault(vma, address, pgoff, flags, NULL, &fault_page);
 	if (unlikely(ret & (VM_FAULT_ERROR | VM_FAULT_NOPAGE | VM_FAULT_RETRY)))
 		return ret;
-
+	//设置页表项，把虚拟页映射到文件的页缓存中的物理页。
 	pte = pte_offset_map_lock(mm, pmd, address, &ptl);
 	if (unlikely(!pte_same(*pte, orig_pte))) {
 		pte_unmap_unlock(pte, ptl);
@@ -3003,7 +3031,7 @@ static int do_cow_fault(struct mm_struct *mm, struct vm_area_struct *vma,
 
 	if (unlikely(anon_vma_prepare(vma)))
 		return VM_FAULT_OOM;
-
+	//因为后面需要执行写时复制，所以预先为副本分配一物理页个
 	new_page = alloc_page_vma(GFP_HIGHUSER_MOVABLE, vma, address);
 	if (!new_page)
 		return VM_FAULT_OOM;
@@ -3012,13 +3040,14 @@ static int do_cow_fault(struct mm_struct *mm, struct vm_area_struct *vma,
 		page_cache_release(new_page);
 		return VM_FAULT_OOM;
 	}
-
+	//把文件页读到文件页的缓存中
 	ret = __do_fault(vma, address, pgoff, flags, new_page, &fault_page);
 	if (unlikely(ret & (VM_FAULT_ERROR | VM_FAULT_NOPAGE | VM_FAULT_RETRY)))
 		goto uncharge_out;
-
+	//把文件页缓存中的物理页的数据复制到副本的物理页
 	if (fault_page)
 		copy_user_highpage(new_page, fault_page, address, vma);
+	//设置副本页描述符的标志位PG_uptodate
 	__SetPageUptodate(new_page);
 
 	pte = pte_offset_map_lock(mm, pmd, address, &ptl);
@@ -3036,6 +3065,7 @@ static int do_cow_fault(struct mm_struct *mm, struct vm_area_struct *vma,
 		}
 		goto uncharge_out;
 	}
+	//设置页表项，把虚拟页映射到副本物理页
 	do_set_pte(vma, address, new_page, pte, true, true);
 	mem_cgroup_commit_charge(new_page, memcg, false);
 	lru_cache_add_active_or_unevictable(new_page, vma);
@@ -3067,7 +3097,7 @@ static int do_shared_fault(struct mm_struct *mm, struct vm_area_struct *vma,
 	pte_t *pte;
 	int dirtied = 0;
 	int ret, tmp;
-
+	//把文件页读到文件的页缓存中
 	ret = __do_fault(vma, address, pgoff, flags, NULL, &fault_page);
 	if (unlikely(ret & (VM_FAULT_ERROR | VM_FAULT_NOPAGE | VM_FAULT_RETRY)))
 		return ret;
@@ -3076,6 +3106,8 @@ static int do_shared_fault(struct mm_struct *mm, struct vm_area_struct *vma,
 	 * Check if the backing address space wants to know that the page is
 	 * about to become writable
 	 */
+	//如果创建内存映射时候的文件所属的文件系统注册了虚拟内存的操作集合中的page_mkwrite方法，
+	//那么调用该方法，通知文件系统的"页即变成可写的"，文件系统判断是否允许写或者等待页进入适当状态
 	if (vma->vm_ops->page_mkwrite) {
 		unlock_page(fault_page);
 		tmp = do_page_mkwrite(vma, fault_page, address);
@@ -3135,14 +3167,18 @@ static int do_fault(struct mm_struct *mm, struct vm_area_struct *vma,
 
 	pte_unmap(page_table);
 	/* The VMA was not fully populated on mmap() or missing VM_DONTEXPAND */
+	//如果虚拟内存区域没有提供处理页错误异常的方法，返回错误号
 	if (!vma->vm_ops->fault)
 		return VM_FAULT_SIGBUS;
+	//读文件页触发的。
 	if (!(flags & FAULT_FLAG_WRITE))
 		return do_read_fault(mm, vma, address, pmd, pgoff, flags,
 				orig_pte);
+	//写私有文件页触发的
 	if (!(vma->vm_flags & VM_SHARED))
 		return do_cow_fault(mm, vma, address, pmd, pgoff, flags,
 				orig_pte);
+	//写共享文件页触发的。
 	return do_shared_fault(mm, vma, address, pmd, pgoff, flags, orig_pte);
 }
 
@@ -3330,7 +3366,7 @@ static int handle_pte_fault(struct mm_struct *mm,
 	处理页错误异常*/
 	if (unlikely(!pte_same(*pte, entry)))
 		goto unlock;
-	//如果页错误异常是由写触发的
+	//如果页错误异常是由写触发的....................................................
 	if (flags & FAULT_FLAG_WRITE) {
 		//如果没有写权限
 		if (!pte_write(entry))

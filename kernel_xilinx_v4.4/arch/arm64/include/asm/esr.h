@@ -44,7 +44,7 @@
 #define ESR_ELx_EC_SYS64	(0x18)
 /* Unallocated EC: 0x19 - 0x1E */
 #define ESR_ELx_EC_IMP_DEF	(0x1f)
-#define ESR_ELx_EC_IABT_LOW	(0x20)  //Instruction Aborts (EC 0x20 or 0x21),
+#define ESR_ELx_EC_IABT_LOW	(0x20)  //Instruction Aborts (EC 0x20 or 0x21),Instruction Abort from a lower Exception level.armv8:2965ҳ
 #define ESR_ELx_EC_IABT_CUR	(0x21)
 #define ESR_ELx_EC_PC_ALIGN	(0x22)  //PC alignment faults (EC 0x22)
 /* Unallocated EC: 0x23 */

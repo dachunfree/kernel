@@ -1931,8 +1931,8 @@ static void do_async_mmap_readahead(struct vm_area_struct *vma,
 int filemap_fault(struct vm_area_struct *vma, struct vm_fault *vmf)
 {
 	int error;
-	struct file *file = vma->vm_file;
-	struct address_space *mapping = file->f_mapping;
+	struct file *file = vma->vm_file; //得到打开的文件实例
+	struct address_space *mapping = file->f_mapping; //得到文件的地址空间mapping
 	struct file_ra_state *ra = &file->f_ra;
 	struct inode *inode = mapping->host;
 	pgoff_t offset = vmf->pgoff;
@@ -2005,6 +2005,7 @@ no_cached_page:
 	 * We're only likely to ever get here if MADV_RANDOM is in
 	 * effect.
 	 */
+	 //把文件页读到内存中
 	error = page_cache_read(file, offset);
 
 	/*

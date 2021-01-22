@@ -228,7 +228,7 @@ extern int __put_user_bad(void) __attribute__((noreturn));
 ({								\
 	const void *__p = (ptr);				\
 	might_fault();						\
-	access_ok(VERIFY_READ, __p, sizeof(*ptr)) ?		\
+	access_ok(VERIFY_READ, __p, sizeof(*ptr)) ?		\    //检查用户虚拟地址+长度是否小于进程虚拟地址空间的上界
 		__get_user((x), (__typeof__(*(ptr)) *)__p) :	\
 		-EFAULT;					\
 })

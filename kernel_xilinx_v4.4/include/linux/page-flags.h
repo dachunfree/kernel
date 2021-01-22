@@ -74,26 +74,26 @@
 enum pageflags {
 	PG_locked,		/* Page is locked. Don't touch. */
 	PG_error,
-	PG_referenced,
-	PG_uptodate,
-	PG_dirty,
-	PG_lru,
-	PG_active,
+	PG_referenced,  //表示页最近被访问(只有文件页使用)
+	PG_uptodate,   //表示物理页包含有效的数据
+	PG_dirty,//页为脏页，文件页被修改，以及非文件页加入到swap cache后，就会被标记为脏页。在此页回写前会被清除，但是回写失败时又会被置位
+	PG_lru,			//表示页在lru链表中
+	PG_active,		//页为活动页，配合PG_lru就可以得出页是处于非活动页lru链表还是活动页lru链表
 	PG_slab,
 	PG_owner_priv_1,	/* Owner use. If pagecache, fs may use*/
 	PG_arch_1,
 	PG_reserved,
-	PG_private,		/* If pagecache, has fs-private data */
+	PG_private,		/* If pagecache, has fs-private data 页描述符中的page->private保存有数据*/
 	PG_private_2,		/* If pagecache, has fs aux data */
-	PG_writeback,		/* Page is under writeback */
+	PG_writeback,		/* Page is under writeback 页正在进行回写*/
 	PG_head,		/* A head page */
-	PG_swapcache,		/* Swap page: swp_entry_t in private */
+	PG_swapcache,		/* Swap page: swp_entry_t in private 页已经加入到了swap cache中(只有非文件页使用)*/
 	PG_mappedtodisk,	/* Has blocks allocated on-disk */
-	PG_reclaim,		/* To be reclaimed asap */
-	PG_swapbacked,		/* Page is backed by RAM/swap */
-	PG_unevictable,		/* Page is "unevictable"  */
+	PG_reclaim,		/* To be reclaimed asap 页正在进行回收，只有在内存回收时才会对需要回收的页进行此标记*/
+	PG_swapbacked,		/* Page is backed by RAM/swap 此页可写入swap分区，一般用于表示此页是非文件页 */
+	PG_unevictable,		/* Page is "unevictable"  不可回收的物理页*/
 #ifdef CONFIG_MMU
-	PG_mlocked,		/* Page is vma mlocked */
+	PG_mlocked,		/* Page is vma mlocked 页被锁在内存中 */
 #endif
 #ifdef CONFIG_ARCH_USES_PG_UNCACHED
 	PG_uncached,		/* Page has been mapped as uncached */

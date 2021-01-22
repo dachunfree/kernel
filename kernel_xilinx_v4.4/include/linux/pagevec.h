@@ -19,8 +19,11 @@ struct address_space;
 到相应的链表上去，而是先被放到一个缓冲区中去，当该缓冲区缓存了足够多的页面之后，缓冲区中的页
 面才会被一次性地全部添加到相应的 LRU链表中去。Linux采用这种方法降低了锁的竞争，极大地提升了系统的性能*/
 struct pagevec {
+	//nr代表的是此lru缓存中保存的页数量，而加入到了lru缓存中的页
 	unsigned long nr;
 	unsigned long cold;
+	//指针数组，每一项都可以指向一个页描述符，默认大小是14.
+	//一个lru缓存的大小为14，也就是一个lru缓存中最多能存放14个即将处理的页。
 	struct page *pages[PAGEVEC_SIZE];
 };
 

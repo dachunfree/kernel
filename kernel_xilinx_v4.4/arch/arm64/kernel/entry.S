@@ -87,7 +87,7 @@
 	stp	x28, x29, [sp, #16 * 14]
 
 	.if	\el == 0
-	mrs	x21, sp_el0
+	mrs	x21, sp_el0             //将sp_el0保存到x21中。sp和sp_el0啥区别呢?
 	get_thread_info tsk			// Ensure MDSCR_EL1.SS is clear,
 	ldr	x19, [tsk, #TI_FLAGS]		// since we can unmask debug
 	disable_step_tsk x19, x20		// exceptions when scheduling.
@@ -399,11 +399,16 @@ el1_preempt:
 
 /*
  * EL0 mode handlers.
+31       26   25                         0
+|________|____|__________________________|
+   EC      IL             ISS
+EC:异常级别；
+ISS:指令特定症状
  */
 	.align	6
 el0_sync:
-	kernel_entry 0
-	mrs	x25, esr_el1			// read the syndrome register
+	kernel_entry 0                //保存现场x0-x29到sp_el0中
+	mrs	x25, esr_el1			// read the syndrome register.异常症状寄存器
 	lsr	x24, x25, #ESR_ELx_EC_SHIFT	// exception class
 	cmp	x24, #ESR_ELx_EC_SVC64		// SVC in 64-bit state
 	b.eq	el0_svc

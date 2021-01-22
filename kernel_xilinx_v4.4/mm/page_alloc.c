@@ -2906,7 +2906,7 @@ __perform_reclaim(gfp_t gfp_mask, unsigned int order,
 	struct reclaim_state reclaim_state;
 	int progress;
 
-	cond_resched();
+	cond_resched(); //主动调度出去?
 
 	/* We now go into synchronous reclaim */
 	cpuset_memory_pressure_bump();
@@ -3221,7 +3221,7 @@ retry:
 		migration_mode = MIGRATE_SYNC_LIGHT;
 
 	/* Try direct reclaim and then allocating */
-	/*inux中页面回收主要是通过两种方式触发的，一种是由“内存严重不足”事件触发的；
+	/*linux中页面回收主要是通过两种方式触发的，一种是由“内存严重不足”事件触发的；
 	一种是由后台进程 kswapd触发的，该进程周期性地运行，一旦检测到内存不足，就会触发页面回收操作*/
 	page = __alloc_pages_direct_reclaim(gfp_mask, order, alloc_flags, ac,
 							&did_some_progress);

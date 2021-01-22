@@ -24,6 +24,7 @@
  * the anon_vma object itself: we're guaranteed no page can be
  * pointing to this anon_vma once its vma list is empty.
  */
+ //用来组织匿名页被映射到的所有虚拟内存区域
 struct anon_vma {
 	struct anon_vma *root;		/* Root of this anon_vma tree */
 	struct rw_semaphore rwsem;	/* W: modification, R: walking the list */
@@ -54,6 +55,7 @@ struct anon_vma {
 	 * is serialized by a system wide lock only visible to
 	 * mm_take_all_locks() (mm_all_locks_mutex).
 	 */
+	 //anon_vma_chain充当中介，关联anon_vma实例和vma_area_struct.中介anon_vma_chain是此rb tree的红黑树节点。
 	struct rb_root rb_root;	/* Interval tree of private "related" vmas */
 };
 
@@ -71,10 +73,10 @@ struct anon_vma {
  * which link all the VMAs associated with this anon_vma.
  */
 struct anon_vma_chain {
-	struct vm_area_struct *vma;
-	struct anon_vma *anon_vma;
-	struct list_head same_vma;   /* locked by mmap_sem & page_table_lock */
-	struct rb_node rb;			/* locked by anon_vma->rwsem */
+	struct vm_area_struct *vma; //获取vm_area_struct实例
+	struct anon_vma *anon_vma;   //指向anon_vma数据结构，可以指向父进程或子进程的anon_vma数据结构
+	struct list_head same_vma;   /* locked by mmap_sem & page_table_lock -链表节点，通常把anon_vma_chain添加到vma->anon_vma_chain链表中。*/
+	struct rb_node rb;			/*anon_vma是树的根节点。此rb是红黑树的节点.locked by anon_vma->rwsem */
 	unsigned long rb_subtree_last;
 #ifdef CONFIG_DEBUG_VM_RB
 	unsigned long cached_vma_start, cached_vma_last;
