@@ -627,8 +627,9 @@ enum tlb_flush_reason {
   * A swap entry has to fit into a "unsigned long", as the entry is hidden
   * in the "index" field of the swapper address space.
   */
+  //存储换出页在交换区中的位置。交换项。
 typedef struct {
-	unsigned long val;
+	unsigned long val;//高7位存储交换区的索引，其他位存储交换区的偏移。(单位是页)
 } swp_entry_t;
 
 #endif /* _LINUX_MM_TYPES_H */

@@ -88,17 +88,18 @@ static inline int current_is_kswapd(void)
 union swap_header {
 	struct {
 		char reserved[PAGE_SIZE - 10];
-		char magic[10];			/* SWAP-SPACE or SWAPSPACE2 */
+		char magic[10];			/* 魔幻数，用来区分交换区格式 SWAP-SPACE or SWAPSPACE2 */
 	} magic;
 	struct {
+		//1024字节空闲，为引导程序预留空间，使交换区可以处在磁盘起始位置
 		char		bootbits[1024];	/* Space for disklabel etc. */
-		__u32		version;
-		__u32		last_page;
-		__u32		nr_badpages;
+		__u32		version; //交换区版本号
+		__u32		last_page; //最后一页的页号
+		__u32		nr_badpages; //坏页的数量
 		unsigned char	sws_uuid[16];
 		unsigned char	sws_volume[16];
 		__u32		padding[117];
-		__u32		badpages[1];
+		__u32		badpages[1];//从成员badpages开始存放坏页的页号
 	} info;
 };
 
@@ -127,9 +128,9 @@ struct zone;
  */
 struct swap_extent {
 	struct list_head list;
-	pgoff_t start_page;
-	pgoff_t nr_pages;
-	sector_t start_block;
+	pgoff_t start_page; //起始槽位的页号
+	pgoff_t nr_pages; //槽位的数量
+	sector_t start_block; //起始磁盘块号
 };
 
 /*
@@ -140,13 +141,13 @@ struct swap_extent {
 	((__swapoffset(magic.magic) - __swapoffset(info.badpages)) / sizeof(int))
 
 enum {
-	SWP_USED	= (1 << 0),	/* is slot in swap_info[] used? */
-	SWP_WRITEOK	= (1 << 1),	/* ok to write to this swap?	*/
+	SWP_USED	= (1 << 0),	/* 表示当前数组处于使用状态 is slot in swap_info[] used? */
+	SWP_WRITEOK	= (1 << 1),	/* 表示交换区可写。禁用交换区后，交换区不可写 ok to write to this swap?	*/
 	SWP_DISCARDABLE = (1 << 2),	/* blkdev support discard */
 	SWP_DISCARDING	= (1 << 3),	/* now discarding a free cluster */
 	SWP_SOLIDSTATE	= (1 << 4),	/* blkdev seeks are cheap */
 	SWP_CONTINUED	= (1 << 5),	/* swap_map has count continuation */
-	SWP_BLKDEV	= (1 << 6),	/* its a block device */
+	SWP_BLKDEV	= (1 << 6),	/* 表示交换区是块设备 its a block device */
 	SWP_FILE	= (1 << 7),	/* set after swap_activate success */
 	SWP_AREA_DISCARD = (1 << 8),	/* single-time swap area discards */
 	SWP_PAGE_DISCARD = (1 << 9),	/* freed swap page-cluster discards */
@@ -205,11 +206,12 @@ struct percpu_cluster {
  */
 struct swap_info_struct {
 	unsigned long	flags;		/* SWP_USED etc: see above */
-	signed short	prio;		/* swap priority of this type */
-	struct plist_node list;		/* entry in swap_active_head */
+	signed short	prio;		/* 优先级 swap priority of this type */
+	struct plist_node list;		/* 用来加入有效交换区链表，优先级从高到底排序，头结点是 swap_active_head.entry in swap_active_head */
 	struct plist_node avail_list;	/* entry in swap_avail_head */
 	signed char	type;		/* strange name for an index */
 	unsigned int	max;		/* extent of the swap_map */
+	//交换映射，指向一个数组。每字节对应交换区的每个槽位。低6bit存储每个槽位使用计数;高2位是标志位
 	unsigned char *swap_map;	/* vmalloc'ed array of usage counts */
 	struct swap_cluster_info *cluster_info; /* cluster info. Only for SSD */
 	struct swap_cluster_info free_cluster_head; /* free cluster list head */
@@ -217,14 +219,14 @@ struct swap_info_struct {
 	unsigned int lowest_bit;	/* index of first free in swap_map */
 	unsigned int highest_bit;	/* index of last free in swap_map */
 	unsigned int pages;		/* total of usable pages of swap */
-	unsigned int inuse_pages;	/* number of those currently in use */
-	unsigned int cluster_next;	/* likely index for next allocation */
-	unsigned int cluster_nr;	/* countdown to next cluster search */
+	unsigned int inuse_pages;	/* 交换区正在使用的页的数量number of those currently in use */
+	unsigned int cluster_next;	/* 当前聚集下一次分配槽位的索引。likely index for next allocation */
+	unsigned int cluster_nr;	/* 当前聚集中可用的槽位数量。countdown to next cluster search */
 	struct percpu_cluster __percpu *percpu_cluster; /* per cpu's swap location */
 	struct swap_extent *curr_swap_extent;
-	struct swap_extent first_swap_extent;
-	struct block_device *bdev;	/* swap device or bdev of swap file */
-	struct file *swap_file;		/* seldom referenced */
+	struct swap_extent first_swap_extent; //存储第一个交换区间信息
+	struct block_device *bdev;	/* 指向块设备。磁盘分区:块设备；文件:文件实例。swap device or bdev of swap file */
+	struct file *swap_file;		/*指向交换区关联文件的打开实例。磁盘分区:块设备文件。文件:文件实例。seldom referenced */
 	unsigned int old_block_size;	/* seldom referenced */
 #ifdef CONFIG_FRONTSWAP
 	unsigned long *frontswap_map;	/* frontswap in-use, one bit per page */
@@ -393,6 +395,7 @@ int generic_swapfile_activate(struct swap_info_struct *, struct file *,
 
 /* linux/mm/swap_state.c */
 extern struct address_space swapper_spaces[];
+//用来获取交换项对应的交换地址空间
 #define swap_address_space(entry) (&swapper_spaces[swp_type(entry)])
 extern unsigned long total_swapcache_pages(void);
 extern void show_swap_cache_info(void);

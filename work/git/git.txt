@@ -1,0 +1,5 @@
+增加换行使用方法:
+git commit -m '
+1. this is the test 
+2. update file
+'

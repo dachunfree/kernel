@@ -133,9 +133,12 @@ static void anon_vma_chain_link(struct vm_area_struct *vma,
 				struct anon_vma_chain *avc,
 				struct anon_vma *anon_vma)
 {
+	//分配一个AVC结构，成员指针指向对应的VMA和VA
 	avc->vma = vma;
 	avc->anon_vma = anon_vma;
+	//将该AVC加入VMA链表
 	list_add(&avc->same_vma, &vma->anon_vma_chain);
+	//将该AVC加入VA红黑树
 	anon_vma_interval_tree_insert(avc, &anon_vma->rb_root);
 }
 
@@ -254,6 +257,7 @@ static inline void unlock_anon_vma_root(struct anon_vma *root)
  * good chance of avoiding scanning the whole hierarchy when it searches where
  * page is mapped.
  */
+ //建立子进程VMA和“父进程们”VA的关系
 int anon_vma_clone(struct vm_area_struct *dst, struct vm_area_struct *src)
 {
 	struct anon_vma_chain *avc, *pavc;

@@ -1,0 +1,9 @@
+#echo nop > /sys/kernel/debug/tracing/current_tracer
+echo 0 > /sys/kernel/debug/tracing/tracing_on
+echo function_graph > /sys/kernel/debug/tracing/current_tracer
+echo iq_read > /sys/kernel/debug/tracing/set_graph_function
+echo dma_alloc_coherent >> /sys/kernel/debug/tracing/set_graph_function  
+echo dma_alloc_attrs >> /sys/kernel/debug/tracing/set_graph_function 
+echo __dma_alloc_from_coherent >> /sys/kernel/debug/tracing/set_graph_function
+
+echo 1 > /sys/kernel/debug/tracing/tracing_on

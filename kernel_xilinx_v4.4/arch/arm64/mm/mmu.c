@@ -494,7 +494,7 @@ void __init paging_init(void)
 	map_mem();
 	fixup_executable();
 
-	/* allocate the zero page. */
+	/* allocate the zero page. 0页，给匿名页用*/
 	zero_page = early_alloc(PAGE_SIZE);
 	//初始化内存管理
 	bootmem_init();

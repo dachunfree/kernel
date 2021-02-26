@@ -1,0 +1,2 @@
+http://vger.kernel.org/~davem/skb_data.html
+关于网络skb的介绍还算清晰。

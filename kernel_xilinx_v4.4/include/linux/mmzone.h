@@ -217,8 +217,8 @@ struct zone_reclaim_stat {
 	 *
 	 * The anon LRU stats live in [0], file LRU stats in [1]
 	 */
-	unsigned long		recent_rotated[2];
-	unsigned long		recent_scanned[2];
+	unsigned long		recent_rotated[2]; //0 是从不活动变成活动匿名页的数量；1是从不活动变为活动的文件页数量
+	unsigned long		recent_scanned[2];  //0 是最近扫描过的匿名页的数量; 1是最近扫描过的文件页的数量
 };
 
 struct lruvec {

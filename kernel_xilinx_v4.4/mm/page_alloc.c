@@ -3123,7 +3123,7 @@ retry:
 	}
 
 	/* This is the last chance, in general, before the goto nopage. */
-	//使用最低水线分配页。
+	//使用最低水线分配页。里面包含回收函数，后面继续回收?
 	page = get_page_from_freelist(gfp_mask, order,
 				alloc_flags & ~ALLOC_NO_WATERMARKS, ac);
 	if (page)
