@@ -221,7 +221,7 @@ ENTRY(stext)
 	bl	preserve_boot_args   //进行blob 设备树地址的保存。
 	//进入EL2模式
 	bl	el2_setup			// Drop to EL1, w20=cpu_boot_mode
-	adrp	x24, __PHYS_OFFSET //从符号地址获取物理地址
+	adrp	x24, __PHYS_OFFSET //从符号地址获取物理地址 .KERNEL_START	_text
 	bl	set_cpu_boot_mode_flag      //svc mode
 	bl	__create_page_tables		// x25=TTBR0, x26=TTBR1
 	/*

@@ -464,7 +464,7 @@ enum pageblock_bits;
 	 * freepage counting problem due to racy retrieving migratetype
 	 * of pageblock. Protected by zone->lock.
 	 */
-	unsigned long		nr_isolate_pageblock;
+	unsigned long		nr_isolate_pageblock; //隔离页。buddy不会使用
 #endif
 
 #ifdef CONFIG_MEMORY_HOTPLUG
@@ -1110,7 +1110,7 @@ struct mem_section {
 	unsigned long section_mem_map; //存放nid等标志位+struct page 地址?
 
 	/* See declaration of similar field in struct zone */
-	unsigned long *pageblock_flags; //bit map?
+	unsigned long *pageblock_flags; //bit map?指示isolate_pages
 #ifdef CONFIG_PAGE_EXTENSION
 	/*
 	 * If !SPARSEMEM, pgdat doesn't have page_ext pointer. We use

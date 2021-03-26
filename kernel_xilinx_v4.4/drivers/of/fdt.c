@@ -981,7 +981,7 @@ int __init early_init_dt_scan_memory(unsigned long node, const char *uname,
 
 	return 0;
 }
-
+//data:boot_command_line
 int __init early_init_dt_scan_chosen(unsigned long node, const char *uname,
 				     int depth, void *data)
 {

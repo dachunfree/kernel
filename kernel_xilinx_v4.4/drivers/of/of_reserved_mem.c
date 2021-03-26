@@ -183,6 +183,7 @@ static const struct of_device_id __rmem_of_table_sentinel
  */
 static int __init __reserved_mem_init_node(struct reserved_mem *rmem)
 {
+	//RESERVEDMEM_OF_DECLARE(cma, "shared-dma-pool", rmem_cma_setup);
 	extern const struct of_device_id __reservedmem_of_table[];
 	const struct of_device_id *i;
 	/*
@@ -199,7 +200,7 @@ static int __init __reserved_mem_init_node(struct reserved_mem *rmem)
 
 		if (!of_flat_dt_is_compatible(rmem->fdt_node, compat))
 			continue;
-
+		//µ÷ÓÃrmem_cma_setup
 		if (initfn(rmem) == 0) {
 			pr_info("Reserved memory: initialized node %s, compatible id %s\n",
 				rmem->name, compat);

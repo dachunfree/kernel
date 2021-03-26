@@ -386,7 +386,7 @@ static void __init sparse_early_usemaps_alloc_node(void *data,
 	void *usemap;
 	unsigned long pnum;
 	unsigned long **usemap_map = (unsigned long **)data;
-	/*计算一个section需要多少空间。当前上下文，一个section有（1<<(30-12-10)）个
+	/*计算一个section需要多少空间。当前上下文，一个section有（1<<(30-12-10)
 	pageblock，一个pageblock需要NR_PAGEBLOCK_BITS个bits来表示*/
 	int size = usemap_size();
 	//分配所需要的usemap空间
