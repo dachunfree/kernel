@@ -1147,7 +1147,7 @@ void __init early_init_dt_scan_nodes(void)
 	of_scan_flat_dt(early_init_dt_scan_root, NULL);
 
 	/* Setup memory, calling early_init_dt_add_memory_arch */
-	//遍历blob中所有节点依次调用 early_init_dt_scan_memory。
+	//遍历blob中所有节点依次调用 early_init_dt_scan_memory。将dtb中的内存加入到mem_block中。
 	of_scan_flat_dt(early_init_dt_scan_memory, NULL);
 	printk(KERN_ERR "PID:%d",current->);
 }

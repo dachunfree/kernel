@@ -209,7 +209,7 @@ section_table:
 /*
 在初始化阶段，我们mapping三段地址，一段是identity mapping，其实就是把物理地址mapping到物理地址上去，
 在打开MMU的时候需要这样的mapping（ARM ARCH强烈推荐这么做的）。第二段是kernel image mapping，内核代码
-欢快的执行当然需要将kernel running需要的地址（kernel txt、dernel rodata、data、bss等等）进行映射了，
+欢快的执行当然需要将kernel running需要的地址（kernel txt、kernel rodata、data、bss等等）进行映射了，
 第三段是blob memory对应的mapping。
 boot loader传参进来:
 x0 = physical address of device tree blob (dtb) in system RAM.
@@ -476,7 +476,7 @@ __create_page_tables:
 	   的地址空间，这时候，x0指向了内核地址空间的PGD的基地址.
 	   #define PAGE_OFFSET		(UL(0xffffffffffffffff) << (VA_BITS - 1))
 	 */
-
+	//对phy_offset 到 page_offset的线性映射
 	mov	x0, x26				// swapper_pg_dir
 	mov	x5, #PAGE_OFFSET    //PAGE_OFFSET是kernel image的首地址，对于48bit的VA而言，该地址是0xffff,8000,0000,0000。
 	//x0:swapper_pg_dir页表基地址；x5:#PAGE_OFFSET;

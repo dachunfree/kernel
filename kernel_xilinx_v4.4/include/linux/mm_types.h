@@ -50,6 +50,12 @@ struct page {
      * PG_mlocked: 表示此页被mlock()锁在内存中，禁止换出和释放
      * PG_swapbacked: 表示此页依靠swap，可能是进程的匿名页(堆、栈、数据段)，匿名mmap共享内存映射，shmem共享内存映射
      */
+    /* |[section]|[NODE]|zone|list_cpuid|flags|
+    section:稀疏内存模型中的段编号
+    node:节点编号。page_to_nid来获取
+    zone:区域类型。page_zonenum
+    flags:标志位。
+    */
 	unsigned long flags;		/* Atomic flags, some possibly
 					 * updated asynchronously */
 	union {

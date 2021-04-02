@@ -5464,7 +5464,7 @@ void __paginginit free_area_init_node(int nid, unsigned long *zones_size,
 	//为了统计Node中的页面数(总内存大小(包含空洞)，实际内存大小)
 	calculate_node_totalpages(pgdat, start_pfn, end_pfn,
 				  zones_size, zholes_size);
-	//分配struct page到 pgdat->node_mem_map
+	//分配struct page到 pgdat->node_mem_map(平坦内存模型)
 	alloc_node_mem_map(pgdat);
 #ifdef CONFIG_FLAT_NODE_MEM_MAP
 	printk(KERN_DEBUG "free_area_init_node: node %d, pgdat %08lx, node_mem_map %08lx\n",

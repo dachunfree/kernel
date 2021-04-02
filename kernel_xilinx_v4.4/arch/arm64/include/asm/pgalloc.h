@@ -112,6 +112,7 @@ static inline void pte_free(struct mm_struct *mm, pgtable_t pte)
 static inline void __pmd_populate(pmd_t *pmdp, phys_addr_t pte,
 				  pmdval_t prot)
 {
+	//*pmdp = __pmd(pte | prot);
 	set_pmd(pmdp, __pmd(pte | prot));
 }
 
