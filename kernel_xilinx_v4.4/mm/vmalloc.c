@@ -192,6 +192,7 @@ static int vmap_page_range_noflush(unsigned long start, unsigned long end,
 	int nr = 0;
 
 	BUG_ON(addr >= end);
+	//得到虚拟地址区域对应的PGD地址
 	pgd = pgd_offset_k(addr);
 	do {
 		next = pgd_addr_end(addr, end);
@@ -362,7 +363,7 @@ static struct vmap_area *alloc_vmap_area(unsigned long size,
 	BUG_ON(!size);
 	BUG_ON(offset_in_page(size));
 	BUG_ON(!is_power_of_2(align));
-
+	//分配一个vmap_area结构体
 	va = kmalloc_node(sizeof(struct vmap_area),
 			gfp_mask & GFP_RECLAIM_MASK, node);
 	if (unlikely(!va))
@@ -410,7 +411,7 @@ nocache:
 		addr = ALIGN(vstart, align);
 		if (addr + size < addr)
 			goto overflow;
-
+		//vmap_area_root存放系统中正在使用的vmalloc块，为vmap_area结构。
 		n = vmap_area_root.rb_node;
 		first = NULL;
 
@@ -420,7 +421,7 @@ nocache:
 			if (tmp->va_end >= addr) {
 				first = tmp;
 				if (tmp->va_start <= addr)
-					break;
+					break; //此时tmp->va_start<=addr<=tmp->va_end，找到起始地址最小的vmalloc区块
 				n = n->rb_left;
 			} else
 				n = n->rb_right;
@@ -431,6 +432,7 @@ nocache:
 	}
 
 	/* from the starting point, walk areas until a suitable hole is found */
+	//判断申请空间addr+size的合法性
 	while (addr + size > first->va_start && addr + size <= vend) {
 		if (addr + cached_hole_size < first->va_start)
 			cached_hole_size = first->va_start - addr;
@@ -452,6 +454,7 @@ found:
 	va->va_start = addr;
 	va->va_end = addr + size;
 	va->flags = 0;
+	//将找到的新区块插入到vmap_area_root中
 	__insert_vmap_area(va);
 	free_vmap_cache = &va->rb_node;
 	spin_unlock(&vmap_area_lock);
@@ -1293,6 +1296,7 @@ EXPORT_SYMBOL_GPL(unmap_kernel_range);
 
 int map_vm_area(struct vm_struct *area, pgprot_t prot, struct page **pages)
 {
+	//确定映射的起始和结束地址
 	unsigned long addr = (unsigned long)area->addr;
 	unsigned long end = addr + get_vm_area_size(area);
 	int err;
@@ -1333,7 +1337,7 @@ static struct vm_struct *__get_vm_area_node(unsigned long size,
 {
 	struct vmap_area *va;
 	struct vm_struct *area;
-
+	//vmalloc不能中在中断中被调用
 	BUG_ON(in_interrupt());
 	if (flags & VM_IOREMAP)
 		align = 1ul << clamp_t(int, fls_long(size),
@@ -1342,20 +1346,20 @@ static struct vm_struct *__get_vm_area_node(unsigned long size,
 	size = PAGE_ALIGN(size);
 	if (unlikely(!size))
 		return NULL;
-
+	//分配一个struct vm_struct来描述vmalloc区域
 	area = kzalloc_node(sizeof(*area), gfp_mask & GFP_RECLAIM_MASK, node);
 	if (unlikely(!area))
 		return NULL;
-
+	//加一页作为安全区间
 	if (!(flags & VM_NO_GUARD))
 		size += PAGE_SIZE;
-
+	//申请一个vmap_area并将其插入vmap_area_root中
 	va = alloc_vmap_area(size, align, start, end, node, gfp_mask);
 	if (IS_ERR(va)) {
 		kfree(area);
 		return NULL;
 	}
-
+	//vm_struct和vmap_area关联
 	setup_vmalloc_vm(area, va, flags, caller);
 
 	return area;
@@ -1584,7 +1588,7 @@ static void *__vmalloc_area_node(struct vm_struct *area, gfp_t gfp_mask,
 	unsigned int nr_pages, array_size, i;
 	const gfp_t nested_gfp = (gfp_mask & GFP_RECLAIM_MASK) | __GFP_ZERO;
 	const gfp_t alloc_mask = gfp_mask | __GFP_NOWARN;
-
+	//计算vmalloc描述符vm_struct->size需要多少页
 	nr_pages = get_vm_area_size(area) >> PAGE_SHIFT;
 	array_size = (nr_pages * sizeof(struct page *));
 
@@ -1603,11 +1607,12 @@ static void *__vmalloc_area_node(struct vm_struct *area, gfp_t gfp_mask,
 		kfree(area);
 		return NULL;
 	}
-
+	//逐页分配页框，这里也可以看出对vmalloc是无法保证屋里连续的，页不是一起分配，而是一页一页分配的
 	for (i = 0; i < area->nr_pages; i++) {
 		struct page *page;
 
 		if (node == NUMA_NO_NODE)
+			//alloc_mask为GFP_KERNEL|__GFP_HIGHMEM|__GFP_NOWARN，所以优先在vmalloc区域，允许睡眠
 			page = alloc_page(alloc_mask);
 		else
 			page = alloc_pages_node(node, alloc_mask, order);
@@ -1621,7 +1626,7 @@ static void *__vmalloc_area_node(struct vm_struct *area, gfp_t gfp_mask,
 		if (gfpflags_allow_blocking(gfp_mask))
 			cond_resched();
 	}
-
+	//建立vmalloc区域的页面映射关系
 	if (map_vm_area(area, prot, pages))
 		goto fail;
 	return area->addr;
@@ -1658,16 +1663,16 @@ void *__vmalloc_node_range(unsigned long size, unsigned long align,
 	struct vm_struct *area;
 	void *addr;
 	unsigned long real_size = size;
-
+	//页对齐
 	size = PAGE_ALIGN(size);
 	if (!size || (size >> PAGE_SHIFT) > totalram_pages)
 		goto fail;
-
+	//申请并填充vm_struct结构体
 	area = __get_vm_area_node(size, align, VM_ALLOC | VM_UNINITIALIZED |
 				vm_flags, start, end, node, gfp_mask, caller);
 	if (!area)
 		goto fail;
-
+	//分配内存，建立页面映射关系
 	addr = __vmalloc_area_node(area, gfp_mask, prot, node);
 	if (!addr)
 		return NULL;
@@ -1684,6 +1689,7 @@ void *__vmalloc_node_range(unsigned long size, unsigned long align,
 	 * __get_vm_area_node() contains a reference to the virtual address of
 	 * the vmalloc'ed block.
 	 */
+	 //kmemleak记录分配信息
 	kmemleak_alloc(addr, real_size, 2, gfp_mask);
 
 	return addr;

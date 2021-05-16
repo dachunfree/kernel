@@ -32,6 +32,10 @@ extern void rcu_nmi_exit(void);
  * always balanced, so the interrupted value of ->hardirq_context
  * will always be restored.
  */
+ /*
+ irq_enter的实现中将preempt_count变量的HARDIRQ部分+1，记录硬件中断的次数
+ 这样irq_enter的就可以禁止抢占
+ */
 #define __irq_enter()					\
 	do {						\
 		account_irq_enter_time(current);	\

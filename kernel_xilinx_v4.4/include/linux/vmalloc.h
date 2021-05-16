@@ -29,20 +29,20 @@ struct vm_area_struct;		/* vma defining user mapping in mm_types.h */
 #endif
 
 struct vm_struct {
-	struct vm_struct	*next;
-	void			*addr;
-	unsigned long		size;
-	unsigned long		flags;
-	struct page		**pages;
-	unsigned int		nr_pages;
-	phys_addr_t		phys_addr;
-	const void		*caller;
+	struct vm_struct	*next; //下一个vm。
+	void			*addr; //指向第一个内存单元虚拟地址
+	unsigned long		size; //该内存区对应的大小
+	unsigned long		flags; //vm标志位
+	struct page		**pages; //指向页面没描述符的指针数组
+	unsigned int		nr_pages; //vmalloc映射的page数目
+	phys_addr_t		phys_addr; //用来映射硬件设备的IO共享内存，其他情况下为0
+	const void		*caller; //调用vmalloc类函数的返回地址
 };
 
 struct vmap_area {
-	unsigned long va_start;
-	unsigned long va_end;
-	unsigned long flags;
+	unsigned long va_start; //malloc区的起始地址
+	unsigned long va_end; //malloc区的结束地址
+	unsigned long flags; //
 	struct rb_node rb_node;         /* address sorted rbtree */
 	struct list_head list;          /* address sorted list */
 	struct list_head purge_list;    /* "lazy purge" list */
