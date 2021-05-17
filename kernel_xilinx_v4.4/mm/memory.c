@@ -2470,7 +2470,7 @@ static int do_swap_page(struct mm_struct *mm, struct vm_area_struct *vma,
 
 	if (!pte_unmap_same(mm, pmd, page_table, orig_pte))
 		goto out;
-
+	//根据pte来获取swap的entry
 	entry = pte_to_swp_entry(orig_pte);
 	if (unlikely(non_swap_entry(entry))) {
 		if (is_migration_entry(entry)) {
@@ -2707,9 +2707,9 @@ static int do_anonymous_page(struct mm_struct *mm, struct vm_area_struct *vma,
 	/* Use the zero-page for reads */
 	//如果缺页异常是由读触发的，并且进程允许使用0页，那么把虚拟页映射到第一个0页
 	if (!(flags & FAULT_FLAG_WRITE) && !mm_forbids_zeropage(mm)) {
-		//生成特殊的页表项，映射到专用的0页.只读属性
-		entry = pte_mkspecial(pfn_pte(my_zero_pfn(address),vma->vm_page_prot));
-		page_table = pte_offset_map_lock(mm, pmd, address, &ptl);
+		//生成特殊的页表项，映射到专用的0页.只读属性*
+		entry = pte_mkspecial(pfn_pte(my_zero_pfn(address),vma->vm_page_prot));//*pte
+		page_table = pte_offset_map_lock(mm, pmd, address, &ptl);//pte
 		if (!pte_none(*page_table))
 			goto unlock;
 		/* Deliver the page fault to userland, check inside PT lock */
@@ -2740,7 +2740,7 @@ static int do_anonymous_page(struct mm_struct *mm, struct vm_area_struct *vma,
 	 */
 	 //设置页描述符的标志位为PG_uptodate，表示物理页中包含有效的数据
 	__SetPageUptodate(page);
-	//使用页帧号和访问权限生成页表项
+	//使用页帧号和ｖｍａ的访问权限设置页表项值（注意：这个时候页表项属性依然为只读）
 	entry = mk_pte(page, vma->vm_page_prot);
 	if (vma->vm_flags & VM_WRITE)
 		//设置页表项脏标志位和写权限。
@@ -2758,7 +2758,7 @@ static int do_anonymous_page(struct mm_struct *mm, struct vm_area_struct *vma,
 		return handle_userfault(vma, address, flags,
 					VM_UFFD_MISSING);
 	}
-
+	//匿名页计数统计
 	inc_mm_counter_fast(mm, MM_ANONPAGES);
 	//反向映射
 	page_add_new_anon_rmap(page, vma, address);
@@ -3000,7 +3000,7 @@ static int do_read_fault(struct mm_struct *mm, struct vm_area_struct *vma,
 			goto unlock_out;
 		pte_unmap_unlock(pte, ptl);
 	}
-	//把文件页读到文件的页缓存中。
+	//把文件页读到文件的页缓存中。struct vm_operations_struct ext4_file_vm_ops
 	ret = __do_fault(vma, address, pgoff, flags, NULL, &fault_page);
 	if (unlikely(ret & (VM_FAULT_ERROR | VM_FAULT_NOPAGE | VM_FAULT_RETRY)))
 		return ret;

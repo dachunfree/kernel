@@ -3123,7 +3123,7 @@ retry:
 	}
 
 	/* This is the last chance, in general, before the goto nopage. */
-	//使用最低水线分配页。
+	//使用最低水线分配页。里面包含回收函数，后面继续回收?
 	page = get_page_from_freelist(gfp_mask, order,
 				alloc_flags & ~ALLOC_NO_WATERMARKS, ac);
 	if (page)
@@ -5060,7 +5060,7 @@ static unsigned long __meminit zone_spanned_pages_in_node(int nid,
 	/* Get the start and end of the zone */
 	zone_start_pfn = arch_zone_lowest_possible_pfn[zone_type];
 	zone_end_pfn = arch_zone_highest_possible_pfn[zone_type];
-	//留出movable类型?
+	//留出movable类型,确定可移动区域范围类型
 	adjust_zone_range_for_zone_movable(nid, zone_type,
 				node_start_pfn, node_end_pfn,
 				&zone_start_pfn, &zone_end_pfn);
@@ -5464,7 +5464,7 @@ void __paginginit free_area_init_node(int nid, unsigned long *zones_size,
 	//为了统计Node中的页面数(总内存大小(包含空洞)，实际内存大小)
 	calculate_node_totalpages(pgdat, start_pfn, end_pfn,
 				  zones_size, zholes_size);
-	//分配struct page到 pgdat->node_mem_map
+	//分配struct page到 pgdat->node_mem_map(平坦内存模型)
 	alloc_node_mem_map(pgdat);
 #ifdef CONFIG_FLAT_NODE_MEM_MAP
 	printk(KERN_DEBUG "free_area_init_node: node %d, pgdat %08lx, node_mem_map %08lx\n",

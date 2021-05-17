@@ -8,6 +8,10 @@
  * MIGRATE_SYNC will block when migrating pages
  */
 enum migrate_mode {
+	/*
+		所以异步不处理MIRGATE_RECLAIMABLE类型的页框，因为这部分页框很大可能导致回写然后阻塞，
+		只处理MIGRATE_MOVABLE和MIGRATE_CMA类型中的页
+	*/
 	MIGRATE_ASYNC,    //异步方式。不允许阻塞
 	MIGRATE_SYNC_LIGHT, //轻量级同步，允许大多数阻塞，但是不允许把脏页写会到存储设备(费时)
 	MIGRATE_SYNC,  //同步方式，允许阻塞，允许把脏页写回到存储设备上。

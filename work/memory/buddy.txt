@@ -1,0 +1,82 @@
+https://www.cnblogs.com/arnoldlu/p/10526814.html
+
+目前只有一个zone（DMA）：
+[    0.000000] Zone ranges:
+[    0.000000]   DMA      [mem 0x0000000040000000-0x00000000bfffffff]
+[    0.000000]   Normal   empty
+
+buddy获取页信息：
+
+# cat /proc/pagetypeinfo
+Page block order: 9
+Pages per block:  512
+
+Free pages count per migrate type at order       0      1      2      3      4      5      6      7      8      9     10     11     12     13     14     15
+Node    0, zone      DMA, type    Unmovable      1     17      9      0      0      1      0      1      0      0      0      1      0      1      1      0
+Node    0, zone      DMA, type      Movable     64    140     35     23     16      8      5      1      3      1      0      2      3      1      3     10
+Node    0, zone      DMA, type  Reclaimable      2      2      1      3      0      0      1      0      1      0      1      1      1      1      1      0
+Node    0, zone      DMA, type   HighAtomic      0      0      0      0      0      0      0      0      0      0      0      0      0      0      0      0
+Node    0, zone      DMA, type          CMA      1      0      1      0      1      1      1      0      1      1      1      1      1      1      1      0
+Node    0, zone      DMA, type      Isolate      0      0      0      0      0      0      0      0      0      0      0      0      0      0      0      0
+
+Number of blocks type     Unmovable      Movable  Reclaimable   HighAtomic          CMA      Isolate
+Node 0, zone      DMA           64          832           64            0           64            0
+
+
+echo m > /proc/sysrq-trigger[  334.527437] sysrq: SysRq : Show Memory
+
+[  334.533022] Mem-Info:
+[  334.535667] active_anon:1611 inactive_anon:21 isolated_anon:0
+[  334.535667]  active_file:2840 inactive_file:2051 isolated_file:0
+[  334.535667]  unevictable:0 dirty:0 writeback:0 unstable:0
+[  334.535667]  slab_reclaimable:690 slab_unreclaimable:1792
+[  334.535667]  mapped:1237 shmem:39 pagetables:65 bounce:0
+[  334.535667]  free:493154 free_pcp:196 free_cma:32629
+[  334.576982] Node 0 active_anon:6444kB inactive_anon:84kB active_file:11360kB inactive_file:8204kB unevictable:0kB isolated(anon):0kB isolated(file):0kB mapped:4948kB dirty:0kB writeback:0kB shmem:156kB shmem_thp: 0kB shmem_pmdmapped: 0kB anon_thp: 0kB writeback_tmp:0kB unstable:0kB all_unreclaimable? no
+[  334.607140] Node 0 DMA free:1972616kB min:22528kB low:28160kB high:33792kB active_anon:6444kB inactive_anon:84kB active_file:11360kB inactive_file:8204kB unevictable:0kB writepending:0kB present:2097152kB managed:2028932kB mlocked:0kB kernel_stack:1008kB pagetables:260kB bounce:0kB free_pcp:784kB local_pcp:540kB free_cma:130516kB
+[  334.641625] lowmem_reserve[]: 0 0 0
+[  334.645708] Node 0 DMA: 72*4kB (UMEC) 63*8kB (UM) 35*16kB (UMC) 22*32kB (UME) 6*64kB (MC) 10*128kB (MEC) 5*256kB (UMC) 3*512kB (UM) 6*1024kB (UMEC) 3*2048kB (UMC) 3*4096kB (MEC) 3*8192kB (MEC) 5*16384kB (MEC) 4*32768kB (UMEC) 6*65536kB (UMEC) 10*131072kB (M) = 1972616kB
+[  334.674452] Node 0 hugepages_total=0 hugepages_free=0 hugepages_surp=0 hugepages_size=2048kB
+[  334.684070] 4930 total pagecache pages
+[  334.689773] 0 pages in swap cache
+[  334.693604] Swap cache stats: add 0, delete 0, find 0/0
+[  334.700912] Free swap  = 0kB
+[  334.704171] Total swap = 0kB
+[  334.708830] 524288 pages RAM
+[  334.712088] 0 pages HighMem/MovableOnly
+[  334.717819] 17055 pages reserved
+[  334.721546] 32768 pages cma reserved
+
+/****************************memTotal = managed:2028932kB.
+cat /proc/meminfo
+MemTotal:        2028932 kB
+MemFree:         1972840 kB
+MemAvailable:    1950212 kB
+Buffers:            9100 kB
+Cached:            10620 kB
+SwapCached:            0 kB
+Active:            17804 kB
+Inactive:           8288 kB
+Active(anon):       6444 kB
+Inactive(anon):       84 kB
+Active(file):      11360 kB
+Inactive(file):     8204 kB
+Unevictable:           0 kB
+Mlocked:               0 kB
+SwapTotal:             0 kB
+SwapFree:              0 kB
+Dirty:                 0 kB
+
+//开机打印：
+Memory: 1897348K/2097152K available (8254K kernel code, 542K rwdata, 2692K rodata, 512K init, 23529K bss, 68732K reserved, 131072K cma-reserved)
+
+
+totalpages：
+1.cma的将reserved memory 还给buddy 
+init_cma_reserved_pageblock
+	adjust_managed_page_count（）；
+	
+	
+	
+buddy介绍文章：	
+https://zhuanlan.zhihu.com/p/73539328

@@ -79,6 +79,29 @@ dma_alloc_coherent(struct device *dev, size_t size,dma_addr_t *dma_handle, gfp_t
 cma 初始化：
 setup_arch
 	arm64_memblock_init
+		early_init_fdt_scan_reserved_mem //进行memory reserved的类型进行处理。去除no-map属性
 		dma_contiguous_reserve(phys_addr_t limit)
 			
-		
+cma_init_reserved_areas //负责把所有的CMA区域的物理页释放给伙伴分配器
+	zone = page_zone(pfn_to_page(pfn)) //找到cma对应的zone
+	init_cma_reserved_pageblock(pfn_to_page(base_pfn)); //将该pageblock导入到伙伴系统，并且将migrate type设定为MIGRATE_CMA
+		__free_pages(page, pageblock_order)
+			_free_one_page(page, zone, order, migratetype)//page会被加到MIGRATE_CMA的free_list
+			
+cma内存分配:
+arch_initcall(arm64_dma_init);
+	dma_ops = &swiotlb_dma_ops;//dma_ops为全局变量
+
+void *dma_alloc_coherent(struct device *dev, size_t size,dma_addr_t *dma_handle, gfp_t flag)
+	dma_alloc_attrs(dev, size, dma_handle, flag, NULL);
+		struct dma_map_ops *ops = get_dma_ops(dev);
+	dma_alloc_from_coherent(dev, size, dma_handle, &cpu_addr)//先从每设备中分配
+	ops->alloc(dev, size, dma_handle, flag, attrs)//arm_dma_ops->alloc
+		 __dma_alloc(dev, size, handle, gfp, prot, false,attrs, __builtin_return_address(0))
+				__alloc_from_contiguous
+					cma_alloc
+						bitmap_count = cma_bitmap_pages_to_bits(cma, count); //把count转换为bitmap数 
+						bitmap_no = bitmap_find_next_zero_area_off //找到bitmap非0值
+						bitmap_set(cma->bitmap, bitmap_no, bitmap_count); //表示已经分配
+						ret = alloc_contig_range(pfn, pfn + count, MIGRATE_CMA);//使用页分配器分配
+						

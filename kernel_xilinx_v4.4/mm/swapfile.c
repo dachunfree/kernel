@@ -2382,7 +2382,7 @@ static bool swap_discardable(struct swap_info_struct *si)
 
 	return true;
 }
-
+//specialfile:文件路径。如果交换区是磁盘分区，文件路径是块设备文件的路径
 SYSCALL_DEFINE2(swapon, const char __user *, specialfile, int, swap_flags)
 {
 	struct swap_info_struct *p;
@@ -2407,7 +2407,7 @@ SYSCALL_DEFINE2(swapon, const char __user *, specialfile, int, swap_flags)
 	if (!capable(CAP_SYS_ADMIN))
 		return -EPERM;
 
-	p = alloc_swap_info();
+	p = alloc_swap_info(); //分配交换区信息结构体，在交换区信息数组中查找一个空闲的数组项
 	if (IS_ERR(p))
 		return PTR_ERR(p);
 
@@ -2431,6 +2431,7 @@ SYSCALL_DEFINE2(swapon, const char __user *, specialfile, int, swap_flags)
 	inode = mapping->host;
 
 	/* If S_ISREG(inode->i_mode) will do mutex_lock(&inode->i_mutex); */
+	//设置交换区信息结构体bdev。如果交换区是磁盘分区，指向磁盘分区对应的块设备；如果交换区是文件，指向文件所在块设备
 	error = claim_swapfile(p, inode);
 	if (unlikely(error))
 		goto bad_swap;
@@ -2442,6 +2443,7 @@ SYSCALL_DEFINE2(swapon, const char __user *, specialfile, int, swap_flags)
 		error = -EINVAL;
 		goto bad_swap;
 	}
+	//读取交换分区第一个page的数据，其中包含前面mkswap写入的信息
 	page = read_mapping_page(mapping, 0, swap_file);
 	if (IS_ERR(page)) {
 		error = PTR_ERR(page);
@@ -2492,7 +2494,7 @@ SYSCALL_DEFINE2(swapon, const char __user *, specialfile, int, swap_flags)
 	error = swap_cgroup_swapon(p->type, maxpages);
 	if (error)
 		goto bad_swap;
-
+	//设置交换映射和交换区间
 	nr_extents = setup_swap_map_and_extents(p, swap_header, swap_map,
 		cluster_info, maxpages, &span);
 	if (unlikely(nr_extents < 0)) {

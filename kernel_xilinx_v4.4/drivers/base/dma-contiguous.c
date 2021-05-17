@@ -68,6 +68,20 @@ static int __init early_cma(char *p)
 }
 early_param("cma", early_cma);
 
+/*
+early_param(str, fn)
+	_setup_param(str, fn, fn, 0)
+
+#define __setup_param(cma, early_cma, early_cma, early)			\
+	static const char __setup_str_early_cma __initconst		\
+		__aligned(1) = cma; 					\
+	static struct obs_kernel_param __setup_early_cma		\
+		__used __section(.init.setup)				\
+		__attribute__((aligned((sizeof(long)))))		\
+		= { __setup_str_early_cma, fn, early }
+
+*/
+
 #ifdef CONFIG_CMA_SIZE_PERCENTAGE
 
 static phys_addr_t __init __maybe_unused cma_early_percent_memory(void)
@@ -284,8 +298,8 @@ RESERVEDMEM_OF_DECLARE(cma, "shared-dma-pool", rmem_cma_setup);
 _OF_DECLARE(reservedmem, name, compat, init, reservedmem_of_init_fn)
 #define _OF_DECLARE(table, name, compat, fn, fn_type)			\
 	static const struct of_device_id __of_table_cma		\
-		__used __section(__##table##_of_table)			\
-		 = { .compatible = compat,				\
-		     .data = (fn == (fn_type)NULL) ? fn : fn  }
+		__used __section(__reservedmem_of_table)			\
+		 = { .compatible = "shared-dma-pool",				\
+		     .data = (rmem_cma_setup == (fn_type)NULL) ? rmem_cma_setup : rmem_cma_setup  }
 */
 #endif

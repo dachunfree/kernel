@@ -304,7 +304,7 @@ void __init setup_arch(char **cmdline_p)
 	early_fixmap_init();
 	//执行各个模块的早期ioremap（此时内存管理系统还没有加载).没有填充pte。
 	early_ioremap_init();
-	/*进行dtb的fixmap映射。__fdt_pointer是bootloader 通过x0传进来的
+	/*进行dtb的fixmap映射。__fdt_pointer是bootloader 通过x0传进来的物理地址
 	 其中会调用到fixmap_remap_fdt来创建最后一个level的页表entry，完成dtb最终的映射*/
 	setup_machine_fdt(__fdt_pointer);
 

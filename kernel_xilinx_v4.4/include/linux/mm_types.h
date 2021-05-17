@@ -50,6 +50,12 @@ struct page {
      * PG_mlocked: 表示此页被mlock()锁在内存中，禁止换出和释放
      * PG_swapbacked: 表示此页依靠swap，可能是进程的匿名页(堆、栈、数据段)，匿名mmap共享内存映射，shmem共享内存映射
      */
+    /* |[section]|[NODE]|zone|list_cpuid|flags|
+    section:稀疏内存模型中的段编号
+    node:节点编号。page_to_nid来获取
+    zone:区域类型。page_zonenum
+    flags:标志位。
+    */
 	unsigned long flags;		/* Atomic flags, some possibly
 					 * updated asynchronously */
 	union {
@@ -627,8 +633,9 @@ enum tlb_flush_reason {
   * A swap entry has to fit into a "unsigned long", as the entry is hidden
   * in the "index" field of the swapper address space.
   */
+  //存储换出页在交换区中的位置。交换项。
 typedef struct {
-	unsigned long val;
+	unsigned long val;//高7位存储交换区的索引，其他位存储交换区的偏移。(单位是页)
 } swp_entry_t;
 
 #endif /* _LINUX_MM_TYPES_H */
