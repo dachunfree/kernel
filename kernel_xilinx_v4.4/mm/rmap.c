@@ -929,6 +929,12 @@ static bool invalid_page_referenced_vma(struct vm_area_struct *vma, void *arg)
  * Quick test_and_clear_referenced for all mappings to a page,
  * returns the number of ptes which referenced the page.
  */
+ //判断页最近是否被访问过。
+ /*
+ 操作系统进行页面回收时，每扫描到一个页面，就会调用该函数设置页面的 PG_referenced 位。
+ 如果一个页面的 PG_referenced 位被置位，但是在一定时间内该页面没有被再次访问，
+ 那么该页面的 PG_referenced 位会被清除
+*/
 int page_referenced(struct page *page,
 		    int is_locked,
 		    struct mem_cgroup *memcg,

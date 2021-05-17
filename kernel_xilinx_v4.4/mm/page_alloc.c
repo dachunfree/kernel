@@ -1452,7 +1452,7 @@ struct page *__rmqueue_smallest(struct zone *zone, unsigned int order,
 			continue;
 		page = list_entry(area->free_list[migratetype].next,
 							struct page, lru);
-		list_del(&page->lru); //从lru中删除当前page还是order?
+		list_del(&page->lru); //把page从从free_list中做了一些删除。
 		//设置属性，清除buddy标识，也就是设置 page->_mapcount = -1
 		rmv_page_order(page);
 		area->nr_free--;
@@ -3279,6 +3279,10 @@ __alloc_pages_nodemask(gfp_t gfp_mask, unsigned int order,
 			struct zonelist *zonelist, nodemask_t *nodemask)
 {
 	struct zoneref *preferred_zoneref;
+	/*
+	GFP_KERNEL:(__GFP_RECLAIM | __GFP_IO | __GFP_FS)
+	#define __GFP_RECLAIM ((__force gfp_t)(___GFP_DIRECT_RECLAIM|___GFP_KSWAPD_RECLAIM))
+	*/
 	struct page *page = NULL;
 	unsigned int cpuset_mems_cookie;
 	int alloc_flags = ALLOC_WMARK_LOW|ALLOC_CPUSET|ALLOC_FAIR;

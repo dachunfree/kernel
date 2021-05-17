@@ -343,7 +343,20 @@ void gic_set_cpu(unsigned int cpu, unsigned int irq)
 }
 EXPORT_SYMBOL(gic_set_cpu);
 #endif
+/*
+gic中断处理流程:
+1.gic决定哪些中断是使能的。
+2.对于pending的中断，gic决定分发给哪个cpu或者哪些cpus。
+3.对cpu的interface，进行高优先级的中断的分发。
 
+1. The GIC determines the interrupts that are enabled.
+2. For each pending interrupt, the GIC determines the targeted processor or processors.
+3. For each CPU interface, the Distributor forwards the highest priority pending interrupt that targets that interface.
+4. Each CPU interface determines whether to signal an interrupt request to its processor, and if required, does so.
+5. The processor acknowledges the interrupt, and the GIC returns the interrupt ID and updates the interrupt state.
+6. After processing the interrupt, the processor signals End of Interrupt (EOI) to the GIC.
+
+*/
 static void __exception_irq_entry gic_handle_irq(struct pt_regs *regs)
 {
 	u32 irqstat, irqnr;
@@ -351,6 +364,10 @@ static void __exception_irq_entry gic_handle_irq(struct pt_regs *regs)
 	void __iomem *cpu_base = gic_data_cpu_base(gic); //获取root GIC mapping到CPU地址空间的信息
 
 	do {
+		/*
+		7030 datasheet:ICCIAR.
+		bit[0,9]:The interrupt ID.This read acts as an acknowledge for the interrupt.
+		*/
 		irqstat = readl_relaxed(cpu_base + GIC_CPU_INTACK); //获取HW interrupt ID
 		irqnr = irqstat & GICC_IAR_INT_ID_MASK;
 
@@ -1262,10 +1279,10 @@ gic_of_init(struct device_node *node, struct device_node *parent)
 	if (WARN_ON(!node))
 		return -ENODEV;
 
-	dist_base = of_iomap(node, 0); //-映射GIC Distributor的寄存器地址空间
+	dist_base = of_iomap(node, 0); //-映射GIC Distributor的寄存器地址空间 0xf8f01000
 	WARN(!dist_base, "unable to map gic dist registers\n");
 
-	cpu_base = of_iomap(node, 1); //映射GIC CPU interface的寄存器地址空间
+	cpu_base = of_iomap(node, 1); //映射GIC CPU interface的寄存器地址空间 0xf8f00100
 	WARN(!cpu_base, "unable to map gic cpu registers\n");
 
 	/*

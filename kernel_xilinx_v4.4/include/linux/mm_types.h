@@ -60,9 +60,9 @@ struct page {
 					 * updated asynchronously */
 	union {
 	/*
-	 a: 如果mapping = 0，说明该page属于交换缓存（swap cache）；当需要使用地址空间时会指定交换分区的地址空间swapper_space。
-     b: 如果mapping != 0，bit[0] = 0，说明该page属于页缓存或文件映射，mapping指向文件的地址空间address_space.file。
-     c: 如果mapping != 0，bit[0] != 0，说明该page为匿名映射，mapping指向struct anon_vma对象。
+	 a: 等于NULL，表示该page frame不再内存中，而是被swap out到磁盘去了。
+     b: 如果不等于NULL，并且least signification bit等于1，表示该page frame是匿名映射页面，mapping指向了一个anon_vma的数据结构。
+     c: 如果不等于NULL，并且least signification bit等于0，表示该page frame是文件映射页面，mapping指向了一个该文件的address_space数据结构。
      通过mapping恢复anon_vma的方法：anon_vma = (struct anon_vma *)(mapping - PAGE_MAPPING_ANON)。
 	*/
 		struct address_space *mapping;	/* If low bit clear, points to
@@ -124,6 +124,7 @@ struct page {
 					 来确定该page是否属于伙伴系统。
    					 注意区分_count和_mapcount，_mapcount表示的是映射次数，而_count表示的是使用次数；被映射了不一定在使用，但要使用必须
    					 先映射。*/
+   					 //mapcount字段保存了有多少PTE页表项映射了该物理页,remap会用到?
 					atomic_t _mapcount;
 
 					struct { /* SLUB */
@@ -351,7 +352,7 @@ struct vm_area_struct {
 
 	/* Second cache line starts here. */
 
-	struct mm_struct *vm_mm;	/* The address space we belong to. */
+	struct mm_struct *vm_mm;	/* The address space we belong to.可以找到全局页表项。remap */
 	pgprot_t vm_page_prot;		/* Access permissions of this VMA. vma访问权限*/
 	unsigned long vm_flags;		/* Flags, see mm.h. */
 

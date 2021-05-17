@@ -65,6 +65,7 @@ struct scan_control {
 	unsigned long nr_to_reclaim;
 
 	/* This context's GFP mask */
+	/*申请分配页掩码。调用者申请页时可能不允许向下调用底层文件系统或者不允许读写存储设备，需要把这些约束传送给页回收算法*/
 	gfp_t gfp_mask;
 
 	/* Allocation order */
@@ -75,7 +76,7 @@ struct scan_control {
 	 * Nodemask of nodes allowed by the caller. If NULL, all nodes
 	 * are scanned.
 	 */
-	/* 允许执行扫描的node结点掩码 */
+	/* 允许执行扫描的node结点掩码。如果是空指针，表示扫描所有内存节点 */
 	nodemask_t	*nodemask;
 
 	/*
@@ -87,7 +88,7 @@ struct scan_control {
 
 	/* Scan (total_size >> priority) pages at once */
 
-    /* 扫描优先级，代表一次扫描(total_size >> priority)个页框
+    /* 扫描优先级，代表一次扫描(LRU链表总页数 >> priority)个页框
      * 优先级越低，一次扫描的页框数量就越多
      * 优先级越高，一次扫描的数量就越少
      * 默认优先级为12
@@ -114,7 +115,7 @@ struct scan_control {
 	unsigned int compaction_ready:1;
 
 	/* Incremented by the number of inactive pages that were scanned */
-	/* 已经扫描的页框数量 */
+	/* 已经扫描的不活动页框数量 */
 	unsigned long nr_scanned;
 
 	/* Number of pages freed so far during a call to shrink_zones() */
@@ -805,7 +806,20 @@ enum page_references {
 	PAGEREF_KEEP,
 	PAGEREF_ACTIVATE,
 };
+/*
+PG_active 用于表示页面当前是否是活跃的，如果该位被置位，则表示该页面是活跃的。
+PG_referenced 用于表示页面最近是否被访问过，每次页面被访问，该位都会被置位。
 
+如果页面被认为是活跃的，则将该页的 PG_active 置位；否则，不置位。当页面被访问时，检查该页的 PG_referenced 位，
+若未被置位，则置位之；
+若发现该页的 PG_referenced 已经被置位了，则意味着该页经常被访问，这时，若该页在 inactive 链表上，
+则置位其 PG_active 位，将其移动到 active 链表上去，并清除其 PG_referenced位的设置；如果页面的 PG_referenced 位被置位了
+一段时间后，该页面没有被再次访问，那么 Linux 操作系统会清除该页面的 PG_referenced 位，因为这意味着这个页面最近这段时间
+都没有被访问。PG_referenced 位同样也可以用于页面从 active 链表移动到 inactive 链表。对于某个在 active 链表上的页面来说，
+其 PG_active 位被置位，如果 PG_referenced 位未被置位，给定一段时间之后，该页面如果还是没有被访问，那么该页面会被清除其
+PG_active 位，挪到 inactive 链表上去。
+
+*/
 static enum page_references page_check_references(struct page *page,
 						  struct scan_control *sc)
 {
@@ -1126,9 +1140,12 @@ static unsigned long shrink_page_list(struct list_head *page_list,
 			 * starts and then write it out here.
 			 */
 			try_to_unmap_flush_dirty();
+			//如果是脏页的，调用pageout把文件页写回到存储设备中。
 			switch (pageout(page, mapping, sc)) {
+			//添加到ret_pages链表中
 			case PAGE_KEEP:
 				goto keep_locked;
+			//设置活动标志位，并添加到ret_pages链表中
 			case PAGE_ACTIVATE:
 				goto activate_locked;
 			case PAGE_SUCCESS:
@@ -1385,7 +1402,7 @@ static unsigned long isolate_lru_pages(unsigned long nr_to_scan,
 					!list_empty(src); scan++) {
 		struct page *page;
 		int nr_pages;
-		//从队尾开始扫描
+		//从队尾开始扫描。里面是(_head)->prev
 		page = lru_to_page(src);
 		prefetchw_prev_lru_page(page, src, flags);
 
@@ -1771,6 +1788,7 @@ static void move_active_pages_to_lru(struct lruvec *lruvec,
 
 		nr_pages = hpage_nr_pages(page);
 		mem_cgroup_update_lru_size(lruvec, lru, nr_pages);
+		//加入到头部
 		list_move(&page->lru, &lruvec->lists[lru]);
 		pgmoved += nr_pages;
 
@@ -1845,7 +1863,7 @@ static void shrink_active_list(unsigned long nr_to_scan,
 				     &nr_scanned, sc, isolate_mode, lru);
 	if (global_reclaim(sc))
 		__mod_zone_page_state(zone, NR_PAGES_SCANNED, nr_scanned);
-
+	// 最近扫描的文件页或者匿名页的数量。nr_scanned是实际扫描的
 	reclaim_stat->recent_scanned[file] += nr_taken;
 
 	__count_zone_vm_events(PGREFILL, zone, nr_scanned);
@@ -1939,7 +1957,10 @@ static void shrink_active_list(unsigned long nr_to_scan,
 static bool inactive_anon_is_low_global(struct zone *zone)
 {
 	unsigned long active, inactive;
-
+	/*
+	active:活动页链表中内存区域类型小于或等于回收的最高区域类型的总页数
+	inactive:不活动页链表中内存区域类型小于或等于回收的最高区域类型的总页数。
+	*/
 	active = zone_page_state(zone, NR_ACTIVE_ANON);
 	inactive = zone_page_state(zone, NR_INACTIVE_ANON);
 
@@ -2018,11 +2039,9 @@ static unsigned long shrink_list(enum lru_list lru, unsigned long nr_to_scan,
 {
 	/* 如果lru类型是活动lru(包括活动匿名页lru和活动文件页lru) */
 	if (is_active_lru(lru)) {
- /* 如果此活动lru对应的非活动lru链表中维护的页框数量太少，则会从活动lru链表中移动一些到对应非活动lru链表中
- * 这里需要注意，文件页和匿名页的非活动lru链表中是否少计算方式是不同的
- * 匿名页的话，有一个经验值表示大概多少匿名页保存到非活动匿名页lru链表
- * 文件页的话，大概非活动文件页数量要大于活动文件页
- * 而如果遇到page->_count == 0的页，则会将它们释放到每CPU页框高速缓存中
+/*
+	当不活动页比较少的时候，页回收算法收缩活动页链表。也就是从活动页链表尾部取
+	物理页并转移到不活动页链表中，把活动页转换成不活动页。
  */
 		if (inactive_list_is_low(lruvec, lru))
 /* 从活动lru中移动一些页框到非活动lru中，移动nr_to_scan个，nr_to_scan <= 32，从活动lru链表末尾拿出页框移动到非活动lru链表头
@@ -2191,6 +2210,7 @@ static void get_scan_count(struct lruvec *lruvec, int swappiness,
 	 * proportional to the fraction of recently scanned pages on
 	 * each list that were recently referenced and in active use.
 	 */
+	 /*(anon_prio* 最近扫描匿名页数量)/不活动匿名页变为活动页数量。表示匿名页的活动系数。越大，越该降低匿名页比例*/
 	ap = anon_prio * (reclaim_stat->recent_scanned[0] + 1); //最近扫描匿名页的数量
 	ap /= reclaim_stat->recent_rotated[0] + 1; //不活动变为活动的匿名页数量
 
@@ -2210,8 +2230,9 @@ out:
 			int file = is_file_lru(lru);
 			unsigned long size;
 			unsigned long scan;
-
+			//所有LRU链表(active unactive都扫描?)
 			size = get_lru_size(lruvec, lru);
+			//根据优先级计算LRU>>priority的数量
 			scan = size >> sc->priority;
 
 			if (!scan && pass && force_scan)
@@ -2226,7 +2247,7 @@ out:
 				 * Scan types proportional to swappiness and
 				 * their relative recent reclaim efficiency.
 				 */
-				 //scan = sacn * ap(ap+fp)
+				 //scan = sacn * ap(ap+fp)。如果匿名页的比值比较大，说明匿名页活跃成都高
 				scan = div64_u64(scan * fraction[file],
 							denominator);
 				break;
@@ -2331,6 +2352,7 @@ static void shrink_lruvec(struct lruvec *lruvec, int swappiness,
 	blk_start_plug(&plug);
 /* 如果LRU_INACTIVE_ANON，LRU_ACTIVE_FILE，LRU_INACTIVE_FILE这三个其中一个需要扫描的页框数没有扫描完，那扫描就会继续
  * 注意这里不会判断LRU_ACTIVE_ANON需要扫描的页框数是否扫描完，这里原因大概是因为系统不太希望对匿名页lru链表中的页回收
+ 	nr[]: 根据swapiness 和 优先级 ，活跃度 计算出来的要扫描的页数。
  */
 	while (nr[LRU_INACTIVE_ANON] || nr[LRU_ACTIVE_FILE] ||
 					nr[LRU_INACTIVE_FILE]) {
@@ -2356,7 +2378,7 @@ static void shrink_lruvec(struct lruvec *lruvec, int swappiness,
 							    lruvec, sc);
 			}
 		}
-
+		// scan_adjusted 会一直回收够了为止。
 		if (nr_reclaimed < nr_to_reclaim || scan_adjusted)
 			continue;
 
@@ -3831,7 +3853,7 @@ int sysctl_min_unmapped_ratio = 1;
  * slab reclaim needs to occur.
  */
 int sysctl_min_slab_ratio = 5;
-
+//找到file lru 链表中位映射的页数
 static inline unsigned long zone_unmapped_file_pages(struct zone *zone)
 {
 	unsigned long file_mapped = zone_page_state(zone, NR_FILE_MAPPED);
@@ -3910,6 +3932,11 @@ static int __zone_reclaim(struct zone *zone, gfp_t gfp_mask, unsigned int order)
 		 * Free memory by calling shrink zone with increasing
 		 * priorities until we have enough memory freed.
 		 */
+		 /*一次扫描页数是(LRU链表中的总页数>>n)。 n是扫描优先级
+		 扫描优先级越小，扫描的页数越多。
+		 如果回收的页数没有达到目标，那么扫描优先级-1，继续扫描。
+		 扫描优先级最小是0，表示扫描LRU链表中所有页。
+		*/
 		do {
 			shrink_zone(zone, &sc, true);
 		} while (sc.nr_reclaimed < nr_pages && --sc.priority >= 0);

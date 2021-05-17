@@ -283,6 +283,7 @@ enum pageblock_bits {
 unsigned long usemap_size(void)
 {
 	unsigned long size_bytes;
+	//以pageblock为单位进行管理
 	size_bytes = roundup(SECTION_BLOCKFLAGS_BITS, 8) / 8; //bits
 	size_bytes = roundup(size_bytes, sizeof(unsigned long)); //bits to unsigned long
 	return size_bytes;

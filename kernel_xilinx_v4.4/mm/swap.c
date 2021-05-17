@@ -632,10 +632,12 @@ static void __lru_cache_activate_page(struct page *page)
  * __SetPageReferenced(page) may be substituted for mark_page_accessed(page).
  */
  /*
- 检测该page的PG_referenced位，如果PG_referenced为0，则将其置为1
+ 检测该page的PG_referenced位，如果PG_referenced为0，则将其置为1.
+ 当一个页面被访问时，则调用该函数相应地修改 PG_active 和 PG_referenced
 */
 void mark_page_accessed(struct page *page)
 {
+	//非active && 最近被访问的话。置位active标志位。
 	if (!PageActive(page) && !PageUnevictable(page) &&
 			PageReferenced(page)) {
 

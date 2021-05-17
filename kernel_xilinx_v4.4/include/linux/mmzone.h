@@ -99,7 +99,7 @@ static inline int get_pfnblock_migratetype(struct page *page, unsigned long pfn)
 //把空闲链表拆分成每种迁移类型一条空闲链表。
 struct free_area {
 	struct list_head	free_list[MIGRATE_TYPES];
-	unsigned long		nr_free;
+	unsigned long		nr_free; //表示多少个free的order
 };
 
 struct pglist_data;
@@ -371,6 +371,7 @@ struct zone {
 	 * The target ratio of ACTIVE_ANON to INACTIVE_ANON pages on
 	 * this zone's LRU.  Maintained by the pageout code.
 	 */
+	// = 根号下(10*gb)。gb = (inactive+active)页数转换成字节数
 	unsigned int inactive_ratio;
 	//指向节点的 pglist_data 实例。执行所属的pglist_data
 	struct pglist_data	*zone_pgdat;
@@ -521,8 +522,8 @@ enum pageblock_bits;
 	/*
 	lru链表.enum lru_list
 	struct lruvec {
-	struct list_head lists[NR_LRU_LISTS];
-	struct zone_reclaim_stat reclaim_stat;
+		struct list_head lists[NR_LRU_LISTS];
+		struct zone_reclaim_stat reclaim_stat;
 	};
 	处于此两个链表中的页框标志位也需要相应设置：PG_lru,PG_active。前者的标志表明页在活动或
 	非活动页链表中，而后者是页在活动链表中。当是属于非活动链表时，标志位要清。

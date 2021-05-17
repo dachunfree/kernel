@@ -227,6 +227,8 @@ static int __kprobes do_page_fault(unsigned long addr, unsigned int esr,
 	 /*如果禁止执行页错误异常处理程序，或者处于原子上下文，或者当前进程是内核线程。跳转no_context
 		原子上下文:执行硬中断，执行软中断，禁止硬中断，禁止软中断，禁止内核抢占
 		思考:为甚中断上下文要禁止执行页错误异常程序呢?
+		内核空间访问虚拟地址，正常情况下不会出现虚拟页没有映射到物理页的情况。内核使用线性映射区域虚拟地址
+		在内存管理子系统初始化的时候就会把虚拟地址映射到物理地址(kernel mapping)
 	 */
 	if (faulthandler_disabled() || !mm)
 		goto no_context;

@@ -141,14 +141,22 @@
 #define PTE_TYPE_PAGE		(_AT(pteval_t, 3) << 0)
 #define PTE_TABLE_BIT		(_AT(pteval_t, 1) << 1)
 #define PTE_USER		(_AT(pteval_t, 1) << 6)		/* AP[1] */
+/*Data Access premissio，数据访问权限.AP[2,1]:*/
 #define PTE_RDONLY		(_AT(pteval_t, 1) << 7)		/* AP[2] */
+/*可共享性。00:不共享;01:保留值;10:外部共享;11:内部共享*/
 #define PTE_SHARED		(_AT(pteval_t, 3) << 8)		/* SH[1:0], inner shareable */
+/*指示页或者内存块自从相应的转换表描述符中的访问标志被置0以后是否被访问过*/
 #define PTE_AF			(_AT(pteval_t, 1) << 10)	/* Access Flag */
+/*not global.ng是1:转换不是全局的，是进程私有的，有一个ASID。ng是0，表示准换是全局的，是所有进程共享的。比如内核的页*/
 #define PTE_NG			(_AT(pteval_t, 1) << 11)	/* nG */
+/*指示页或者内存块是否被修改过*/
 #define PTE_DBM			(_AT(pteval_t, 1) << 51)	/* Dirty Bit Management */
+/*在这条转换页表项属于一个连续页表项集合，一个连续页表项集合可以被缓存在一条TLB表项中*/
 #define PTE_CONT		(_AT(pteval_t, 1) << 52)	/* Contiguous range */
+/*privilegd execute-Never:不允许在特权级别(及异常级别1,2,3)执行*/
 #define PTE_PXN			(_AT(pteval_t, 1) << 53)	/* Privileged XN */
-#define PTE_UXN			(_AT(pteval_t, 1) << 54)	/* User XN */
+/*在异常级别0(unprivileged execute-never) ，不予许异常级别0执行内核代码。其他异常级别xn表示不允许执行*/
+#define PTE_UXN			(_AT(pteval_t, 1) << 54)	/* User XN.*/
 
 /*
  * AttrIndx[2:0] encoding (mapping attributes defined in the MAIR* registers).
