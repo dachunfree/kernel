@@ -741,6 +741,7 @@ typedef struct pglist_data {
 	struct task_struct *kswapd;	/* Protected by
 					   mem_hotplug_begin/end() */
 	int kswapd_max_order;
+	//最合适分配内存的zone序号
 	enum zone_type classzone_idx;
 #ifdef CONFIG_NUMA_BALANCING
 	/* Lock serializing the migrate rate limiting window */

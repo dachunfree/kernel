@@ -136,6 +136,10 @@ enum pageflags {
 /*
  * Macros to create function definitions for page flags
  */
+ /*PageSwapCache
+ static inline int PageSwapCache(const struct page *page)			\
+			{ return test_bit(PG_swapcache, &page->flags); }
+ */
 #define TESTPAGEFLAG(uname, lname)					\
 static inline int Page##uname(const struct page *page)			\
 			{ return test_bit(PG_##lname, &page->flags); }

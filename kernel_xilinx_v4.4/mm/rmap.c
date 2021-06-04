@@ -1358,6 +1358,7 @@ static int try_to_unmap_one(struct page *page, struct vm_area_struct *vma,
 
 		set_tlb_ubc_flush_pending(mm, page, pte_dirty(pteval));
 	} else {
+		//pte 页表内容清0;
 		pteval = ptep_clear_flush(vma, address, pte);
 	}
 
@@ -1607,7 +1608,7 @@ static int rmap_walk_anon(struct page *page, struct rmap_walk_control *rwc)
 
 		if (rwc->invalid_vma && rwc->invalid_vma(vma, rwc->arg))
 			continue;
-		//remove_migration_pte
+		//page_referenced_one
 		ret = rwc->rmap_one(page, vma, address, rwc->arg); //实际的断开用户PTE页表项操作try_to_unmap_one
 		if (ret != SWAP_AGAIN)
 			break;

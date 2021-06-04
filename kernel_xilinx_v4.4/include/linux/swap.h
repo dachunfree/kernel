@@ -126,6 +126,7 @@ struct zone;
  *
  * We always assume that blocks are of size PAGE_SIZE.
  */
+ //用来把交换区的连续槽位映射到连续的磁盘块
 struct swap_extent {
 	struct list_head list;
 	pgoff_t start_page; //起始槽位的页号
@@ -223,6 +224,7 @@ struct swap_info_struct {
 	unsigned int cluster_next;	/* 当前聚集下一次分配槽位的索引。likely index for next allocation */
 	unsigned int cluster_nr;	/* 当前聚集中可用的槽位数量。countdown to next cluster search */
 	struct percpu_cluster __percpu *percpu_cluster; /* per cpu's swap location */
+	//用来把交换区的连续槽位映射到连续的磁盘块
 	struct swap_extent *curr_swap_extent;
 	struct swap_extent first_swap_extent; //存储第一个交换区间信息
 	struct block_device *bdev;	/* 指向块设备。磁盘分区:块设备；文件:文件实例。swap device or bdev of swap file */

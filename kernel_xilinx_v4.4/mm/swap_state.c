@@ -166,11 +166,11 @@ int add_to_swap(struct page *page, struct list_head *list)
 
 	VM_BUG_ON_PAGE(!PageLocked(page), page);
 	VM_BUG_ON_PAGE(!PageUptodate(page), page);
-
+	//从优先级最高的交换区分配一个槽位
 	entry = get_swap_page();
 	if (!entry.val)
 		return 0;
-
+	//如果是透明巨型页，拆分成普通页
 	if (unlikely(PageTransHuge(page)))
 		if (unlikely(split_huge_page_to_list(page, list))) {
 			swapcache_free(entry);
@@ -188,6 +188,7 @@ int add_to_swap(struct page *page, struct list_head *list)
 	/*
 	 * Add it to the swap cache and mark it dirty
 	 */
+	 //把页添加到交换缓存中，给页描述符设置标志位PG_swapcache,表示在页交换缓存中，页描述符的成员private存储交换项
 	err = add_to_swap_cache(page, entry,
 			__GFP_HIGH|__GFP_NOMEMALLOC|__GFP_NOWARN);
 

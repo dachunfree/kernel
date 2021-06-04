@@ -141,8 +141,9 @@ void defer_compaction(struct zone *zone, int order)
 /* Returns true if compaction should be skipped this time */
 bool compaction_deferred(struct zone *zone, int order)
 {
+	//最大推迟次数
 	unsigned long defer_limit = 1UL << zone->compact_defer_shift;
-
+	//当前order < 上次回收failed的order，不延期
 	if (order < zone->compact_order_failed)
 		return false;
 
@@ -1316,7 +1317,7 @@ static unsigned long __compaction_suitable(struct zone *zone, int order,
 	 * If watermarks for high-order allocation are already met, there
 	 * should be no need for compaction at all.
 	 */
-	 //如果空闲页数-申请页数 >=低水线，并且有一个足够大的空闲页块，那么不需要内存规整
+	 //如果空闲页数-申请页数 >=低水线，并且有一个足够大的空闲页块，那么不需要内存规整??
 	if (zone_watermark_ok(zone, order, watermark, classzone_idx,
 								alloc_flags))
 		return COMPACT_PARTIAL;
@@ -1397,6 +1398,12 @@ static int compact_zone(struct zone *zone, struct compact_control *cc)
 	 * is initialised by ensuring the values are within zone boundaries.
 	 	确保可移动页都放在zone的尾部。
 	 */
+	 /*
+	 设置迁移扫描器和空闲扫描器的起始物理页号。
+	 1.扫描整个内存区域。迁移扫描器起始物理页号:内存区域第一页;空闲扫描器的起始物理页号:最后一个页块的第一页；
+	 2.扫描部分内存区域。迁移扫描器起始物理页号:zone->compact_cached_migrate_pfn[sync];(sync:1表示同步模式;0表示异步模式)
+	 					 空闲扫描器起始物理页号:zone->compact_cached_free_pfn
+	*/
 	 //迁移扫描器起始物理帧号。表示从zone的开始页面开始扫描和查找哪些页面可以被迁移
 	cc->migrate_pfn = zone->compact_cached_migrate_pfn[sync];
 	//空闲扫描器起始帧号。从zone末端开始扫描和查找哪些空闲的页面可以用作迁移页面的目的地。
@@ -1581,12 +1588,12 @@ unsigned long try_to_compact_pages(gfp_t gfp_mask, unsigned int order,
 	trace_mm_compaction_try_to_compact_pages(order, gfp_mask, mode);
 
 	/* Compact each zone in the list */
-	//针对列表中的每个区域进行内存碎片整理。
+	//针对列表中的 所选区域和备用区域 进行内存碎片整理。
 	for_each_zone_zonelist_nodemask(zone, z, ac->zonelist, ac->high_zoneidx,
 								ac->nodemask) {
 		int status;
 		int zone_contended;
-
+		//内存规整是否延期
 		if (compaction_deferred(zone, order))
 			continue;
 		//在该内存区域执行内存碎片整理
@@ -1623,7 +1630,7 @@ unsigned long try_to_compact_pages(gfp_t gfp_mask, unsigned int order,
 
 			goto break_loop;
 		}
-
+		//如果内存碎片整理的优先级不是异步模式，并且迁移扫描器和空闲扫描器在内存区域中间相遇，更新推迟信息
 		if (mode != MIGRATE_ASYNC && status == COMPACT_COMPLETE) {
 			/*
 			 * We think that allocation won't succeed in this zone
@@ -1712,6 +1719,7 @@ static void __compact_pgdat(pg_data_t *pgdat, struct compact_control *cc)
 
 void compact_pgdat(pg_data_t *pgdat, int order)
 {
+	//异步方式进行内存规整
 	struct compact_control cc = {
 		.order = order,
 		.mode = MIGRATE_ASYNC,

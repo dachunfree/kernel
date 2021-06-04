@@ -648,6 +648,7 @@ swp_entry_t get_swap_page(void)
 	spin_lock(&swap_avail_lock);
 
 start_over:
+	//按照优先级遍历
 	plist_for_each_entry_safe(si, next, &swap_avail_head, avail_list) {
 		/* requeue si to after same-priority siblings */
 		plist_requeue(&si->avail_list, &swap_avail_head);
@@ -2419,6 +2420,7 @@ SYSCALL_DEFINE2(swapon, const char __user *, specialfile, int, swap_flags)
 		name = NULL;
 		goto bad_swap;
 	}
+	//打开文件，设置交换区信息结构体成员swap_file指向文件打开的实例
 	swap_file = file_open_name(name, O_RDWR|O_LARGEFILE, 0);
 	if (IS_ERR(swap_file)) {
 		error = PTR_ERR(swap_file);

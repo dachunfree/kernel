@@ -802,11 +802,12 @@ redo:
 
 enum page_references {
 	PAGEREF_RECLAIM,
-	PAGEREF_RECLAIM_CLEAN,
-	PAGEREF_KEEP,
-	PAGEREF_ACTIVATE,
+	PAGEREF_RECLAIM_CLEAN, //表示尝试回收该页面
+	PAGEREF_KEEP,    //表示继续保持在不活动链表中
+	PAGEREF_ACTIVATE, //表示页面会迁移到活跃的链表中
 };
 /*
+二次机会法:
 PG_active 用于表示页面当前是否是活跃的，如果该位被置位，则表示该页面是活跃的。
 PG_referenced 用于表示页面最近是否被访问过，每次页面被访问，该位都会被置位。
 
@@ -819,15 +820,18 @@ PG_referenced 用于表示页面最近是否被访问过，每次页面被访问，该位都会被置位。
 其 PG_active 位被置位，如果 PG_referenced 位未被置位，给定一段时间之后，该页面如果还是没有被访问，那么该页面会被清除其
 PG_active 位，挪到 inactive 链表上去。
 
+PTE_YOUNG是在页表中，硬件控制的bit位。
+PG_referenced，PG_active是软件bit位。
 */
 static enum page_references page_check_references(struct page *page,
 						  struct scan_control *sc)
 {
 	int referenced_ptes, referenced_page;
 	unsigned long vm_flags;
-
+	//检测有多少个页访问referenced_ptes。引用PTE
 	referenced_ptes = page_referenced(page, 1, sc->target_mem_cgroup,
 					  &vm_flags);
+	//获取page中的PG_Reference标志位
 	referenced_page = TestClearPageReferenced(page);
 
 	/*
@@ -836,8 +840,10 @@ static enum page_references page_check_references(struct page *page,
 	 */
 	if (vm_flags & VM_LOCKED)
 		return PAGEREF_RECLAIM;
-
+	//根据引用PTE的数量(referenced_ptes)和PG_referenced来判断放到那个LRU链表中.
+	//当该页访问 引用PTE时候，要放回到活跃LRU链表中
 	if (referenced_ptes) {
+		//该页是匿名页面，加入到ACTIVE LRU链表中。表示匿名页面的内容已经从磁盘换回(backed)到内存中.
 		if (PageSwapBacked(page))
 			return PAGEREF_ACTIVATE;
 		/*
@@ -854,14 +860,17 @@ static enum page_references page_check_references(struct page *page,
 		 * so that recently deactivated but used pages are
 		 * quickly recovered.
 		 */
+		 //第二次访问的页面置PG_reference标志位1。
 		SetPageReferenced(page);
-
+		// referenced_ptes.表示有多个文件同时映射到该页面，应该把他们放到活跃的LRU链表中，方便其他用户再次访问到
+		// referenced_page:第二次访问到的页面
 		if (referenced_page || referenced_ptes > 1)
 			return PAGEREF_ACTIVATE;
 
 		/*
 		 * Activate file-backed executable pages after first usage.
 		 */
+		 //可执行文件，加入到活跃链表
 		if (vm_flags & VM_EXEC)
 			return PAGEREF_ACTIVATE;
 
@@ -907,6 +916,17 @@ static void page_check_dirty_writeback(struct page *page,
 /*
  * shrink_page_list() returns the number of reclaimed pages
  */
+ /*
+ LRU算法+二次机会法:
+ 二次机会法设置了一个访问状态位，如果访问状态位是0，就淘汰这个页面。
+ 如果访问位是1，就给他第二次机会,并选择下一个页面来换出。当该页面得到第二次机会时候，
+ 他的访问位被清0，如果该页在此期间被访问过，访问位置1.
+
+
+ pg_active------>pg_reference
+ |					 |
+ |_______<_________<_|
+*/
 static unsigned long shrink_page_list(struct list_head *page_list,
 				      struct zone *zone,
 				      struct scan_control *sc,
@@ -948,7 +968,7 @@ static unsigned long shrink_page_list(struct list_head *page_list,
 		VM_BUG_ON_PAGE(PageActive(page), page);
 		VM_BUG_ON_PAGE(page_zone(page) != zone, page);
 
-		sc->nr_scanned++;
+		sc->nr_scanned++; //扫描的不活动页框数量
 
 		if (unlikely(!page_evictable(page)))
 			goto cull_mlocked;
@@ -969,6 +989,7 @@ static unsigned long shrink_page_list(struct list_head *page_list,
 		 * will stall and start writing pages if the tail of the LRU
 		 * is all dirty unqueued pages.
 		 */
+		 //dirty 的文件页写回
 		page_check_dirty_writeback(page, &dirty, &writeback);
 		if (dirty || writeback)
 			nr_dirty++;
@@ -1021,6 +1042,7 @@ static unsigned long shrink_page_list(struct list_head *page_list,
 		 *    pages are in writeback and there is nothing else to
 		 *    reclaim. Wait for the writeback to complete.
 		 */
+		 //带PageWriteback标志，说明page正在往磁盘回写。需要等一等。。。。
 		if (PageWriteback(page)) {
 			/* Case 1 above */
 			if (current_is_kswapd() &&
@@ -1075,7 +1097,7 @@ static unsigned long shrink_page_list(struct list_head *page_list,
 		 * Anonymous process memory has backing store?
 		 * Try to allocate it some swap space here.
 		 */
-		 //如果是匿名页，调用add_to_swap添加到交换缓存中
+		 //如果是匿名页，并且没有分配交换空间。add_to_swap添加到交换缓存中
 		if (PageAnon(page) && !PageSwapCache(page)) {
 			if (!(sc->gfp_mask & __GFP_IO))
 				goto keep_locked;
@@ -1140,7 +1162,7 @@ static unsigned long shrink_page_list(struct list_head *page_list,
 			 * starts and then write it out here.
 			 */
 			try_to_unmap_flush_dirty();
-			//如果是脏页的，调用pageout把文件页写回到存储设备中。
+			//如果是脏页的，&&是匿名页。调用pageout把文件页写回到存储设备中。
 			switch (pageout(page, mapping, sc)) {
 			//添加到ret_pages链表中
 			case PAGE_KEEP:
@@ -1255,7 +1277,7 @@ keep:
 	mem_cgroup_uncharge_list(&free_pages);
 	try_to_unmap_flush();
 	free_hot_cold_page_list(&free_pages, true);
-
+	//拼接
 	list_splice(&ret_pages, page_list);
 	count_vm_events(PGACTIVATE, pgactivate);
 
@@ -1310,6 +1332,7 @@ int __isolate_lru_page(struct page *page, isolate_mode_t mode)
 	int ret = -EINVAL;
 
 	/* Only take pages on the LRU. */
+	//只处理在LRU链表中的页
 	if (!PageLRU(page))
 		return ret;
 
@@ -1614,8 +1637,8 @@ shrink_inactive_list(unsigned long nr_to_scan, struct lruvec *lruvec,
 	int file = is_file_lru(lru);
 	struct zone *zone = lruvec_zone(lruvec);
 	struct zone_reclaim_stat *reclaim_stat = &lruvec->reclaim_stat;
-	/* 如果隔离的页数量多于非活动的页数量，则是隔离太多页了，个人猜测这里是控制并发
-     * 当zone的NR_INACTIVE_FILE/ANON < NR_ISOLATED_ANON时，有一种情况是其他CPU也在对此zone进行内存回收，所以NR_ISOLATED_ANON比较高
+	/* 如果隔离的页数量多于非活动的页数量，则是隔离太多页了
+     * 太多的隔离页了，就让kswap线程睡一会再说。IO写的慢
      */
 	while (unlikely(too_many_isolated(zone, file, sc))) {
 		 /* 这里会休眠等待100ms，如果是并发进行内存回收，另一个CPU可能也在执行内存回收 */
@@ -1791,7 +1814,7 @@ static void move_active_pages_to_lru(struct lruvec *lruvec,
 		//加入到头部
 		list_move(&page->lru, &lruvec->lists[lru]);
 		pgmoved += nr_pages;
-
+		//page->_count 等于0的页放回到 lcold中
 		if (put_page_testzero(page)) {
 			__ClearPageLRU(page);
 			__ClearPageActive(page);
@@ -1854,10 +1877,11 @@ static void shrink_active_list(unsigned long nr_to_scan,
      */
 	if (!sc->may_writepage)
 		isolate_mode |= ISOLATE_CLEAN;
-
+	//添加自旋锁保护LRU链表的操作
 	spin_lock_irq(&zone->lru_lock);
 	 /* 从lruvec中活动lru类型链表的尾部拿出一些页隔离出来，放入到l_hold中
      * nr_taken保存拿出的页的数量
+      nr_taken 返回值是多少个页被隔离放入到l_hold中。
      */
 	nr_taken = isolate_lru_pages(nr_to_scan, lruvec, &l_hold,
 				     &nr_scanned, sc, isolate_mode, lru);
@@ -1869,6 +1893,7 @@ static void shrink_active_list(unsigned long nr_to_scan,
 	__count_zone_vm_events(PGREFILL, zone, nr_scanned);
 	__mod_zone_page_state(zone, NR_LRU_BASE + lru, -nr_taken);
 	__mod_zone_page_state(zone, NR_ISOLATED_ANON + file, nr_taken);
+	//链表隔离结束。释放锁。先批处理拿出来，然后后面咱们慢慢解剖
 	spin_unlock_irq(&zone->lru_lock);
 	/* 将l_hold中的页一个一个处理 */
 	while (!list_empty(&l_hold)) {
@@ -1922,8 +1947,7 @@ static void shrink_active_list(unsigned long nr_to_scan,
 				continue;
 			}
 		}
-		/* 将页放到l_inactive链表中
-         * 只有最近访问过的代码段的页不会被放入，其他即使被访问过了，也会被放入l_inactive
+		/* 将页放到l_inactive链表中。PTE页表未引用
          */
 		ClearPageActive(page);	/* we are de-activating */
 		list_add(&page->lru, &l_inactive);
@@ -1939,7 +1963,7 @@ static void shrink_active_list(unsigned long nr_to_scan,
 	 * helps balance scan pressure between file and anonymous pages in
 	 * get_scan_count.
 	 */
-	/* 记录的是最近被加入到活动lru链表的页数量，之后这些页被返回到active链表 */
+	/* 把最近页表引用的页 放入到 recent_rotated中。下次计算时候用到*/
 	reclaim_stat->recent_rotated[file] += nr_rotated;
 	/* 将l_active链表中的页移动到lruvec->lists[lru]中，这里是将active的页移动到active的lru链表头部 */
     move_active_pages_to_lru(lruvec, &l_active, &l_hold, lru);
@@ -3154,6 +3178,12 @@ static bool zone_balanced(struct zone *zone, int order,
  *     Similarly, on x86-64 the Normal zone would need to be at least 1G
  *     to balance a node on its own. These seemed like reasonable ratios.
  */
+ /*
+ 1.对于order等于0的情况，所有页面是平衡的。
+ 2.对于order大于0的分配，需要统计从低端zone到classzone_idx中所有处于平衡状态
+   zone的页面数量(balanced_pages)，当大于这个节点的managed_pages的25%，那么
+   就认为这个内存节点处于平衡状态。
+*/
 static bool pgdat_balanced(pg_data_t *pgdat, int order, int classzone_idx)
 {
 	unsigned long managed_pages = 0;
@@ -3180,7 +3210,7 @@ static bool pgdat_balanced(pg_data_t *pgdat, int order, int classzone_idx)
 			balanced_pages += zone->managed_pages;
 			continue;
 		}
-
+		//如果这个zone的空闲页面高于WMARK_HIGH水位，那么这个zone所有管理的页面可以看作balances_pages
 		if (zone_balanced(zone, order, 0, i))
 			balanced_pages += zone->managed_pages;
 		else if (!order)
@@ -3243,6 +3273,7 @@ static bool kswapd_shrink_zone(struct zone *zone,
 	bool lowmem_pressure;
 
 	/* Reclaim above the high watermark. */
+	//计算一轮扫描最多回收页面数。32还是高水位数量?
 	sc->nr_to_reclaim = max(SWAP_CLUSTER_MAX, high_wmark_pages(zone));
 
 	/*
@@ -3262,6 +3293,7 @@ static bool kswapd_shrink_zone(struct zone *zone,
 	 * high wmark plus a "gap" where the gap is either the low
 	 * watermark or 1% of the zone, whichever is smaller.
 	 */
+	 //balance_gap增加了水位平衡难度.低水位或者zone管理页面的百分之1。
 	balance_gap = min(low_wmark_pages(zone), DIV_ROUND_UP(
 			zone->managed_pages, KSWAPD_ZONE_BALANCE_GAP_RATIO));
 
@@ -3269,7 +3301,10 @@ static bool kswapd_shrink_zone(struct zone *zone,
 	 * If there is no low memory pressure or the zone is balanced then no
 	 * reclaim is necessary
 	 */
+	 /*需要判断当前水位是否高于WMARK_HIGH+balance_gap,如果成立，则直接返回true。
+	 不需要进行shrink_zone回收页面。*/
 	lowmem_pressure = (buffer_heads_over_limit && is_highmem(zone));
+	//增加回收压力
 	if (!lowmem_pressure && zone_balanced(zone, testorder,
 						balance_gap, classzone_idx))
 		return true;
@@ -3292,7 +3327,7 @@ static bool kswapd_shrink_zone(struct zone *zone,
 		clear_bit(ZONE_CONGESTED, &zone->flags);
 		clear_bit(ZONE_DIRTY, &zone->flags);
 	}
-
+	//扫描的页面数量大于等于待回收页面数量，表示扫描了足够多的页面。
 	return sc->nr_scanned >= sc->nr_to_reclaim;
 }
 
@@ -3317,6 +3352,11 @@ static bool kswapd_shrink_zone(struct zone *zone,
  * interoperates with the page allocator fallback scheme to ensure that aging
  * of pages is balanced across the zones.
  */
+ /*
+  balance_pgdat()是回收页面的主函数。这是一个大循环，首先从高端zone往低端zone方向查找
+  第一个处于不平衡状态end_zone；然后从最低端zone开始回收页面，直到end_zone；在大循环里
+  检查从最低端zone到classzone_idx的zone是否处于平衡状态，然后不断加大扫描力度。
+*/
 static unsigned long balance_pgdat(pg_data_t *pgdat, int order,
 							int *classzone_idx)
 {
@@ -3372,7 +3412,7 @@ static unsigned long balance_pgdat(pg_data_t *pgdat, int order,
 				end_zone = i;
 				break;
 			}
-
+			//当前zone是否处于平衡状态，如果不平衡记录到end_zone中，然后跳出当前for循环
 			if (!zone_balanced(zone, order, 0, 0)) {
 				end_zone = i;
 				break;
@@ -3388,7 +3428,7 @@ static unsigned long balance_pgdat(pg_data_t *pgdat, int order,
 
 		if (i < 0)
 			goto out;
-
+		//从低端内存往endzone方向进行扫描，开始页面回收。
 		for (i = 0; i <= end_zone; i++) {
 			struct zone *zone = pgdat->node_zones + i;
 
@@ -3400,6 +3440,8 @@ static unsigned long balance_pgdat(pg_data_t *pgdat, int order,
 			 * not call compaction as it is expected that the
 			 * necessary pages are already available.
 			 */
+			 /*在order大于0的情况下，pgdat_needs_compaction初始化为true；
+			   如果当前zone处于WMARK_LOW水位之上，则不需要内存规整。*/
 			if (pgdat_needs_compaction &&
 					zone_watermark_ok(zone, order,
 						low_wmark_pages(zone),
@@ -3423,6 +3465,12 @@ static unsigned long balance_pgdat(pg_data_t *pgdat, int order,
 		 * pages behind kswapd's direction of progress, which would
 		 * cause too much scanning of the lower zones.
 		 */
+		 //从最低端的zone开始回收，一直到最高端的.
+		 /*
+		为什么页面回收的路径从ZONE_NORMAL到end_zone方向？
+		因为伙伴系统分配页面从ZONE_HIGHMEM到ZONE_NORMAL方向，页面回收恰好和其相反。
+		这样有利于减少锁的争用，提高效率。页面分配和页面回收可能争用zone->lru_lock锁
+		*/
 		for (i = 0; i <= end_zone; i++) {
 			struct zone *zone = pgdat->node_zones + i;
 
@@ -3450,6 +3498,8 @@ static unsigned long balance_pgdat(pg_data_t *pgdat, int order,
 			 * that that high watermark would be met at 100%
 			 * efficiency.
 			 */
+			 /*真正扫描和页回收函数，扫描的参数和结果存放在struct scan_control中。
+			 返回true表明回收了所需要的页面，不需要再提高扫描优先级*/
 			if (kswapd_shrink_zone(zone, end_zone,
 					       &sc, &nr_attempted))
 				raise_priority = false;
@@ -3472,10 +3522,12 @@ static unsigned long balance_pgdat(pg_data_t *pgdat, int order,
 		 * prevent kswapd reclaiming excessively. Assume that a
 		 * process requested a high-order can direct reclaim/compact.
 		 */
+		 /*如果order不为0，并且sc.nr_reclaimed即已成功回收页面数量大于等于2^order。*/
 		if (order && sc.nr_reclaimed >= 2UL << order)
-			order = sc.order = 0;
+			order = sc.order = 0; //这里设置order为0，为了避免碎片，方式kswapd过于激进地回收页面
 
 		/* Check if kswapd should be suspending */
+		//判断kswapd是否需要停止或者睡眠，如果是则退出。
 		if (try_to_freeze() || kthread_should_stop())
 			break;
 
@@ -3483,6 +3535,7 @@ static unsigned long balance_pgdat(pg_data_t *pgdat, int order,
 		 * Compact if necessary and kswapd is reclaiming at least the
 		 * high watermark number of pages as requsted
 		 */
+		 //判断是否需要进行内存规整，优化内存碎片。
 		if (pgdat_needs_compaction && sc.nr_reclaimed > nr_attempted)
 			compact_pgdat(pgdat, order);
 
@@ -3494,7 +3547,7 @@ static unsigned long balance_pgdat(pg_data_t *pgdat, int order,
 			sc.priority--;
 	} while (sc.priority >= 1 &&
 		 !pgdat_balanced(pgdat, order, *classzone_idx));
-
+	//不断加大扫描粒度，并且检查低端的zone到classzone_idx是否处于平衡状态
 out:
 	/*
 	 * Return the order we were reclaiming at so prepare_kswapd_sleep()
@@ -3513,11 +3566,13 @@ static void kswapd_try_to_sleep(pg_data_t *pgdat, int order, int classzone_idx)
 
 	if (freezing(current) || kthread_should_stop())
 		return;
-
+	//定义一个wait在kswapd_wait上等待，设置进程状态为TASK_INTERRUPTIBLE
 	prepare_to_wait(&pgdat->kswapd_wait, &wait, TASK_INTERRUPTIBLE);
 
 	/* Try to sleep for a short interval */
+	//remaining为0，检查kswapd是否准备好睡眠。
 	if (prepare_kswapd_sleep(pgdat, order, remaining, classzone_idx)) {
+		//尝试短睡100ms，如果返回不为0，则说明没有100ms之内被唤醒了
 		remaining = schedule_timeout(HZ/10);
 		finish_wait(&pgdat->kswapd_wait, &wait);
 		prepare_to_wait(&pgdat->kswapd_wait, &wait, TASK_INTERRUPTIBLE);
@@ -3527,6 +3582,7 @@ static void kswapd_try_to_sleep(pg_data_t *pgdat, int order, int classzone_idx)
 	 * After a short sleep, check if it was a premature sleep. If not, then
 	 * go fully to sleep until explicitly woken up.
 	 */
+	 //如果短睡被唤醒，则没有必要继续睡眠。如果短睡没有被唤醒，则可以尝试进入睡眠
 	if (prepare_kswapd_sleep(pgdat, order, remaining, classzone_idx)) {
 		trace_mm_vmscan_kswapd_sleep(pgdat->node_id);
 
@@ -3547,7 +3603,7 @@ static void kswapd_try_to_sleep(pg_data_t *pgdat, int order, int classzone_idx)
 		 * that pages and compaction may succeed so reset the cache.
 		 */
 		reset_isolation_suitable(pgdat);
-
+		//把当前睡眠进程调度出去，移除运行队列
 		if (!kthread_should_stop())
 			schedule();
 
@@ -3558,6 +3614,7 @@ static void kswapd_try_to_sleep(pg_data_t *pgdat, int order, int classzone_idx)
 		else
 			count_vm_event(KSWAPD_HIGH_WMARK_HIT_QUICKLY);
 	}
+	//设置进程状态为TASK_RUNNING。
 	finish_wait(&pgdat->kswapd_wait, &wait);
 }
 
@@ -3638,8 +3695,10 @@ static int kswapd(void *p)
 			order = new_order;
 			classzone_idx = new_classzone_idx;
 		} else {
+			//睡眠并且让出CPU，等待wakeup_kswapd()唤醒
 			kswapd_try_to_sleep(pgdat, balanced_order,
 						balanced_classzone_idx);
+			//pgdata->kswapd_max_order和pgdat->classzone_id已经在wakeup_kswapd中进行了更新
 			order = pgdat->kswapd_max_order;
 			classzone_idx = pgdat->classzone_idx;
 			new_order = order;
@@ -3659,6 +3718,7 @@ static int kswapd(void *p)
 		if (!ret) {
 			trace_mm_vmscan_kswapd_wake(pgdat->node_id, order);
 			balanced_classzone_idx = classzone_idx;
+			//回收页面的主函数，多zone
 			balanced_order = balance_pgdat(pgdat, order,
 						&balanced_classzone_idx);
 		}
@@ -3684,6 +3744,7 @@ void wakeup_kswapd(struct zone *zone, int order, enum zone_type classzone_idx)
 	if (!cpuset_zone_allowed(zone, GFP_KERNEL | __GFP_HARDWALL))
 		return;
 	pgdat = zone->zone_pgdat;
+	//准备内存本节点的classzone_idx和kswapd_max_order两个参数。
 	if (pgdat->kswapd_max_order < order) {
 		pgdat->kswapd_max_order = order;
 		pgdat->classzone_idx = min(pgdat->classzone_idx, classzone_idx);
@@ -3694,7 +3755,8 @@ void wakeup_kswapd(struct zone *zone, int order, enum zone_type classzone_idx)
 		return;
 
 	trace_mm_vmscan_wakeup_kswapd(pgdat->node_id, zone_idx(zone), order);
-	wake_up_interruptible(&pgdat->kswapd_wait);
+	//唤醒kswapd_wait等待队列上的TASK_INTERRUPTIBLE线程。kswapd
+	wake_up_interruptible(&pgdat->kswapd_wait); //default_wake_function
 }
 
 #ifdef CONFIG_HIBERNATION

@@ -14,7 +14,8 @@ typedef int (*wait_queue_func_t)(wait_queue_t *wait, unsigned mode, int flags, v
 int default_wake_function(wait_queue_t *wait, unsigned mode, int flags, void *key);
 
 /* __wait_queue::flags */
-#define WQ_FLAG_EXCLUSIVE	0x01
+//当 wake_up 被在一个等待队列上调用, 它在唤醒第一个有 WQ_FLAG_EXCLUSIVE 标 志的进程后停止.
+#define WQ_FLAG_EXCLUSIVE	0x01 //它被添加到等待队列的尾 部. 没有这个标志的入口项, 相反, 添加到开始.
 #define WQ_FLAG_WOKEN		0x02
 
 struct __wait_queue {
@@ -37,8 +38,8 @@ struct wait_bit_queue {
 };
 
 struct __wait_queue_head {
-	spinlock_t		lock;
-	struct list_head	task_list;
+	spinlock_t		lock; //自旋锁用于保护自身资源(task_list链表)不被多个进程同时访问
+	struct list_head	task_list; //双向循环链表通过此字段连接成等待对列链表
 };
 typedef struct __wait_queue_head wait_queue_head_t;
 

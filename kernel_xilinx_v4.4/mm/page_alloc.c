@@ -3173,7 +3173,11 @@ retry:
 	 * Try direct compaction. The first pass is asynchronous. Subsequent
 	 * attempts after direct reclaim are synchronous
 	 */
-	//针对申请阶数大于0，执行内存碎片整理
+	//针对申请阶数大于0，执行内存碎片整理.
+	/*
+	在明确的触发条件没有被满足的情形下，内存规整是不会被执行的；
+	因为移动页框是一件耗时的操作，除非万不得已，最好避免此类操作
+	*/
 	page = __alloc_pages_direct_compact(gfp_mask, order, alloc_flags, ac,
 					migration_mode,
 					&contended_compaction,

@@ -62,11 +62,18 @@ EXPORT_SYMBOL(remove_wait_queue);
  * started to run but is not in state TASK_RUNNING. try_to_wake_up() returns
  * zero in this (rare) case, and we handle it by continuing to scan the queue.
  */
+ /*
+ 当一个等待队列入口有 WQ_FLAG_EXCLUSEVE 标志置位, 它被添加到等待队列的尾部.没有这个标志的入口项,
+ 相反, 添加到开始.
+当 wake_up 被在一个等待队列上调用, 它在唤醒第一个有 WQ_FLAG_EXCLUSIVE 标 志的进程后停止.
+最后的结果是进行互斥等待的进程被一次唤醒一个, 以顺序的方式, 并且没有引起惊群问 题. 但内核仍然
+每次唤醒所有的非互斥等待者
+*/
 static void __wake_up_common(wait_queue_head_t *q, unsigned int mode,
 			int nr_exclusive, int wake_flags, void *key)
 {
 	wait_queue_t *curr, *next;
-
+	//遍历wait_queue_head_t中的 wait_queue_t.
 	list_for_each_entry_safe(curr, next, &q->task_list, task_list) {
 		unsigned flags = curr->flags;
 

@@ -21,3 +21,49 @@ lru缓存
 判定为活动页，但是当第二轮内存回收时，就可以正常判断了，因为每一轮内存回收后，都会清除所有访问了此页的页表项的Accessed标志，
 在第二轮内存回收时，只有在第一轮内存回收后与第二轮内存回收开始前被访问过的页，才会被判断为最近被访问过的页。
 
+
+１．当vma flag中标记VM_LOCKED时，表示这段内存不能被回收，要常驻内存中.
+
+2.当ZONE的空闲页面数大于WMARK_HIGH时，这个ZONE就可认为是balanced(由函数zone_balanced()判断)
+
+3.当ZONE的水位低于WMARK_LOW时，触发内核启动内存回收,当ZONE的水位高于WMARK_LOW时，停止内存回收.
+
+４．Page相关标志位。
+
+PageWriteback(page)检查page是否设置PG_PageWriteback标志位,表示页面正在回写磁盘：
+
+PG_writeback:is set before writeback starts and cleared when it finishes
+
+PG_locked : This bit is set before I/O　and cleared when writeback _starts_ or when read _completes_.
+
+PG_uptodate : tells whether the page's contents is valid.? When a read? completes, the page becomes uptodate
+
+PG_referenced/PG_reclaim :are used for page reclaim for anonymous and file-backed pagecache
+
+PG_head: 表示这个页是head page
+
+PG_unevictable:表示页面不可回收.
+
+PG_PageReclaim：如果页面是Dirty或者处于writeback状态，那么这种页面会放到不活跃链表头，并设置PG_PageReclaim.
+
+PG_swapcache:表示页面是否分配了swap空间 PageSwapCache(page)
+
+PageSwapBacked(page)：检查page是否为匿名页面,Page is backed by RAM/swap
+
+对PG_swapcache和PG_SwapBacked的一点理解,swapcache表示匿名页面已经交换(swap)到磁盘,
+
+而SwapBacked,表示匿名页面的内容已经从磁盘换回(backed)到内存中.
+设置page的标志位函数定义在头文件:include/linux/page-flags.h
+
+5 共享匿名映射内存实现时，虽然关联到/dev/zero结点,当分配的内存page,挂接到lrulist的匿名非活跃链表。
+
+6.　内核分配的内存kmalloc/alloc_page/vmalloc等等，不会挂接到zone的lrulist
+
+７手动释放page cache
+
+To free pagecache:
+echo 1 > /proc/sys/vm/drop_caches
+To free dentries and inodes:
+echo 2 > /proc/sys/vm/drop_caches
+To free pagecache, dentries and inodes:
+echo 3 > /proc/sys/vm/drop_caches

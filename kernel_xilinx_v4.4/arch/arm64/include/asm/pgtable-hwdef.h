@@ -140,8 +140,10 @@
 #define PTE_TYPE_FAULT		(_AT(pteval_t, 0) << 0)
 #define PTE_TYPE_PAGE		(_AT(pteval_t, 3) << 0)
 #define PTE_TABLE_BIT		(_AT(pteval_t, 1) << 1)
-#define PTE_USER		(_AT(pteval_t, 1) << 6)		/* AP[1] */
 /*Data Access premissio，数据访问权限.AP[2,1]:*/
+/*AP[1]:用来选择是否允许异常级别0访问。1表示允许。0表示不允许*/
+#define PTE_USER		(_AT(pteval_t, 1) << 6)		/* AP[1] */
+/*AP[2]:用来选择只读或者只写。1表示只读，0表示只写。*/
 #define PTE_RDONLY		(_AT(pteval_t, 1) << 7)		/* AP[2] */
 /*可共享性。00:不共享;01:保留值;10:外部共享;11:内部共享*/
 #define PTE_SHARED		(_AT(pteval_t, 3) << 8)		/* SH[1:0], inner shareable */

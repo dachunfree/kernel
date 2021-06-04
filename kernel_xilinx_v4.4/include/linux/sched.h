@@ -280,6 +280,7 @@ extern char ___assert_task_state[1 - 2*!!(
 		current->task_state_change = _THIS_IP_;		\
 		current->state = (state_value);			\
 	} while (0)
+//为什么要内存屏障 write_once
 #define set_current_state(state_value)				\
 	do {							\
 		current->task_state_change = _THIS_IP_;		\

@@ -618,9 +618,9 @@ unsigned long node_page_state(int node, enum zone_stat_item item)
 #ifdef CONFIG_COMPACTION
 
 struct contig_page_info {
-	unsigned long free_pages;
-	unsigned long free_blocks_total;
-	unsigned long free_blocks_suitable;
+	unsigned long free_pages;//共有多少空闲的页数
+	unsigned long free_blocks_total;//共有多少空闲的页块数
+	unsigned long free_blocks_suitable; //满足要求的空闲页块数
 };
 
 /*
