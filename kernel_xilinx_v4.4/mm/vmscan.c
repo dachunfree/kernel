@@ -1327,6 +1327,12 @@ unsigned long reclaim_clean_pages_from_list(struct zone *zone,
  *
  * returns 0 on success, -ve errno on failure.
  */
+ /*
+ 隔离作用
+ 1.老page数据正在迁移过程中，却被修改了。
+ 2.老page数据正在迁移过程中，被释放了。
+ 清除PG_LRU标志位即可，表示不在LRU链表中
+*/
 int __isolate_lru_page(struct page *page, isolate_mode_t mode)
 {
 	int ret = -EINVAL;
@@ -1385,6 +1391,12 @@ int __isolate_lru_page(struct page *page, isolate_mode_t mode)
 		 * sure the page is not being freed elsewhere -- the
 		 * page release code relies on it.
 		 */
+		 /*ClearPageLRU()会清除掉page的PG_lru标记，使得PageLRU(page)为假
+		 从而阻止了很多类似如下的LRU代码路径：
+		 __activate_page
+		 if (PageLRU(page) && !PageActive(page) && !PageUnevictable(page)) {
+		 }
+		*/
 		ClearPageLRU(page);
 		ret = 0;
 	}

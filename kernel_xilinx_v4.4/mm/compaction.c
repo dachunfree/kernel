@@ -1114,6 +1114,7 @@ int sysctl_compact_unevictable_allowed __read_mostly = 1;
  * starting at the block pointed to by the migrate scanner pfn within
  * compact_control.
  */
+//isolate_migratepages扫描并寻找zone中可迁移页面，结果回添加到cc->migratepages链表中。
 static isolate_migrate_t isolate_migratepages(struct zone *zone,
 					struct compact_control *cc)
 {
@@ -1247,6 +1248,7 @@ static int __compact_finished(struct zone *zone, struct compact_control *cc,
 		return COMPACT_CONTINUE;
 
 	/* Compaction run is not finished if the watermark is not met */
+	//不满足低水位条件，继续内存规整。
 	watermark = low_wmark_pages(zone);
 
 	if (!zone_watermark_ok(zone, cc->order, watermark, cc->classzone_idx,
@@ -1533,12 +1535,12 @@ static unsigned long compact_zone_order(struct zone *zone, int order,
 		.order = order,
 		.gfp_mask = gfp_mask,
 		.zone = zone,
-		.mode = mode,
+		.mode = mode, //页面规整模式-同步、异步
 		.alloc_flags = alloc_flags,
 		.classzone_idx = classzone_idx,
 	};
-	INIT_LIST_HEAD(&cc.freepages);// 空闲扫描器
-	INIT_LIST_HEAD(&cc.migratepages);//迁移扫描器
+	INIT_LIST_HEAD(&cc.freepages);// 空闲扫描器.初始化迁移目的地的链表
+	INIT_LIST_HEAD(&cc.migratepages);//迁移扫描器,初始化将要迁移页面链表
 	//负责在一个区域执行内存碎片整理
 	ret = compact_zone(zone, &cc);
 
