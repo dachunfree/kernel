@@ -874,7 +874,17 @@ EXPORT_SYMBOL_GPL(page_endio);
 void __lock_page(struct page *page)
 {
 	DEFINE_WAIT_BIT(wait, &page->flags, PG_locked);
-
+	/*
+		#define DEFINE_WAIT_BIT(name, word, bit)
+		struct wait_bit_queue wait = {					\
+		.key = __WAIT_BIT_KEY_INITIALIZER(page->flags, bit),		\
+		.wait	= {						\
+			.private	= current,			\
+			.func		= wake_bit_function,		\
+			.task_list	=				\
+				LIST_HEAD_INIT((wait).wait.task_list),	\
+		},
+	*/
 	__wait_on_bit_lock(page_waitqueue(page), &wait, bit_wait_io,
 							TASK_UNINTERRUPTIBLE);
 }

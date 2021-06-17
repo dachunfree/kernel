@@ -542,10 +542,16 @@ enum pageblock_bits;
 
 #if defined CONFIG_COMPACTION || defined CONFIG_CMA
 	/* pfn where compaction free scanner should start */
-	//空闲扫描器起始地址。默认是zone endpfn
+    /* 空闲页框扫描起始位置，开始设置时是管理区的最后一个页框
+     * 在内存碎片整理扫描可以移动的页时，从本次内存碎片整理开始到此pageblock结束都没有隔离出可移动页时，会将此值设置为pageblock的最后一页
+     * 此值默认是zone的结束页框
+     */
 	unsigned long		compact_cached_free_pfn;
 	/* pfn where async and sync compaction migration scanner should start */
-	// 1表示同步模式，0表示异步模式。migrate_pfn迁移扫描器起始地址，默认zone startpfn
+	/* 0用于异步，1用于同步，用于保存管理区可移动页框扫描起始位置
+     * 在内存碎片整理扫描空闲页时，从本次内存碎片整理开始到此pageblock结束都没有隔离出空闲页时，会将此值设置为pageblock的最后一页
+     * 此值默认是zone的开始页框
+     */
 	unsigned long		compact_cached_migrate_pfn[2];
 #endif
 

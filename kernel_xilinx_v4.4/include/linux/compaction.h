@@ -5,11 +5,13 @@
 /* compaction didn't start as it was deferred due to past failures */
 #define COMPACT_DEFERRED	0
 /* compaction didn't start as it was not possible or direct reclaim was more suitable */
+//此zone内存不足以进行内存碎片整理，判断条件是此zone的空闲页框数量少于 zone的低阀值 + (2 << order)。
 #define COMPACT_SKIPPED		1
 /* compaction should continue to another pageblock */
 #define COMPACT_CONTINUE	2
 /* direct compaction partially compacted a zone and there are suitable pages */
-//部分
+// If the allocation would succeed without compaction
+//此zone内存足够用于分配要求的2^order个页框，不用进行内存碎片整理。
 #define COMPACT_PARTIAL		3
 /* The full zone was compacted */
 //扫描整个区域

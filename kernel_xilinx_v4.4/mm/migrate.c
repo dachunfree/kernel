@@ -213,6 +213,7 @@ void __migration_entry_wait(struct mm_struct *mm, pte_t *ptep,
 
 	spin_lock(ptl);
 	pte = *ptep;
+	//pte页表不为空 && pte页表在内存中
 	if (!is_swap_pte(pte))
 		goto out;
 
@@ -231,6 +232,7 @@ void __migration_entry_wait(struct mm_struct *mm, pte_t *ptep,
 	 */
 	if (!get_page_unless_zero(page))
 		goto out;
+	//将进程放入等待队列，等待page的PG_locked标记被清楚，也就是等待第3阶段的完成，从而实现了无缝地交接
 	pte_unmap_unlock(ptep, ptl);
 	wait_on_page_locked(page);
 	put_page(page);
@@ -784,7 +786,15 @@ static int move_to_new_page(struct page *newpage, struct page *page,
 	}
 	return rc;
 }
+/*
+page：待迁移页的页描述符，该页的迁移类型只能是MIGRATE_RECLAIMABLE、MIGRATE_MOVABLE和MIGRATE_CMA中的一种
+	（内存规整中是通过迁移页扫描器隔离到cc->migratepages链表中的页）。
+newpage:page准备移入的页，该页为空闲页，通常从伙伴系统中取出被隔离到一个特定的区域。
+		(内存规整是通过其空闲页扫描器将空闲页隔离到cc->freepages链表中)
+force:表示迁移的紧急程度，若if判断为true表示迫切需要进行page页的迁移。
+mod:迁移模式
 
+*/
 static int __unmap_and_move(struct page *page, struct page *newpage,
 				int force, enum migrate_mode mode)
 {
@@ -792,7 +802,27 @@ static int __unmap_and_move(struct page *page, struct page *newpage,
 	int page_was_mapped = 0;
 	struct anon_vma *anon_vma = NULL;
 	//尝试给页面枷锁，返回false表示已经有别的进程给page枷锁，返回true表示当前进程可以成功获取锁。
+	/*
+  *（1） 获取迁移页page的锁（PG_locked置位），该操作非常关键，因为按照要求在page的迁移过程
+  *     所有映射了page的进程若要访问page，会通过特殊操作将这些进程加入到一个等待队列中等待
+  *     着。当该页的迁移执行完后，释放掉该锁，才从上面的等待队将中将那些等待page锁释放的进
+  *     程唤醒。释放锁前page页的内容和状态数据都迁移到newpage中去了。所以这些进程唤醒后通
+  *     过原先虚拟地址访问的页由page变为了newpage
+  *（2）在page迁移过程中，让所有访问迁移页page的进程都处于等待获取page锁状态的方法是:
+  *  （a）首先是获取page的锁
+  *  （b）在迁移page的流程中，函数会先创建一个特殊的页表项（该页表项的状态位设置为页表项
+  *    指向的物理页不在内存中，而页表项的偏移量设置为page页对应的页框号pfn。（类似swap
+  *    类型的页表项，只是swap类型的页表项的偏移量是匿名页所在swap分区页槽的索引）
+  *  （c）当某一进程通过虚拟地址访问page物理页时，遇到该特殊的页表项，则会触发缺页中断，而
+  *    在异常中断处理流程中该特殊页表项也会引导进程进入到一个特殊的处理流程中，该特殊流程会让当前进程因获
+  *    取到到page的页锁而处于等待状态
+  */
+
 	if (!trylock_page(page)) {
+	/*
+	 *在异步非紧急的迁移流程中必须要在此获取到page的锁，否立即返回-EAGAIN，该次页迁移失败。
+	 *为了防止后面lock_page(page)获取锁，可能会导致阻塞等待
+	 */
 		if (!force || mode == MIGRATE_ASYNC) //加锁失败，且强制迁移或异步模式，则忽略这个页面
 			goto out;
 
@@ -812,10 +842,10 @@ static int __unmap_and_move(struct page *page, struct page *newpage,
 		 //可能在直接内存压缩路径上，睡眠等待页面锁是不安全的，忽略此页面。
 		if (current->flags & PF_MEMALLOC)
 			goto out;
-
+		//同步和轻同步的情况下，都有可能会为了拿到这个锁而阻塞在这
 		lock_page(page);
 	}
-
+	//页正在回写
 	if (PageWriteback(page)) {
 		/*
 		 * Only in the case of a full synchronous migration is it
@@ -823,12 +853,15 @@ static int __unmap_and_move(struct page *page, struct page *newpage,
 		 * the retry loop is too short and in the sync-light case,
 		 * the overhead of stalling is too much
 		 */
+		 //异步或轻同步模式页迁移不等待页回写，返回迁移失败（设备繁忙）
 		if (mode != MIGRATE_SYNC) {
 			rc = -EBUSY;
 			goto out_unlock;
 		}
+		//非紧急模式下也结束迁移，该返回值告诉上层函数可以再次尝试该页的迁移
 		if (!force)
-			goto out_unlock;
+			goto out_unlock; //page的页锁还未释放
+		//同步迁移模式下，阻塞，等待页回写完成
 		wait_on_page_writeback(page);
 	}
 
@@ -846,7 +879,9 @@ static int __unmap_and_move(struct page *page, struct page *newpage,
 	 * because that implies that the anon page is no longer mapped
 	 * (and cannot be remapped so long as we hold the page lock).
 	 */
+	 //非ksm匿名页进入该代码块
 	if (PageAnon(page) && !PageKsm(page))
+		//获取匿名页page反向映射中的struct anon_vma指针（page->mapping指向）
 		anon_vma = page_get_anon_vma(page);
 
 	/*
@@ -857,6 +892,7 @@ static int __unmap_and_move(struct page *page, struct page *newpage,
 	 * cases where there might be a race with the previous use of newpage.
 	 * This is much like races on refcount of oldpage: just don't BUG().
 	 */
+	 //获取待迁入页newpage的页锁，失败的话本次迁移失败
 	if (unlikely(!trylock_page(newpage)))
 		goto out_unlock;
 
@@ -884,13 +920,14 @@ static int __unmap_and_move(struct page *page, struct page *newpage,
 	 * invisible to the vm, so the page can not be migrated.  So try to
 	 * free the metadata, so the page can be freed.
 	 */
+	//如果页没有反向映射。
 	if (!page->mapping) {
 		VM_BUG_ON_PAGE(PageAnon(page), page);
 		if (page_has_private(page)) {
-			try_to_free_buffers(page);
+			try_to_free_buffers(page); //释放块缓存区
 			goto out_unlock_both;
 		}
-	} else if (page_mapped(page)) { //有pte映射的页面，调用try_to_unmap()解除页面所有映射
+	} else if (page_mapped(page)) { //有反向映射且存在页表项映射这个页，调用try_to_unmap()解除页面所有映射
 		/* Establish migration ptes */
 		VM_BUG_ON_PAGE(PageAnon(page) && !PageKsm(page) && !anon_vma,
 				page);
@@ -903,15 +940,22 @@ static int __unmap_and_move(struct page *page, struct page *newpage,
 		rc = move_to_new_page(newpage, page, mode);
 	//rc不为0表示迁移页面失败，调用remove_migration_ptes()删掉迁移的pte。
 	if (page_was_mapped)
+		/*
+		 *(1).若page和newpage数据拷贝成功，将通过反向映射将以前映射了page所有进程对应的
+		 *	  pte页表项的偏移量替换成newpage对应的物理页框号pfn，并置位页表项对应bit，表
+		 *    示其指向的物理页在内存中
+		 *（2）若数据拷贝失败，则将所有映射了旧页的进程页表项再重新映射到旧页上，主要是将页表项
+		 *	   中表示该映射对应的物理页在内存中的bit置位，当然本次迁移失败。
+		 */
 		remove_migration_ptes(page,
 			rc == MIGRATEPAGE_SUCCESS ? newpage : page);
-
+//释放lock的页锁
 out_unlock_both:
 	unlock_page(newpage);
 out_unlock:
 	/* Drop an anon_vma reference if we took one */
 	if (anon_vma)
-		put_anon_vma(anon_vma);
+		put_anon_vma(anon_vma);//解除anon_vma应用计数
 	unlock_page(page);
 out:
 	return rc;

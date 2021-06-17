@@ -3065,7 +3065,7 @@ __alloc_pages_slowpath(gfp_t gfp_mask, unsigned int order,
 	int alloc_flags;
 	unsigned long pages_reclaimed = 0;
 	unsigned long did_some_progress;
-	enum migrate_mode migration_mode = MIGRATE_ASYNC;
+	enum migrate_mode migration_mode = MIGRATE_ASYNC; //异步模式进行内存规整
 	bool deferred_compaction = false;
 	int contended_compaction = COMPACT_CONTENDED_NONE;
 

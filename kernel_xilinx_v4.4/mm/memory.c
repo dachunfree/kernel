@@ -2472,6 +2472,7 @@ static int do_swap_page(struct mm_struct *mm, struct vm_area_struct *vma,
 		goto out;
 	//根据pte来获取swap的entry
 	entry = pte_to_swp_entry(orig_pte);
+	//处理迁移内存类型
 	if (unlikely(non_swap_entry(entry))) {
 		if (is_migration_entry(entry)) {
 			migration_entry_wait(mm, pmd, address);
