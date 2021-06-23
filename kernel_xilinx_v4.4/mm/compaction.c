@@ -1380,7 +1380,7 @@ static int compact_zone(struct zone *zone, struct compact_control *cc)
 	int ret;
 	unsigned long start_pfn = zone->zone_start_pfn; //当前zone起始物理帧号
 	unsigned long end_pfn = zone_end_pfn(zone); //包含空洞的结束物理帧号
-	//  /* 获取可进行移动的页框类型(__GFP_RECLAIMABLE、__GFP_MOVABLE) */
+	/* 获取可进行移动的页框类型(__GFP_RECLAIMABLE、__GFP_MOVABLE) */
 	const int migratetype = gfpflags_to_migratetype(cc->gfp_mask);
 	const bool sync = cc->mode != MIGRATE_ASYNC;
 	//判断内存区域是否适合执行内存碎片整理

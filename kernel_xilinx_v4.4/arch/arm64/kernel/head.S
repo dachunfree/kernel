@@ -38,7 +38,7 @@
 #include <asm/thread_info.h>
 #include <asm/virt.h>
 
-#define __PHYS_OFFSET	(KERNEL_START - TEXT_OFFSET)
+#define __PHYS_OFFSET	(KERNEL_START - TEXT_OFFSET) // Makefile÷–:TEXT_OFFSET := 0x00080000
 
 #if (TEXT_OFFSET & 0xfff) != 0
 #error TEXT_OFFSET must be at least 4KB aligned

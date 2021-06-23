@@ -1,6 +1,6 @@
 /*
  *  linux/mm/oom_kill.c
- * 
+ *
  *  Copyright (C)  1998,2000  Rik van Riel
  *	Thanks go out to Claus Fischer for some serious inspiration and
  *	for goading me into coding this file...
@@ -131,8 +131,10 @@ static inline bool is_sysrq_oom(struct oom_control *oc)
 static bool oom_unkillable_task(struct task_struct *p,
 		struct mem_cgroup *memcg, const nodemask_t *nodemask)
 {
+	// 1号进程 不要杀死
 	if (is_global_init(p))
 		return true;
+	//内核线程 不要杀死
 	if (p->flags & PF_KTHREAD)
 		return true;
 
@@ -161,15 +163,22 @@ unsigned long oom_badness(struct task_struct *p, struct mem_cgroup *memcg,
 {
 	long points;
 	long adj;
-
+	//如果是不可杀死进程，比如1号进程和内核线程，坏蛋分数是0
 	if (oom_unkillable_task(p, memcg, nodemask))
 		return 0;
 
 	p = find_lock_task_mm(p);
 	if (!p)
 		return 0;
-
+	/*
+	对某一个task进行打分（oom_score）主要有两部分组成，
+	1.系统打分，主要是根据该task的内存使用情况。
+	2.用户打分，也就是oom_score_adj了.
+	该task的实际得分需要综合考虑两方面的打分。如果用户将该task的 oom_score_adj设定成OOM_SCORE_ADJ_MIN（-1000）的话，那么实际上就是禁止
+	了OOM killer杀死该进程。
+	*/
 	adj = (long)p->signal->oom_score_adj;
+	//这里返回了0也就是告知OOM killer，该进程是“good process”，不要干掉它。后面我们可以看到，实际计算分数的时候最低分是1分
 	if (adj == OOM_SCORE_ADJ_MIN) {
 		task_unlock(p);
 		return 0;
@@ -179,6 +188,8 @@ unsigned long oom_badness(struct task_struct *p, struct mem_cgroup *memcg,
 	 * The baseline for the badness score is the proportion of RAM that each
 	 * task's rss, pagetable and swap space use.
 	 */
+	//坏蛋分数等于=常驻内存大小+换出的页数+直接页表数量+页中间目录的数量
+	//系统打分就是看物理内存消耗量，主要是三部分，RSS部分，swap file或者swap device上占用的内存情况以及页表占用的内存情况
 	points = get_mm_rss(p->mm) + get_mm_counter(p->mm, MM_SWAPENTS) +
 		atomic_long_read(&p->mm->nr_ptes) + mm_nr_pmds(p->mm);
 	task_unlock(p);
@@ -187,17 +198,20 @@ unsigned long oom_badness(struct task_struct *p, struct mem_cgroup *memcg,
 	 * Root processes get 3% bonus, just like the __vm_enough_memory()
 	 * implementation used by LSMs.
 	 */
+	 //root进程有3%的内存使用特权，因此这里要减去那些内存使用量
 	if (has_capability_noaudit(p, CAP_SYS_ADMIN))
 		points -= (points * 3) / 100;
-
+	//坏蛋分数的调整值等于(物理内存总页数+交换区的总页数)*进程的分数调整值/1000
 	/* Normalize to oom_score_adj units */
 	adj *= totalpages / 1000;
+	//将坏蛋分数加上调整值
 	points += adj;
 
 	/*
 	 * Never return 0 for an eligible task regardless of the root bonus and
 	 * oom_score_adj (oom_score_adj can't be OOM_SCORE_ADJ_MIN here).
 	 */
+	 //返回坏蛋分数
 	return points > 0 ? points : 1;
 }
 
@@ -321,6 +335,7 @@ static struct task_struct *select_bad_process(struct oom_control *oc,
 		case OOM_SCAN_OK:
 			break;
 		};
+		//负责计算坏蛋进程的坏蛋分数。范围是0-1000.0表示不杀死，1000表示总是杀死
 		points = oom_badness(p, NULL, oc->nodemask, totalpages);
 		if (!points || points < chosen_points)
 			continue;
@@ -510,7 +525,7 @@ void oom_kill_process(struct oom_control *oc, struct task_struct *p,
 		      unsigned int points, unsigned long totalpages,
 		      struct mem_cgroup *memcg, const char *message)
 {
-	struct task_struct *victim = p;
+	struct task_struct *victim = p; //牺牲
 	struct task_struct *child;
 	struct task_struct *t;
 	struct mm_struct *mm;
@@ -544,6 +559,8 @@ void oom_kill_process(struct oom_control *oc, struct task_struct *p,
 	 * still freeing memory.
 	 */
 	read_lock(&tasklist_lock);
+	//如果选中的进程有子进程，那么从所有子进程中选择坏蛋分数最高的子进程代替父进程牺牲。
+	//试图使丢失的工作数量最小化
 	for_each_thread(p, t) {
 		list_for_each_entry(child, &t->children, sibling) {
 			unsigned int child_points;
@@ -612,7 +629,7 @@ void oom_kill_process(struct oom_control *oc, struct task_struct *p,
 			continue;
 		if (p->signal->oom_score_adj == OOM_SCORE_ADJ_MIN)
 			continue;
-
+		//像被选中的进程发送杀死信号
 		do_send_sig_info(SIGKILL, SEND_SIG_FORCED, p, true);
 	}
 	rcu_read_unlock();
@@ -680,7 +697,7 @@ bool out_of_memory(struct oom_control *oc)
 
 	if (oom_killer_disabled)
 		return false;
-
+	//调用注册到oom_notify_list的通知链
 	blocking_notifier_call_chain(&oom_notify_list, 0, &freed);
 	if (freed > 0)
 		/* Got some memory back in the last second. */
@@ -707,6 +724,7 @@ bool out_of_memory(struct oom_control *oc)
 	constraint = constrained_alloc(oc, &totalpages);
 	if (constraint != CONSTRAINT_MEMORY_POLICY)
 		oc->nodemask = NULL;
+	//检查是否允许执行内核恐慌
 	check_panic_on_oom(oc, constraint, NULL);
 
 	if (sysctl_oom_kill_allocating_task && current->mm &&
@@ -717,7 +735,7 @@ bool out_of_memory(struct oom_control *oc)
 				 "Out of memory (oom_kill_allocating_task)");
 		return true;
 	}
-
+	//选择坏蛋进程
 	p = select_bad_process(oc, &points, totalpages);
 	/* Found nothing?!?! Either we hang forever, or we panic. */
 	if (!p && !is_sysrq_oom(oc)) {
@@ -725,6 +743,7 @@ bool out_of_memory(struct oom_control *oc)
 		panic("Out of memory and no killable processes...\n");
 	}
 	if (p && p != (void *)-1UL) {
+		//杀死坏蛋进程。
 		oom_kill_process(oc, p, points, totalpages, NULL,
 				 "Out of memory");
 		/*

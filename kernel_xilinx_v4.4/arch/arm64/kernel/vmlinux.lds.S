@@ -19,7 +19,7 @@
 #define ARM_EXIT_DISCARD(x)
 
 OUTPUT_ARCH(aarch64)
-ENTRY(_text)
+ENTRY(_text) //__PHYS_OFFSET 从此获取的物理地址
 
 jiffies = jiffies_64;
 

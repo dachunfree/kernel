@@ -892,7 +892,7 @@ static int __unmap_and_move(struct page *page, struct page *newpage,
 	 * cases where there might be a race with the previous use of newpage.
 	 * This is much like races on refcount of oldpage: just don't BUG().
 	 */
-	 //获取待迁入页newpage的页锁，失败的话本次迁移失败
+	 //尝试锁住新的物理页，如果页被其他进程锁住，不等待锁，直接返回。
 	if (unlikely(!trylock_page(newpage)))
 		goto out_unlock;
 
@@ -931,11 +931,16 @@ static int __unmap_and_move(struct page *page, struct page *newpage,
 		/* Establish migration ptes */
 		VM_BUG_ON_PAGE(PageAnon(page) && !PageKsm(page) && !anon_vma,
 				page);
+	/* umap此页，会为映射了此页的进程创建一个迁移使用的swp_entry_t，这个swp_entry_t指向的页就是此page
+     * 将此swp_entry_t替换映射了此页的页表项
+     * 然后对此页的页描述符的_mapcount进行--操作，表明反向映射到的一个进程取消了映射
+	 TTU_MIGRATION:代表这次反向映射是为了页面迁移而进行的
+     */
 		try_to_unmap(page,
 			TTU_MIGRATION|TTU_IGNORE_MLOCK|TTU_IGNORE_ACCESS);
 		page_was_mapped = 1;
 	}
-	//已经解除完所有映射的页面，将页面迁移到新分配的页面newpage
+    /* 将page的内容复制到newpage中，会进行将newpage重新映射到page所属进程的pte中 */
 	if (!page_mapped(page))
 		rc = move_to_new_page(newpage, page, mode);
 	//rc不为0表示迁移页面失败，调用remove_migration_ptes()删掉迁移的pte。

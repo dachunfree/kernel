@@ -2475,6 +2475,7 @@ static int do_swap_page(struct mm_struct *mm, struct vm_area_struct *vma,
 	//处理迁移内存类型
 	if (unlikely(non_swap_entry(entry))) {
 		if (is_migration_entry(entry)) {
+			//将进程放入等待队列，等待page的PG_locked标记被清楚
 			migration_entry_wait(mm, pmd, address);
 		} else if (is_hwpoison_entry(entry)) {
 			ret = VM_FAULT_HWPOISON;

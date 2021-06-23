@@ -1317,8 +1317,14 @@ static int try_to_unmap_one(struct page *page, struct vm_area_struct *vma,
 	/* munlock has nothing to gain from examining un-locked vmas */
 	if ((flags & TTU_MUNLOCK) && !(vma->vm_flags & VM_LOCKED))
 		goto out;
-
+	 /* 先检查此vma有没有映射此page，有则返回此page在此进程地址空间的页表项 */
+    /* 检查page有没有映射到mm这个地址空间中
+     * address是page在此vma所属进程地址空间的线性地址，获取方法: address = vma->vm_pgoff + page->pgoff << PAGE_SHIFT;
+     * 通过线性地址address获取对应在此进程地址空间的页表项，然后通过页表项映射的页框号和page的页框号比较，则知道页表项是否映射了此page
+     * 会对页表上锁
+     */
 	pte = page_check_address(page, mm, address, &ptl, 0);
+	/* pte为空，则说明page没有映射到此mm所属的进程地址空间，则跳到out */
 	if (!pte)
 		goto out;
 
@@ -1358,17 +1364,20 @@ static int try_to_unmap_one(struct page *page, struct vm_area_struct *vma,
 
 		set_tlb_ubc_flush_pending(mm, page, pte_dirty(pteval));
 	} else {
-		//pte 页表内容清0;
+		/* 获取页表项内容，保存到pteval中，然后清空页表项 */
 		pteval = ptep_clear_flush(vma, address, pte);
 	}
 
 	/* Move the dirty bit to the physical page now the pte is gone. */
+	 /* 如果页表项标记了此页为脏页 */
 	if (pte_dirty(pteval))
+		 /* 设置页描述符的PG_dirty标记 */
 		set_page_dirty(page);
 
 	/* Update high watermark before we lower rss */
+	 /* 更新进程所拥有的最大页框数 */
 	update_hiwater_rss(mm);
-
+	 /* 此页是被标记为"坏页"的页，这种页用于内核纠正一些错误，是否用于边界检查? */
 	if (PageHWPoison(page) && !(flags & TTU_IGNORE_HWPOISON)) {
 		if (PageHuge(page)) {
 			hugetlb_count_sub(1 << compound_order(page), mm);
@@ -1398,10 +1407,16 @@ static int try_to_unmap_one(struct page *page, struct vm_area_struct *vma,
 		 * pte. do_swap_page() will wait until the migration
 		 * pte is removed and then restart fault handling.
 		 */
+		/*
+		把页表项设置为特殊的迁移页表项。如果其他处理器访问这一页，生成页错误异常，异常
+		处理程序发现页表项是迁移页表项，那么睡眠等待页迁移完成。do_swap_page
+
+		 /* 建立一个迁移使用的swp_entry_t，用于文件页迁移 */
 		entry = make_migration_entry(page, pte_write(pteval));
 		swp_pte = swp_entry_to_pte(entry);
 		if (pte_soft_dirty(pteval))
 			swp_pte = pte_swp_mksoft_dirty(swp_pte);
+		 /* 将配置好的新的页表项swp_pte写入页表项中 */
 		set_pte_at(mm, address, pte, swp_pte);
 	} else if (PageAnon(page)) {
 		swp_entry_t entry = { .val = page_private(page) };
@@ -1429,6 +1444,7 @@ static int try_to_unmap_one(struct page *page, struct vm_area_struct *vma,
 			swp_pte = pte_swp_mksoft_dirty(swp_pte);
 		set_pte_at(mm, address, pte, swp_pte);
 	} else
+ /* 此页是文件页，仅对此mm的文件页计数--，文件页不需要设置页表项，只需要对页表项进行清空 */
 		dec_mm_counter(mm, MM_FILEPAGES);
 
 	page_remove_rmap(page);
