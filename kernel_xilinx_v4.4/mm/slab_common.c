@@ -325,6 +325,7 @@ static struct kmem_cache *create_cache(const char *name,
 	int err;
 
 	err = -ENOMEM;
+	//分配一个keme_cache结构的对象，该结构对象用来管理需要创建slub的缓存
 	s = kmem_cache_zalloc(kmem_cache, GFP_KERNEL);
 	if (!s)
 		goto out;
@@ -338,7 +339,7 @@ static struct kmem_cache *create_cache(const char *name,
 	err = init_memcg_params(s, memcg, root_cache);
 	if (err)
 		goto out_free_cache;
-
+	//初始化分配的keme_cache结构体，包括各个字段，以及per-cpu管理的页面和Node管理的slab页面。
 	err = __kmem_cache_create(s, flags);
 	if (err)
 		goto out_free_cache;
@@ -380,6 +381,19 @@ out_free_cache:
  * cacheline.  This can be beneficial if you're counting cycles as closely
  * as davem.
  */
+ /*
+ kmem_cache_create是创建kmem_cache数据结构，参数描述如下：
+
+ name：kmem_cache的名称
+
+ size ：slab管理对象的大小
+
+ align：slab分配器分配内存的对齐字节数(以align字节对齐)
+
+ flags：分配内存掩码
+
+ ctor ：分配对象的构造回调函数
+*/
 struct kmem_cache *
 kmem_cache_create(const char *name, size_t size, size_t align,
 		  unsigned long flags, void (*ctor)(void *))

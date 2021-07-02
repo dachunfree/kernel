@@ -559,6 +559,7 @@ asmlinkage __visible void __init start_kernel(void)
 	vfs_caches_init_early();
 	sort_main_extable();
 	trap_init();
+	//里面包含 kmem_cache(slub kmalloc)应用
 	mm_init();
 
 	/*

@@ -2027,7 +2027,7 @@ static void unfreeze_partials(struct kmem_cache *s,
 			n = n2;
 			spin_lock(&n->list_lock);
 		}
-
+		/* 将frozen从1设置为0 */
 		do {
 
 			old.freelist = page->freelist;
@@ -2043,11 +2043,16 @@ static void unfreeze_partials(struct kmem_cache *s,
 				old.freelist, old.counters,
 				new.freelist, new.counters,
 				"unfreezing slab"));
-
+		 /*
+         !new.inuse为真表示slab为空
+         如果slab空，并且节点中部分空slab的数量nr_partial不小于
+         slab cache中指明的最小值min_partial，可以将当前的slab
+         释放，先添加到discad_page中 */
 		if (unlikely(!new.inuse && n->nr_partial >= s->min_partial)) {
 			page->next = discard_page;
 			discard_page = page;
 		} else {
+			 /* 添加到节点的partial list中 */
 			add_partial(n, page, DEACTIVATE_TO_TAIL);
 			stat(s, FREE_ADD_PARTIAL);
 		}
@@ -2087,11 +2092,13 @@ static void put_cpu_partial(struct kmem_cache *s, struct page *page, int drain)
 	do {
 		pages = 0;
 		pobjects = 0;
+		//获取本地slab partial链表
 		oldpage = this_cpu_read(s->cpu_slab->partial);
 
 		if (oldpage) {
 			pobjects = oldpage->pobjects;
 			pages = oldpage->pages;
+			//如果 pobjects数量 大于 cpu_partial，进行解冻
 			if (drain && pobjects > s->cpu_partial) {
 				unsigned long flags;
 				/*
@@ -2259,12 +2266,12 @@ static inline void *new_slab_objects(struct kmem_cache *s, gfp_t flags,
 	void *freelist;
 	struct kmem_cache_cpu *c = *pc;
 	struct page *page;
-
+	//从 numa node中获取freelist
 	freelist = get_partial(s, flags, node, c);
 
 	if (freelist)
 		return freelist;
-
+	//如果numa node中也没有，那就从buddy中分配一页当slab
 	page = new_slab(s, flags, node);
 	if (page) {
 		c = raw_cpu_ptr(s->cpu_slab);
@@ -2355,6 +2362,7 @@ static void *___slab_alloc(struct kmem_cache *s, gfp_t gfpflags, int node,
 	struct page *page;
 
 	page = c->page;
+	//如果没有本地活动 slab，转到 new_slab 步骤获取 slab
 	if (!page)
 		goto new_slab;
 redo:
@@ -2387,12 +2395,13 @@ redo:
 	}
 
 	/* must check again c->freelist in case of cpu migration or IRQ */
+	//再次检查空闲对象指针freelist是否为空，避免在禁止本地处理器中断前因发生了CPU迁移或者中断，导致本地的空闲对象指针不为空
 	freelist = c->freelist;
 	if (freelist)
 		goto load_freelist;
-
+	//如果为空，将会更新慢路径申请对象的统计信息，并通过get_freelist()从非冻结页面（未在cpu缓存中）中获取空闲队列
 	freelist = get_freelist(s, page);
-
+	//表示获取空闲队列失败，此时则需要创建新的slab，否则更新统计信息进入load_freelist分支取得对象并返回。
 	if (!freelist) {
 		c->page = NULL;
 		stat(s, DEACTIVATE_BYPASS);
@@ -2413,7 +2422,7 @@ load_freelist:
 	return freelist;
 
 new_slab:
-
+	//首先会判断partial是否为空，不为空则从partial中取出page，然后跳转回redo重试分配
 	if (c->partial) {
 		page = c->page = c->partial;
 		c->partial = page->next;
@@ -2421,7 +2430,7 @@ new_slab:
 		c->freelist = NULL;
 		goto redo;
 	}
-
+	//如果partial为空，意味着当前所有的slab都已经满负荷使用，那么则需使用new_slab_objects()创建新的slab
 	freelist = new_slab_objects(s, gfpflags, node, &c);
 
 	if (unlikely(!freelist)) {
@@ -2503,6 +2512,7 @@ redo:
 	 */
 	do {
 		tid = this_cpu_read(s->cpu_slab->tid);
+		//获取当前CPU的kmem_cache_cpu结构
 		c = raw_cpu_ptr(s->cpu_slab);
 	} while (IS_ENABLED(CONFIG_PREEMPT) &&
 		 unlikely(tid != READ_ONCE(c->tid)));
@@ -2523,13 +2533,17 @@ redo:
 	 * occurs on the right processor and that there was no operation on the
 	 * linked list in between.
 	 */
-
+	//获得当前cpu的空闲对象列表
 	object = c->freelist;
+	//获取当前cpu使用的页
 	page = c->page;
+	//慢速路径
+	//当前CPU的slab空闲列表为空或者当前slab使用内存页面与管理节点不匹配时，需要重新分配slub对象
 	if (unlikely(!object || !node_match(page, node))) {
 		object = __slab_alloc(s, gfpflags, node, addr, c);
 		stat(s, ALLOC_SLOWPATH);
 	} else {
+		//快速路径。获取空闲对象地址（object +s->offset)
 		void *next_object = get_freepointer_safe(s, object);
 
 		/*
@@ -2571,7 +2585,10 @@ static __always_inline void *slab_alloc(struct kmem_cache *s,
 {
 	return slab_alloc_node(s, gfpflags, NUMA_NO_NODE, addr);
 }
-
+/*
+mem_cache_alloc是从cachep参数指定的kmem_cache管理的内存缓存池中分配一个对象，
+其中flags是分配掩码，GFP_KERNEL是不是很熟悉的掩码？
+*/
 void *kmem_cache_alloc(struct kmem_cache *s, gfp_t gfpflags)
 {
 	void *ret = slab_alloc(s, gfpflags, _RET_IP_);
@@ -2655,18 +2672,34 @@ static void __slab_free(struct kmem_cache *s, struct page *page,
 			spin_unlock_irqrestore(&n->list_lock, flags);
 			n = NULL;
 		}
+		/*counters的赋值操作会将和其位于相同union内的
+         inuse，objects，frozen字段赋值 */
 		prior = page->freelist;
 		counters = page->counters;
+		//object =   page->freelist;
 		set_freepointer(s, tail, prior);
 		new.counters = counters;
 		was_frozen = new.frozen;
 		new.inuse -= cnt;
+		 /*
+         !new.inuse = true，slab中没有分配出去的对象，目前我
+         只想到了一种情况，即当前释放的对象是slab中的最后一个
+         对象，释放之后slab为空。
+         !prior = true，slab中没有可用的对象，即slab为满。
+         !was_frozen = true，slab没有被冻结，即不属于某一个CPU
+         的slab cache
+        */
 		if ((!new.inuse || !prior) && !was_frozen) {
 
+			  /*
+             slab为满，释放当前对象后会变成partial，而且
+             不属于某一个CPU的slab cache，将其冻结，使其
+             属于当前CPU的slab cache
+             */
 			if (kmem_cache_has_cpu_partial(s) && !prior) {
 
 				/*
-				 * Slab was on no list before and will be
+				 * Slab was on no list before, and will be
 				 * partially empty
 				 * We can defer the list move and instead
 				 * freeze it.
@@ -2674,7 +2707,10 @@ static void __slab_free(struct kmem_cache *s, struct page *page,
 				new.frozen = 1;
 
 			} else { /* Needs to be taken off a list */
-
+				 /*
+                 释放当前的对象后slab为空，先获取节点信息，
+                 并且获取修改slab list所需的锁，以便之后
+                 释放空slab */
 				n = get_node(s, page_to_nid(page));
 				/*
 				 * Speculatively acquire the list_lock.
@@ -2684,6 +2720,9 @@ static void __slab_free(struct kmem_cache *s, struct page *page,
 				 * Otherwise the list_lock will synchronize with
 				 * other processors updating the list of slabs.
 				 */
+				/*
+                 只有当前slab为空时才需要获取锁，并且在执行
+                 释放操作后释放锁 */
 				spin_lock_irqsave(&n->list_lock, flags);
 
 			}
@@ -2693,13 +2732,29 @@ static void __slab_free(struct kmem_cache *s, struct page *page,
 		prior, counters,
 		head, new.counters,
 		"__slab_free"));
-
+	    /*
+     n为空的可能性较大，即当前释放的对象是slab中的最后一个对象
+     的可能性较小。其他的可能情况为：
+     1. slab已满，并且slab不属于某个CPU
+     2. slab已经属于某个CPU
+     3. 无论slab是否属于某个CPU，slab的freelist不为空，且inuse
+     字段不为0 */
 	if (likely(!n)) {
 
 		/*
 		 * If we just froze the page then put it onto the
 		 * per cpu partial list.
 		 */
+		 /*
+         刚刚执行的冻结操作，将内存页添加到当前CPU的slab
+         cache的partial表。
+         这里put_cpu_partial函数将新的slab添加到partial
+         表时，如果当前CPU中已有的partial对象大于slab
+         cache的cpu_partial值，就会将当前CPU中的所有的
+         partial slab解冻，并且在节点中的partial slab
+         的数量不小于slab cache的cpu_partial值的情况下，
+         释放解冻的slab；否则将解冻的slab添加到节点的
+         partial表中。 */
 		if (new.frozen && !was_frozen) {
 			put_cpu_partial(s, page, 1);
 			stat(s, CPU_PARTIAL_FREE);
@@ -2708,11 +2763,17 @@ static void __slab_free(struct kmem_cache *s, struct page *page,
 		 * The list lock was not taken therefore no list
 		 * activity can be necessary.
 		 */
+		  /*
+         slab已经属于其他CPU的slab cache，当前的CPU不是冻结
+         slab的CPU，无法执行其他的操作；这种情况下也没有获取
+         锁的操作，因此也不需要释放  */
 		if (was_frozen)
 			stat(s, FREE_FROZEN);
 		return;
 	}
-
+	    /*
+     释放当前对象后slab为空，并且节点的partial slab数量仍然
+     大于slab cache中的最小阈值，可以直接将slab释放 */
 	if (unlikely(!new.inuse && n->nr_partial >= s->min_partial))
 		goto slab_empty;
 
@@ -2720,6 +2781,7 @@ static void __slab_free(struct kmem_cache *s, struct page *page,
 	 * Objects left in the slab. If it was not on the partial list before
 	 * then add it.
 	 */
+	   /* slab从full变为partial */
 	if (!kmem_cache_has_cpu_partial(s) && unlikely(!prior)) {
 		if (kmem_cache_debug(s))
 			remove_full(s, n, page);
@@ -2730,14 +2792,17 @@ static void __slab_free(struct kmem_cache *s, struct page *page,
 	return;
 
 slab_empty:
+ /* 当前释放的对象是slab中的最后一个对象 */
 	if (prior) {
 		/*
 		 * Slab on the partial list.
 		 */
+		  /* 当前slab有多个对象 */
 		remove_partial(n, page);
 		stat(s, FREE_REMOVE_PARTIAL);
 	} else {
 		/* Slab must be on the full list */
+		 /* 当前slab只有一个对象，导致位于full表 */
 		remove_full(s, n, page);
 	}
 
@@ -2765,6 +2830,7 @@ static __always_inline void slab_free(struct kmem_cache *s, struct page *page,
 				      void *head, void *tail, int cnt,
 				      unsigned long addr)
 {
+	// tail == NULL,放在头部
 	void *tail_obj = tail ? : head;
 	struct kmem_cache_cpu *c;
 	unsigned long tid;
@@ -2786,8 +2852,9 @@ redo:
 
 	/* Same with comment on barrier() in slab_alloc_node() */
 	barrier();
-
+	//最简单的释放情形1：此对象x的slab正好处于当前cpu的缓存中
 	if (likely(page == c->page)) {
+		//object->next = c->freelist
 		set_freepointer(s, tail_obj, c->freelist);
 
 		if (unlikely(!this_cpu_cmpxchg_double(
@@ -2800,6 +2867,12 @@ redo:
 		}
 		stat(s, FREE_FASTPATH);
 	} else
+	 /*
+     page不是当前CPU正在分配对象的slab，执行慢路径。
+     可能是以下情况：
+     1. 释放的对象属于当前CPU的partial表
+     2. 释放的对象属于其他CPU的slab
+     */
 		__slab_free(s, page, head, tail_obj, cnt, addr);
 
 }
@@ -3322,6 +3395,7 @@ static int calculate_sizes(struct kmem_cache *s, int forced_order)
 	/*
 	 * Determine the number of objects per slab
 	 */
+	 //将order和size 拼成 kmem_cache_order_objects 结构体。
 	s->oo = oo_make(order, size, s->reserved);
 	s->min = oo_make(get_order(size), size, s->reserved);
 	if (oo_objects(s->oo) > oo_objects(s->max))
@@ -3332,12 +3406,13 @@ static int calculate_sizes(struct kmem_cache *s, int forced_order)
 
 static int kmem_cache_open(struct kmem_cache *s, unsigned long flags)
 {
+	//
 	s->flags = kmem_cache_flags(s->size, flags, s->name, s->ctor);
 	s->reserved = 0;
 
 	if (need_reserve_slab_rcu && (s->flags & SLAB_DESTROY_BY_RCU))
 		s->reserved = sizeof(struct rcu_head);
-
+	//初始化对象数，大小，及order的值
 	if (!calculate_sizes(s, -1))
 		goto error;
 	if (disable_higher_order_debug) {
@@ -3364,6 +3439,7 @@ static int kmem_cache_open(struct kmem_cache *s, unsigned long flags)
 	 * The larger the object size is, the more pages we want on the partial
 	 * list to avoid pounding the page allocator excessively.
 	 */
+	 //限制struct kmem_cache_node中的partial链表slab的数量
 	set_min_partial(s, ilog2(s->size) / 2);
 
 	/*

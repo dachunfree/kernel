@@ -340,7 +340,9 @@ struct kmem_cache_node {
 #endif
 
 #ifdef CONFIG_SLUB
+	//slab节点中slab的数量。
 	unsigned long nr_partial;
+	//slab节点的slab partial链表，和struct kmem_cache_cpu的partial链表功能类似。
 	struct list_head partial;
 #ifdef CONFIG_SLUB_DEBUG
 	atomic_long_t nr_slabs;

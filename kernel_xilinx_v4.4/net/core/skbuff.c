@@ -1113,7 +1113,6 @@ EXPORT_SYMBOL(__pskb_copy_fclone);
  *	All the pointers pointing into skb header may change and must be
  *	reloaded after call to this function.
  */
-
 int pskb_expand_head(struct sk_buff *skb, int nhead, int ntail,
 		     gfp_t gfp_mask)
 {

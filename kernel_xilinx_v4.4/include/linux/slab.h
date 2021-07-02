@@ -445,16 +445,18 @@ static __always_inline void *kmalloc_large(size_t size, gfp_t flags)
  */
 static __always_inline void *kmalloc(size_t size, gfp_t flags)
 {
+	//__builtin_constant_p是gcc工具用来判断参数是否是一个常数，毕竟有些操作对于常数来说是可以优化的。
 	if (__builtin_constant_p(size)) {
 		if (size > KMALLOC_MAX_CACHE_SIZE)
 			return kmalloc_large(size, flags);
 #ifndef CONFIG_SLOB
 		if (!(flags & GFP_DMA)) {
+			//通过kmalloc_index函数查找符合满足分配大小的最小kmem_cache。
 			int index = kmalloc_index(size);
 
 			if (!index)
 				return ZERO_SIZE_PTR;
-
+			//将index作为下表从kmalloc_caches数组中找到符合的kmem_cache，并从slab缓存池中分配对象
 			return kmem_cache_alloc_trace(kmalloc_caches[index],
 					flags, size);
 		}

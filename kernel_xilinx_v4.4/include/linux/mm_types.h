@@ -83,7 +83,7 @@ struct page {
 			index指的是在1M空间内的偏移，而不是在整个文件内的偏移
 		    */
 			pgoff_t index;		/* Our offset within mapping. */
-			void *freelist;		/* sl[aou]b first free object */
+			void *freelist;		/* sl[aou]b first free object 指向空闲的第一个object*/
 		};
 
 		union {
@@ -128,9 +128,9 @@ struct page {
 					atomic_t _mapcount;
 
 					struct { /* SLUB */
-						unsigned inuse:16;
-						unsigned objects:15;
-						unsigned frozen:1;
+						unsigned inuse:16; //表示已经分配对象的数量
+						unsigned objects:15;//对象数量
+						unsigned frozen:1;//表示slab是否被冻结在每处理器slab缓存中。如果slab在每处理器slab缓存中，处于冻结状态
 					};
 					int units;	/* SLOB */
 				};
