@@ -179,7 +179,7 @@ struct page *get_huge_zero_page(void)
 retry:
 	if (likely(atomic_inc_not_zero(&huge_zero_refcount)))
 		return READ_ONCE(huge_zero_page);
-
+	// 2mæﬁ–Õ“≥
 	zero_page = alloc_pages((GFP_TRANSHUGE | __GFP_ZERO) & ~__GFP_MOVABLE,
 			HPAGE_PMD_ORDER);
 	if (!zero_page) {

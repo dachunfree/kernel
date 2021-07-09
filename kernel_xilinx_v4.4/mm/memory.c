@@ -3438,7 +3438,7 @@ static int __handle_mm_fault(struct mm_struct *mm, struct vm_area_struct *vma,
 	pud_t *pud;
 	pmd_t *pmd;
 	pte_t *pte;
-
+	//如果虚拟内存区域设置了 VM_HUGETLB，调用巨型页的页错误处理异常函数
 	if (unlikely(is_vm_hugetlb_page(vma)))
 		return hugetlb_fault(mm, vma, address, flags);
 	//在页全局目录中查找虚拟地址对应的页表项。

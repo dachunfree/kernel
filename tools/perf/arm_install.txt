@@ -1,0 +1,60 @@
+基于arm64平台 安装perf工具：
+
+1.kernel
+* General setup  ---> 
+  + [*] Profiling support
+  + Kernel Performance Events And Counters  --->
+    -  [*] Kernel performance events and counters
+    -  [*]   Debug: use vmalloc to back perf mmap() buffers
+    
+2.tools/perf编译
+make CROSS_COMPILE=aarch64-linux-gnu-  ARCH=arm64
+
+3.把编译出来的perf和Image考进去。
+
+perf 的一些说明：https://www.cnblogs.com/yml435/p/6914467.html
+
+/*****************************************实验(hugepage-4kpage)***********************************/
+1.验证大页的TLB情况
+1.1 先进行挂载 10*2M
+	echo "10"> /proc/sys/vm/nr_hugepages  
+	mount -t  hugetlbfs hugetlbfs /mnt/huge 
+	
+# cat /proc/meminfo 
+	HugePages_Total:      10
+	HugePages_Free:       10
+	HugePages_Rsvd:        0
+	HugePages_Surp:        0
+	Hugepagesize:       2048 kB	
+
+出现问题，没有TLB cache等操作，需要打开PMU选项：dts中开启PMU功能
+
+观察TLB MISS:
+perf stat -e dTLB-load-misses,iTLB-load-misses,faults ./huge
+显示结果：
+/**************************************************
+ Performance counter stats for './huge':					*
+																									*
+               222      dTLB-load-misses  				*                                          
+               163      iTLB-load-misses   				*                                         
+                47      faults   									*                                                   
+																									*
+      30.055299800 seconds time elapsed						*
+***************************************************
+
+no_huge 普通页：
+观察TLB MISS:
+perf stat -e dTLB-load-misses,iTLB-load-misses,faults ./no_huge
+显示结果：
+/*************************************************
+ Performance counter stats for './no_huge':				*
+																									*
+               763      dTLB-load-misses   				*                                         
+               199      iTLB-load-misses    			*                                        
+               558      faults    								*                                                  
+																									*
+      30.070130500 seconds time elapsed						*
+***************************************************
+
+
+
