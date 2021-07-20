@@ -354,7 +354,7 @@ struct vm_area_struct {
 
 	struct mm_struct *vm_mm;	/* The address space we belong to.可以找到全局页表项。remap */
 	pgprot_t vm_page_prot;		/* Access permissions of this VMA. vma访问权限*/
-	unsigned long vm_flags;		/* Flags, see mm.h. */
+	unsigned long vm_flags;		/* Flags, see mm.h. VM_HUGEPAGE */
 
 	/*
 	 * For areas with an address space and backing store,
