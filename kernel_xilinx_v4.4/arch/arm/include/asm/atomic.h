@@ -84,8 +84,8 @@ static inline int atomic_##op##_return_relaxed(int i, atomic_t *v)	\
 "	strex	%1, %0, [%3]\n"						\
 "	teq	%1, #0\n"	//判断是否读写成功。					\
 "	bne	1b"							\
-	: "=&r" (result), "=&r" (tmp), "+Qo" (v->counter)		\
-	: "r" (&v->counter), "Ir" (i)					\
+	: "=&r" (result), "=&r" (tmp), "+Qo" (v->counter)		\ //对应％0，％1，％2
+	: "r" (&v->counter), "Ir" (i)					\        //对应％3，％4
 	: "cc");							\
 									\
 	return result;							\

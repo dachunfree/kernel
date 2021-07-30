@@ -45,6 +45,7 @@
  * linkage errors occur due the compiler generating the wrong code to access
  * that section.
  */
+ //定义在 vmlinux.lds.h 中的 PERCPU_SECTION
 #define __PCPU_ATTRS(sec)						\
 	__percpu __attribute__((section(PER_CPU_BASE_SECTION sec)))	\
 	PER_CPU_ATTRIBUTES
@@ -97,6 +98,8 @@
 /*
  * Normal declaration and definition macros.
  */
+
+//定义在 vmlinux.lds.h 中的 PERCPU_SECTION
 #define DECLARE_PER_CPU_SECTION(type, name, sec)			\
 	extern __PCPU_ATTRS(sec) __typeof__(type) name
 

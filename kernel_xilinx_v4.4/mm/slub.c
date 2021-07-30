@@ -809,7 +809,7 @@ static int slab_pad_check(struct kmem_cache *s, struct page *page)
 	restore_bytes(s, "slab padding", POISON_INUSE, end - remainder, end);
 	return 0;
 }
-
+//检测Red zone区域的数值是否被改变，因此这里就会报出bug。
 static int check_object(struct kmem_cache *s, struct page *page,
 					void *object, u8 val)
 {
@@ -849,6 +849,7 @@ static int check_object(struct kmem_cache *s, struct page *page,
 		return 1;
 
 	/* Check free pointer validity */
+	//负责检测object的free pointer指针数据是否valid。oob是有可能导致这种情况得到发生。
 	if (!check_valid_pointer(s, page, get_freepointer(s, p))) {
 		object_err(s, page, p, "Freepointer corrupt");
 		/*
@@ -893,6 +894,7 @@ static int check_slab(struct kmem_cache *s, struct page *page)
  * Determine if a certain object on a page is on the freelist. Must hold the
  * slab lock to guarantee that the chains are in a consistent state.
  */
+ // 检测object是否已经free，可以检测多次free的bug。
 static int on_freelist(struct kmem_cache *s, struct page *page, void *search)
 {
 	int nr = 0;
@@ -1454,13 +1456,14 @@ static struct page *allocate_slab(struct kmem_cache *s, gfp_t flags, int node)
 		SetPageSlabPfmemalloc(page);
 
 	start = page_address(page);
-
+	//设置魔数，供slab检测用
 	if (unlikely(s->flags & SLAB_POISON))
 		memset(start, POISON_INUSE, PAGE_SIZE << order);
 
 	kasan_poison_slab(page);
 
 	for_each_object_idx(p, idx, s, start, page->objects) {
+		//设置object中的魔数
 		setup_object(s, page, p);
 		if (likely(idx < page->objects))
 			set_freepointer(s, p, p + s->size);
@@ -1508,6 +1511,7 @@ static void __free_slab(struct kmem_cache *s, struct page *page)
 		void *p;
 
 		slab_pad_check(s, page);
+		//进行object 填充内容检测，查看是否有越界，use-after-free等问题
 		for_each_object(p, s, page_address(page),
 						page->objects)
 			check_object(s, page, p, SLUB_RED_INACTIVE);
@@ -3293,6 +3297,10 @@ static void set_min_partial(struct kmem_cache *s, unsigned long min)
  * calculate_sizes() determines the order and the distribution of data within
  * a slab object.
  */
+ /*
+ | object_size | red_zone | fp | alloc/free track | red_zone_left |
+	SLUB_RED_INACTIVE
+ */
 static int calculate_sizes(struct kmem_cache *s, int forced_order)
 {
 	unsigned long flags = s->flags;
@@ -3333,7 +3341,7 @@ static int calculate_sizes(struct kmem_cache *s, int forced_order)
 	 * by the object. This is the potential offset to the free pointer.
 	 */
 	s->inuse = size;
-
+	//fp
 	if (((flags & (SLAB_DESTROY_BY_RCU | SLAB_POISON)) ||
 		s->ctor)) {
 		/*
