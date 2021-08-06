@@ -2248,7 +2248,7 @@ static void get_scan_count(struct lruvec *lruvec, int swappiness,
 	 */
 	 /*(anon_prio* 最近扫描匿名页数量)/不活动匿名页变为活动页数量。表示匿名页的活动系数。越大，越该降低匿名页比例*/
 	ap = anon_prio * (reclaim_stat->recent_scanned[0] + 1); //最近扫描匿名页的数量
-	ap /= reclaim_stat->recent_rotated[0] + 1; //不活动变为活动的匿名页数量
+	ap /= reclaim_stat->recent_rotated[0] + 1; //不活动变为活动的匿名页数量。+优先级高
 
 	fp = file_prio * (reclaim_stat->recent_scanned[1] + 1);
 	fp /= reclaim_stat->recent_rotated[1] + 1;
@@ -3643,7 +3643,7 @@ static void kswapd_try_to_sleep(pg_data_t *pgdat, int order, int classzone_idx)
  * If there are applications that are active memory-allocators
  * (most normal use), this basically shouldn't matter.
  */
- //p传参为pg_data_t.看kswapd_run
+ //p传参为pg_data_t.看 kswapd_run
 static int kswapd(void *p)
 {
 	unsigned long order, new_order;
