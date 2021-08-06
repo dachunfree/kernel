@@ -55,6 +55,7 @@ void down(struct semaphore *sem)
 	unsigned long flags;
 
 	raw_spin_lock_irqsave(&sem->lock, flags);
+	//如果信号量标记的资源还有剩余，自然可以成功获取信号量。只需要递减可用资源计数。
 	if (likely(sem->count > 0))
 		sem->count--;
 	else
@@ -180,6 +181,7 @@ void up(struct semaphore *sem)
 	unsigned long flags;
 
 	raw_spin_lock_irqsave(&sem->lock, flags);
+	//如果等待链表没有进程，那么自然只需要增加资源计数。
 	if (likely(list_empty(&sem->wait_list)))
 		sem->count++;
 	else
@@ -204,13 +206,16 @@ struct semaphore_waiter {
 static inline int __sched __down_common(struct semaphore *sem, long state,
 								long timeout)
 {
+	//既然无法获取信号量，就需要将当前进程挂入信号量的等待队列链表上。
 	struct task_struct *task = current;
 	struct semaphore_waiter waiter;
 
 	list_add_tail(&waiter.list, &sem->wait_list);
 	waiter.task = task;
 	waiter.up = false;
-
+	/*schedule()主要是触发任务调度的示意函数，主动让出CPU使用权。
+	  在让出之前，需要将当前进程从运行队列上移除
+	*/
 	for (;;) {
 		if (signal_pending_state(state, task))
 			goto interrupted;
@@ -255,6 +260,7 @@ static noinline int __sched __down_timeout(struct semaphore *sem, long timeout)
 
 static noinline void __sched __up(struct semaphore *sem)
 {
+	//从等待进程链表头取出第一个进程，并从链表上移除。然后就是唤醒该进程。
 	struct semaphore_waiter *waiter = list_first_entry(&sem->wait_list,
 						struct semaphore_waiter, list);
 	list_del(&waiter->list);

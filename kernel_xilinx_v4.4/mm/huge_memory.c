@@ -84,9 +84,9 @@ static struct kmem_cache *mm_slot_cache __read_mostly;
  * @mm: the mm that this information is valid for
  */
 struct mm_slot {
-	struct hlist_node hash;
-	struct list_head mm_node;
-	struct mm_struct *mm;
+	struct hlist_node hash; //用来加入散列表
+	struct list_head mm_node; //扫描链表
+	struct mm_struct *mm; //指向进程的内存描述符
 };
 
 /**
@@ -97,10 +97,11 @@ struct mm_slot {
  *
  * There is only the one khugepaged_scan instance of this cursor structure.
  */
+ //扫描游标。
 struct khugepaged_scan {
-	struct list_head mm_head;
-	struct mm_slot *mm_slot;
-	unsigned long address;
+	struct list_head mm_head; //扫描链表的头结点，扫描链表的成员是内存描述符插槽。
+	struct mm_slot *mm_slot; //mmslot当前正在扫描的内存描述符插槽。
+	unsigned long address; //address即将扫描的下一个地址
 };
 static struct khugepaged_scan khugepaged_scan = {
 	.mm_head = LIST_HEAD_INIT(khugepaged_scan.mm_head),
@@ -179,7 +180,7 @@ struct page *get_huge_zero_page(void)
 retry:
 	if (likely(atomic_inc_not_zero(&huge_zero_refcount)))
 		return READ_ONCE(huge_zero_page);
-
+	// 2m巨型页
 	zero_page = alloc_pages((GFP_TRANSHUGE | __GFP_ZERO) & ~__GFP_MOVABLE,
 			HPAGE_PMD_ORDER);
 	if (!zero_page) {
@@ -729,20 +730,21 @@ static int __do_huge_pmd_anonymous_page(struct mm_struct *mm,
 		count_vm_event(THP_FAULT_FALLBACK);
 		return VM_FAULT_FALLBACK;
 	}
-
+	//分配直接页表
 	pgtable = pte_alloc_one(mm, haddr);
 	if (unlikely(!pgtable)) {
 		mem_cgroup_cancel_charge(page, memcg);
 		put_page(page);
 		return VM_FAULT_OOM;
 	}
-
+	//把巨型页清零
 	clear_huge_page(page, haddr, HPAGE_PMD_NR);
 	/*
 	 * The memory barrier inside __SetPageUptodate makes sure that
 	 * clear_huge_page writes become visible before the set_pmd_at()
 	 * write.
 	 */
+	 //表示物理页含有有效的数据
 	__SetPageUptodate(page);
 
 	ptl = pmd_lock(mm, pmd);
@@ -757,7 +759,7 @@ static int __do_huge_pmd_anonymous_page(struct mm_struct *mm,
 		/* Deliver the page fault to userland */
 		if (userfaultfd_missing(vma)) {
 			int ret;
-
+			//锁住页表
 			spin_unlock(ptl);
 			mem_cgroup_cancel_charge(page, memcg);
 			put_page(page);
@@ -767,16 +769,21 @@ static int __do_huge_pmd_anonymous_page(struct mm_struct *mm,
 			VM_BUG_ON(ret & VM_FAULT_FALLBACK);
 			return ret;
 		}
-
+		//构造页中间目录表项的值
 		entry = mk_huge_pmd(page, vma->vm_page_prot);
 		entry = maybe_pmd_mkwrite(pmd_mkdirty(entry), vma);
+		//为匿名页添加反向映射
 		page_add_new_anon_rmap(page, vma, haddr);
 		mem_cgroup_commit_charge(page, memcg, false);
+		//把巨型页添加到LRU链表中
 		lru_cache_add_active_or_unevictable(page, vma);
+		//把直接页添加到寄存队列中。当巨型页释放一部分时，需要把巨型页分裂成普通页，从寄存器队列取出直接页表使用
 		pgtable_trans_huge_deposit(mm, pmd, pgtable);
+		//设置页中间目录表指向巨型页
 		set_pmd_at(mm, haddr, pmd, entry);
 		add_mm_counter(mm, MM_ANONPAGES, HPAGE_PMD_NR);
 		atomic_long_inc(&mm->nr_ptes);
+		//释放页表锁
 		spin_unlock(ptl);
 		count_vm_event(THP_FAULT_ALLOC);
 	}
@@ -812,13 +819,16 @@ int do_huge_pmd_anonymous_page(struct mm_struct *mm, struct vm_area_struct *vma,
 	gfp_t gfp;
 	struct page *page;
 	unsigned long haddr = address & HPAGE_PMD_MASK;
-
+	//如果触发异常的虚拟地址所属的虚拟巨型页超出虚拟内存区域，回退使用普通页
 	if (haddr < vma->vm_start || haddr + HPAGE_PMD_SIZE > vma->vm_end)
 		return VM_FAULT_FALLBACK;
+	//为反向映射准备结构体anon_vma
 	if (unlikely(anon_vma_prepare(vma)))
 		return VM_FAULT_OOM;
+	//把内存描述符加入扫描链表。khugepaged_do_scan
 	if (unlikely(khugepaged_enter(vma, vma->vm_flags)))
 		return VM_FAULT_OOM;
+	//如果是读操作，并且允许使用巨型零页，那么映射到全局巨型零页
 	if (!(flags & FAULT_FLAG_WRITE) && !mm_forbids_zeropage(mm) &&
 			transparent_hugepage_use_zero_page()) {
 		spinlock_t *ptl;
@@ -860,11 +870,13 @@ int do_huge_pmd_anonymous_page(struct mm_struct *mm, struct vm_area_struct *vma,
 		return ret;
 	}
 	gfp = alloc_hugepage_gfpmask(transparent_hugepage_defrag(vma), 0);
+	//分配巨型页的大小为 HPAGE_PMD_ORDER
 	page = alloc_hugepage_vma(gfp, vma, haddr, HPAGE_PMD_ORDER);
 	if (unlikely(!page)) {
 		count_vm_event(THP_FAULT_FALLBACK);
 		return VM_FAULT_FALLBACK;
 	}
+	//设置页中间目录表项，映射到巨型页
 	return __do_huge_pmd_anonymous_page(mm, vma, address, pmd, page, gfp,
 					    flags);
 }
@@ -2527,6 +2539,7 @@ static void collapse_huge_page(struct mm_struct *mm,
 		__GFP_THISNODE;
 
 	/* release the mmap_sem read lock. */
+	//分配巨型页。
 	new_page = khugepaged_alloc_page(hpage, gfp, mm, address, node);
 	if (!new_page)
 		return;
@@ -2577,6 +2590,7 @@ static void collapse_huge_page(struct mm_struct *mm,
 	mmu_notifier_invalidate_range_end(mm, mmun_start, mmun_end);
 
 	spin_lock(pte_ptl);
+	//隔离普通页
 	isolated = __collapse_huge_page_isolate(vma, address, pte);
 	spin_unlock(pte_ptl);
 
@@ -2600,9 +2614,10 @@ static void collapse_huge_page(struct mm_struct *mm,
 	 * can't run anymore.
 	 */
 	anon_vma_unlock_write(vma->anon_vma);
-
+	//把数据从普通页复制到巨型页，释放普通页
 	__collapse_huge_page_copy(pte, new_page, vma, address, pte_ptl);
 	pte_unmap(pte);
+	//设置有效数据
 	__SetPageUptodate(new_page);
 	pgtable = pmd_pgtable(_pmd);
 
@@ -2618,11 +2633,16 @@ static void collapse_huge_page(struct mm_struct *mm,
 
 	spin_lock(pmd_ptl);
 	BUG_ON(!pmd_none(*pmd));
+	//为匿名页添加反向映射
 	page_add_new_anon_rmap(new_page, vma, address);
 	mem_cgroup_commit_charge(new_page, memcg, false);
+	//把巨型页添加到LRU链表
 	lru_cache_add_active_or_unevictable(new_page, vma);
+	//把直接页表添加到寄存队列中
 	pgtable_trans_huge_deposit(mm, pmd, pgtable);
+	//设置中间目录页表项指向巨型页
 	set_pmd_at(mm, address, pmd, _pmd);
+	//更新页表缓存
 	update_mmu_cache_pmd(vma, address, pmd);
 	spin_unlock(pmd_ptl);
 
@@ -2710,6 +2730,7 @@ out_unmap:
 	if (ret) {
 		node = khugepaged_find_target_node();
 		/* collapse_huge_page will return with the mmap_sem released */
+		//把普通页合并成巨型页
 		collapse_huge_page(mm, address, hpage, vma, node);
 	}
 out:
@@ -2778,6 +2799,7 @@ static unsigned int khugepaged_scan_mm_slot(unsigned int pages,
 			progress++;
 			break;
 		}
+		//检查虚拟内存区域是否允许使用透明巨型页
 		if (!hugepage_vma_check(vma)) {
 skip:
 			progress++;
@@ -2802,6 +2824,7 @@ skip:
 			VM_BUG_ON(khugepaged_scan.address < hstart ||
 				  khugepaged_scan.address + HPAGE_PMD_SIZE >
 				  hend);
+			//如果不是共享内存
 			ret = khugepaged_scan_pmd(mm, vma,
 						  khugepaged_scan.address,
 						  hpage);
@@ -2867,8 +2890,9 @@ static void khugepaged_do_scan(void)
 	bool wait = true;
 
 	barrier(); /* write khugepaged_pages_to_scan to local stack */
-
+	//扫描页数小于上限
 	while (progress < pages) {
+		//预先分配一个巨型页
 		if (!khugepaged_prealloc_page(&hpage, &wait))
 			break;
 
@@ -2977,11 +3001,14 @@ again:
 	ptl = pmd_lock(mm, pmd);
 	if (unlikely(!pmd_trans_huge(*pmd)))
 		goto unlock;
+	//是文件映射或者共享匿名映射?
 	if (vma_is_dax(vma)) {
+		//删除页中间目录表项
 		pmd_t _pmd = pmdp_huge_clear_flush_notify(vma, haddr, pmd);
 		if (is_huge_zero_pmd(_pmd))
 			put_huge_zero_page();
 	} else if (is_huge_zero_pmd(*pmd)) {
+		//分裂巨型0页
 		__split_huge_zero_page_pmd(vma, haddr, pmd);
 	} else {
 		page = pmd_page(*pmd);

@@ -13,9 +13,31 @@
 #endif
 
 #if __LINUX_ARM_ARCH__ >= 7
-#define isb(option) __asm__ __volatile__ ("isb " #option : : : "memory")
-#define dsb(option) __asm__ __volatile__ ("dsb " #option : : : "memory")
-#define dmb(option) __asm__ __volatile__ ("dmb " #option : : : "memory")
+/*
+ISB (instruction synchronization barrier)。
+ISB会flush cpu pipeline（也就是将指令之前的所有stage的pipeline都设置为无效），这会导致ISB
+指令之后的指令会在ISB指令完成之后，重新开始取指，译码……，因此，整个CPU的流水线全部会重新
+来过。可以举一个具体的应用例子：如果你要写一个自修改的程序（该程序会修改自己的执行逻辑，例如JIT），
+那么你需要在代码生成和执行这些生成的代码之间插入一个ISB。
+*/
+#define isb(option) __asm__ __volatile__ ("isb " #option : : : "memory") //指令同步屏障
+/*
+DSB(data synchronization barrier)。DSB和DMB不一样，DSB更“狠”一些，同时对CPU的性能杀伤力更大一些。
+DMB是“看起来”如何如何，DSB是真正的对指令执行的约束。也就是说，首先执行完毕DSB之前的指定的内存访问
+类型的指令，等待那些指定类型的内存访问指令执行完毕之后，对DSB之后的指定类型内存访问的指令才开始执行。
+*/
+#define dsb(option) __asm__ __volatile__ ("dsb " #option : : : "memory") //数据同步屏障
+/*
+DMB (data memory barrier) 。DMB指令可以在指定的作用域内（也就是shareability domain啦），
+约束指定类型的内存操作顺序。更详细的表述是这样的，从指定的shareability domain内的所有观察者
+角度来看，CPU先完成内存屏障指令之前的特定类型的内存操作，然后再完成内存屏障指令之后的内存操作。
+DMB指令需要提供两个参数：一个shareability domain，另外一个是access type。具体的内存操作类型
+（access type）可能是：store或者store + load。如果只是约束store操作的DMB指令，其效果类似Alpha
+处理器的wmb，或者类似POWER处理器的eieio指令。shareability domain有三种：单处理器、一组处理器（inner）
+和全局（outer）。
+
+*/
+#define dmb(option) __asm__ __volatile__ ("dmb " #option : : : "memory") //数据内存屏障
 #elif defined(CONFIG_CPU_XSC3) || __LINUX_ARM_ARCH__ == 6
 #define isb(x) __asm__ __volatile__ ("mcr p15, 0, %0, c7, c5, 4" \
 				    : : "r" (0) : "memory")

@@ -963,7 +963,7 @@ void __init_memblock __next_mem_range(u64 *idx, int nid, ulong flags,
 			phys_addr_t r_end;
 /* 找的实际是预留的空档。比如两个已经预留的段，
 [idx_b-1].base <-->[idx_b-1].base+[idx_b-1].size: <----free area in memory region -->[idx_b].base <--->[idx_b].base+[idx_b].size
-我们在乎的是free area是否和memory region重合*/
+我们在乎的是free area是否和memory region重合。注意下面是空闲区域 r_start和r_end表示空闲区域*/
 			//rstart 和 rend是空闲域
 			r = &type_b->regions[idx_b];
 			r_start = idx_b ? r[-1].base + r[-1].size : 0;
@@ -982,6 +982,9 @@ void __init_memblock __next_mem_range(u64 *idx, int nid, ulong flags,
 				break;
 			/* if the two regions intersect, we're done */
 			//memory 和 reserved memeory相交，做处理
+			/*		 		|rstart ------- rend|    reserved memory
+			 			|mstart------mend| 			 all memory
+			*/
 			if (m_start < r_end) {
 				if (out_start)
 					*out_start =

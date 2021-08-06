@@ -373,7 +373,7 @@ static inline void mmu_notifier_mm_destroy(struct mm_struct *mm)
 	unsigned long ___haddr = __haddr & HPAGE_PMD_MASK;		\
 	struct mm_struct *___mm = (__vma)->vm_mm;			\
 	pmd_t ___pmd;							\
-									\
+	//删除页中间目录表项								\
 	___pmd = pmdp_huge_clear_flush(__vma, __haddr, __pmd);		\
 	mmu_notifier_invalidate_range(___mm, ___haddr,			\
 				      ___haddr + HPAGE_PMD_SIZE);	\

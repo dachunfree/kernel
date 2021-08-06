@@ -1850,6 +1850,7 @@ struct page *alloc_huge_page(struct vm_area_struct *vma,
 	 * has a reservation for the page to be allocated.  A return
 	 * code of zero indicates a reservation exists (no change).
 	 */
+	 //检查预留图，确定进程是否预留过要分配的巨型页
 	map_chg = gbl_chg = vma_needs_reservation(h, vma, addr);
 	if (map_chg < 0)
 		return ERR_PTR(-ENOMEM);
@@ -1890,7 +1891,9 @@ struct page *alloc_huge_page(struct vm_area_struct *vma,
 	 * from the global free pool (global change).  gbl_chg == 0 indicates
 	 * a reservation exists for the allocation.
 	 */
+	//从巨型页池中目标内存节点的空闲链表中分配永久巨型页。
 	page = dequeue_huge_page_vma(h, vma, addr, avoid_reserve, gbl_chg);
+	//如果分配永久巨型页失败，那么尝试从页分配器中分配临时巨型页
 	if (!page) {
 		spin_unlock(&hugetlb_lock);
 		page = __alloc_buddy_huge_page_with_mpol(h, vma, addr);
@@ -1957,7 +1960,7 @@ int __weak alloc_bootmem_huge_page(struct hstate *h)
 
 	for_each_node_mask_to_alloc(h, nr_nodes, node, &node_states[N_MEMORY]) {
 		void *addr;
-
+		//从内存节点分配巨型页
 		addr = memblock_virt_alloc_try_nid_nopanic(
 				huge_page_size(h), huge_page_size(h),
 				0, BOOTMEM_ALLOC_ACCESSIBLE, node);
@@ -1976,6 +1979,7 @@ int __weak alloc_bootmem_huge_page(struct hstate *h)
 found:
 	BUG_ON(!IS_ALIGNED(virt_to_phys(m), huge_page_size(h)));
 	/* Put them into a private list first because mem_map is not up yet */
+	//把巨型页添加到链表huge_boot_pages中
 	list_add(&m->list, &huge_boot_pages);
 	m->hstate = h;
 	return 1;
@@ -2007,8 +2011,10 @@ static void __init gather_bootmem_prealloc(void)
 		page = virt_to_page(m);
 #endif
 		WARN_ON(page_count(page) != 1);
+		//把巨型页组合成复合页
 		prep_compound_huge_page(page, h->order);
 		WARN_ON(PageReserved(page));
+		//把巨型页添加到对应的巨型页池中
 		prep_new_huge_page(h, page, page_to_nid(page));
 		/*
 		 * If we had gigantic hugepages allocated at boot time, we need
@@ -2026,9 +2032,11 @@ static void __init hugetlb_hstate_alloc_pages(struct hstate *h)
 	unsigned long i;
 
 	for (i = 0; i < h->max_huge_pages; ++i) {
+		//如果巨型页长度超过页分配器支持的最大阶数，从引导内存分配器分配巨型页
 		if (hstate_is_gigantic(h)) {
 			if (!alloc_bootmem_huge_page(h))
 				break;
+		//否则从页分配器分配
 		} else if (!alloc_fresh_huge_page(h,
 					 &node_states[N_MEMORY]))
 			break;
@@ -2045,6 +2053,7 @@ static void __init hugetlb_init_hstates(void)
 			minimum_order = huge_page_order(h);
 
 		/* oversize hugepages were init'ed in early boot */
+		//长度超过页分配器支持的最大阶数的巨型页已经从引导内存分配器分配
 		if (!hstate_is_gigantic(h))
 			hugetlb_hstate_alloc_pages(h);
 	}
@@ -2138,6 +2147,8 @@ found:
 }
 
 #define persistent_huge_pages(h) (h->nr_huge_pages - h->surplus_huge_pages)
+
+//count:指定永久巨型页的最大数量。
 static unsigned long set_max_huge_pages(struct hstate *h, unsigned long count,
 						nodemask_t *nodes_allowed)
 {
@@ -2158,11 +2169,12 @@ static unsigned long set_max_huge_pages(struct hstate *h, unsigned long count,
 	 * within all the constraints specified by the sysctls.
 	 */
 	spin_lock(&hugetlb_lock);
+	//如果有临时巨型页，那么把临时巨型页转换为永久巨型页
 	while (h->surplus_huge_pages && count > persistent_huge_pages(h)) {
 		if (!adjust_pool_surplus(h, nodes_allowed, -1))
 			break;
 	}
-
+	//如果永久巨型页数量不够，那么分配巨型页
 	while (count > persistent_huge_pages(h)) {
 		/*
 		 * If this allocation races such that we no longer need the
@@ -2198,14 +2210,19 @@ static unsigned long set_max_huge_pages(struct hstate *h, unsigned long count,
 	 * and won't grow the pool anywhere else. Not until one of the
 	 * sysctls are changed, or the surplus pages go out of use.
 	 */
+	//如果减小巨型页的数量，操作如下
+	/*巨型页总数+预留的巨型页数量-空闲的巨型页数量*/
 	min_count = h->resv_huge_pages + h->nr_huge_pages - h->free_huge_pages;
 	min_count = max(count, min_count);
+	//如果支持高端内存区域，优先把从低端内存区域分配的没有预留的巨型页归还页分配器
 	try_to_free_low(h, min_count, nodes_allowed);
+	//如果永久巨型页数量超过min_count，那么把没有预留的空闲页归还页分配器
 	while (min_count < persistent_huge_pages(h)) {
 		if (!free_pool_huge_page(h, nodes_allowed, 0))
 			break;
 		cond_resched_lock(&hugetlb_lock);
 	}
+	//如果永久巨型页的数量超过指定的最大数量，那么把永久巨型页转换为临时巨型页
 	while (count < persistent_huge_pages(h)) {
 		if (!adjust_pool_surplus(h, nodes_allowed, 1))
 			break;
@@ -2729,6 +2746,7 @@ static int __init hugetlb_nrpages_setup(char *s)
 	 * !hugetlb_max_hstate means we haven't parsed a hugepagesz= parameter yet,
 	 * so this hugepages= parameter goes to the "default hstate".
 	 */
+	 /*!hugetlb_max_hstate意味着没有解析一个"hugepagesz= " 参数，所以用默认的巨型页池*/
 	if (!hugetlb_max_hstate)
 		mhp = &default_hstate_max_huge_pages;
 	else
@@ -2748,6 +2766,7 @@ static int __init hugetlb_nrpages_setup(char *s)
 	 * But we need to allocate >= MAX_ORDER hstates here early to still
 	 * use the bootmem allocator.
 	 */
+	 /*巨型页长度超过了页分配器支持的最大阶数，从引导内存分配器分配巨型页*/
 	if (hugetlb_max_hstate && parsed_hstate->order >= MAX_ORDER)
 		hugetlb_hstate_alloc_pages(parsed_hstate);
 
@@ -3033,6 +3052,7 @@ static pte_t make_huge_pte(struct vm_area_struct *vma, struct page *page,
 					   vma->vm_page_prot));
 	}
 	entry = pte_mkyoung(entry);
+	//清PTE_TABLE_BIT
 	entry = pte_mkhuge(entry);
 	entry = arch_make_huge_pte(entry, vma, page, writable);
 
@@ -3561,6 +3581,7 @@ retry:
 			goto out;
 		}
 		clear_huge_page(page, address, pages_per_huge_page(h));
+		//表示物理页有有效的数据
 		__SetPageUptodate(page);
 		set_page_huge_active(page);
 
@@ -3691,7 +3712,7 @@ int hugetlb_fault(struct mm_struct *mm, struct vm_area_struct *vma,
 	pgoff_t idx;
 	struct page *page = NULL;
 	struct page *pagecache_page = NULL;
-	struct hstate *h = hstate_vma(vma);
+	struct hstate *h = hstate_vma(vma); //为甚从文件系统中获取?
 	struct address_space *mapping;
 	int need_wait_lock = 0;
 
@@ -4012,6 +4033,7 @@ int hugetlb_reserve_pages(struct inode *inode,
 	 * attempt will be made for VM_NORESERVE to allocate a page
 	 * without using reserves
 	 */
+	 //指定不需要预留巨型页直接返回
 	if (vm_flags & VM_NORESERVE)
 		return 0;
 
@@ -4312,7 +4334,7 @@ pte_t *huge_pte_offset(struct mm_struct *mm, unsigned long addr)
 	if (pgd_present(*pgd)) {
 		pud = pud_offset(pgd, addr);
 		if (pud_present(*pud)) {
-			if (pud_huge(*pud))
+			if (pud_huge(*pud)) //PUD_TABLE_BIT
 				return (pte_t *)pud;
 			pmd = pmd_offset(pud, addr);
 		}

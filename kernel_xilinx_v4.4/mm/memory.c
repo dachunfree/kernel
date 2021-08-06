@@ -1193,7 +1193,9 @@ static inline unsigned long zap_pmd_range(struct mmu_gather *tlb,
 	pmd = pmd_offset(pud, addr);
 	do {
 		next = pmd_addr_end(addr, end);
+		//页上层目录表指向透明巨型页?
 		if (pmd_trans_huge(*pmd)) {
+			//释放透明页的一部分
 			if (next - addr != HPAGE_PMD_SIZE) {
 #ifdef CONFIG_DEBUG_VM
 				if (!rwsem_is_locked(&tlb->mm->mmap_sem)) {
@@ -1204,8 +1206,9 @@ static inline unsigned long zap_pmd_range(struct mmu_gather *tlb,
 					BUG();
 				}
 #endif
+				//分裂巨型页
 				split_huge_page_pmd(vma, addr, pmd);
-			} else if (zap_huge_pmd(tlb, vma, pmd, addr))
+			} else if (zap_huge_pmd(tlb, vma, pmd, addr)) //释放巨型页
 				goto next;
 			/* fall through */
 		}
@@ -1218,6 +1221,7 @@ static inline unsigned long zap_pmd_range(struct mmu_gather *tlb,
 		 */
 		if (pmd_none_or_trans_huge_or_clear_bad(pmd))
 			goto next;
+		//页中间目录表指向直接页表或者释放巨型页的一部分?
 		next = zap_pte_range(tlb, vma, pmd, addr, next, details);
 next:
 		cond_resched();
@@ -3289,8 +3293,10 @@ static int create_huge_pmd(struct mm_struct *mm, struct vm_area_struct *vma,
 			unsigned long address, pmd_t *pmd, unsigned int flags)
 {
 	if (vma_is_anonymous(vma))
+		//私有匿名页映射
 		return do_huge_pmd_anonymous_page(mm, vma, address, pmd, flags);
 	if (vma->vm_ops->pmd_fault)
+		//文件映射或者共享匿名映射
 		return vma->vm_ops->pmd_fault(vma, address, pmd, flags);
 	return VM_FAULT_FALLBACK;
 }
@@ -3438,7 +3444,7 @@ static int __handle_mm_fault(struct mm_struct *mm, struct vm_area_struct *vma,
 	pud_t *pud;
 	pmd_t *pmd;
 	pte_t *pte;
-
+	//如果虚拟内存区域设置了 VM_HUGETLB，调用巨型页的页错误处理异常函数
 	if (unlikely(is_vm_hugetlb_page(vma)))
 		return hugetlb_fault(mm, vma, address, flags);
 	//在页全局目录中查找虚拟地址对应的页表项。
@@ -3451,7 +3457,9 @@ static int __handle_mm_fault(struct mm_struct *mm, struct vm_area_struct *vma,
 	pmd = pmd_alloc(mm, pud, address);
 	if (!pmd)
 		return VM_FAULT_OOM;
+	//如果页上层目录页表项是空表项，并且虚拟内存区域允许使用透明巨型页，那么分配巨型页。
 	if (pmd_none(*pmd) && transparent_hugepage_enabled(vma)) {
+		//分配并映射到透明巨型页
 		int ret = create_huge_pmd(mm, vma, address, pmd, flags);
 		if (!(ret & VM_FAULT_FALLBACK))
 			return ret;
@@ -3476,6 +3484,7 @@ static int __handle_mm_fault(struct mm_struct *mm, struct vm_area_struct *vma,
 							     orig_pmd, pmd);
 
 			if (dirty && !pmd_write(orig_pmd)) {
+				//写时复制
 				ret = wp_huge_pmd(mm, vma, address, pmd,
 							orig_pmd, flags);
 				if (!(ret & VM_FAULT_FALLBACK))
@@ -3505,7 +3514,7 @@ static int __handle_mm_fault(struct mm_struct *mm, struct vm_area_struct *vma,
 	 * read mode and khugepaged takes it in write mode. So now it's
 	 * safe to run pte_offset_map().
 	 */
-	 //获取va对应的pte的地址
+	 //获取va对应的pte的地址。普通页
 	pte = pte_offset_map(pmd, address);
 
 	return handle_pte_fault(mm, vma, address, pte, pmd, flags);

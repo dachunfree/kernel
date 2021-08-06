@@ -531,6 +531,7 @@ asmlinkage __visible void __init start_kernel(void)
 	mm_init_cpumask(&init_mm);
 	setup_command_line(command_line);
 	setup_nr_cpu_ids();
+	//用于为每个cpu的per-cpu变量副本分配空间
 	setup_per_cpu_areas();
 	smp_prepare_boot_cpu();	/* arch-specific boot-cpu hooks */
 	/*将所有Node中可用的zone全部添加到各个Node中的zonelist中，也就是对应的struct pglist_data

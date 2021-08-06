@@ -42,12 +42,12 @@ static inline void arch_spin_lock(arch_spinlock_t *lock)
 	ARM64_LSE_ATOMIC_INSN(
 	/* LL/SC */
 "	prfm	pstl1strm, %3\n"
-"1:	ldaxr	%w0, %3\n"
-"	add	%w1, %w0, %w5\n"
-"	stxr	%w2, %w1, %3\n"
-"	cbnz	%w2, 1b\n",
+"1:	ldaxr	%w0, %3\n"   //w0 == lock,表示lockval = lock;
+"	add	%w1, %w0, %w5\n" //newval = lockval +  (1 << 16)，相当于next++
+"	stxr	%w2, %w1, %3\n"  //lock ＝ newval
+"	cbnz	%w2, 1b\n", //－是否有其他PE的执行流插入？有的话，重来。
 	/* LSE atomics */
-"	mov	%w2, %w5\n"
+"	mov	%w2, %w5\n" //
 "	ldadda	%w2, %w0, %3\n"
 "	nop\n"
 "	nop\n"
@@ -55,8 +55,9 @@ static inline void arch_spin_lock(arch_spinlock_t *lock)
 	)
 
 	/* Did we get the lock? */
-"	eor	%w1, %w0, %w0, ror #16\n"
-"	cbz	%w1, 3f\n"
+	//eor亦或指令. ror:循环移位。newval = w0 ^(w0>>16)?
+"	eor	%w1, %w0, %w0, ror #16\n" //lockval中的next域就是自己的号码牌，判断是否等于owner
+"	cbz	%w1, 3f\n" //如果等于，持锁进入临界区
 	/*
 	 * No: spin on the owner. Send a local event to avoid missing an
 	 * unlock before the exclusive load.
@@ -65,7 +66,7 @@ static inline void arch_spin_lock(arch_spinlock_t *lock)
 "2:	wfe\n"
 "	ldaxrh	%w2, %4\n"
 "	eor	%w1, %w2, %w0, lsr #16\n"
-"	cbnz	%w1, 2b\n"
+"	cbnz	%w1, 2b\n" //如果等于，持锁进入临界区，否者回到2，即继续spin
 	/* We got the lock. Critical section starts here. */
 "3:"
 	: "=&r" (lockval), "=&r" (newval), "=&r" (tmp), "+Q" (*lock)
@@ -149,7 +150,21 @@ static inline int arch_spin_is_contended(arch_spinlock_t *lock)
  * The memory barriers are implicit with the load-acquire and store-release
  * instructions.
  */
+/*
+static inline void arch_write_lock(arch_rwlock_t *rw)
+{
+	unsigned int tmp;
 
+	sevl();
+	do {
+		wfe();
+		tmp = rw->lock;  //1
+	} while(tmp);
+	rw->lock = 1 << 31; //2
+}
+1. 由于写者是排他的（读者和写者都不能有），因此这里只有rw->lock的值为0，当前的写者才可以进入临界区。
+2. 置位rw->lock的bit31，代表有写者进入临界区。
+*/
 static inline void arch_write_lock(arch_rwlock_t *rw)
 {
 	unsigned int tmp;
@@ -227,15 +242,33 @@ static inline void arch_write_unlock(arch_rwlock_t *rw)
  * and LSE implementations may exhibit different behaviour (although this
  * will have no effect on lockdep).
  */
+ /*
+static inline void arch_read_lock(arch_rwlock_t *rw)
+{
+	unsigned int tmp;
+	sevl();
+	do {
+		wfe();
+		tmp = rw->lock;
+		tmp++;
+	} while(tmp & (1 << 31));
+	rw->lock = tmp;
+}
+*/
 static inline void arch_read_lock(arch_rwlock_t *rw)
 {
 	unsigned int tmp, tmp2;
 
 	asm volatile(
+	/*sevl()函数是ARM64架构中SEVL汇编指令。SEVL和SEV的区别是，SEVL仅仅修改本地CPU的PE寄存器值，
+	这样下面的WFE指令第一次执行的时候不会睡眠。*/
 	"	sevl\n"
 	ARM64_LSE_ATOMIC_INSN(
 	/* LL/SC */
 	"1:	wfe\n"
+	//增加读者计数，最后会更新到rw->lock中。rw->lock.
+	/*更新rw->lock前提是没有写者，因此这里会判断是否有写者已经进入临界区（判断方法是rw->lock变量bit31的值）。
+	如果，有写者已经进入临界区，就在这里循环，并WFE指令睡眠。类似上面介绍的spin lock实现*/
 	"2:	ldaxr	%w0, %2\n"
 	"	add	%w0, %w0, #1\n"
 	"	tbnz	%w0, #31, 1b\n"
