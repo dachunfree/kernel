@@ -60,23 +60,28 @@ static inline void arch_spin_lock(arch_spinlock_t *lock)
 	unsigned long tmp;
 	u32 newval;
 	arch_spinlock_t lockval;
-
+	// 和preloading cache相关的操作，主要是为了性能考虑
 	prefetchw(&lock->slock);
 	__asm__ __volatile__(
-"1:	ldrex	%0, [%3]\n"
-"	add	%1, %0, %4\n"
-"	strex	%2, %1, [%3]\n"
+//将slock的值保存在lockval这个临时变量中
+"1:	ldrex	%0, [%3]\n"   //lockval = lock->slock
+"	add	%1, %0, %4\n"    //newval ＝ lockval + (1 << 16)，相当于next++
+// 将spin lock中的next加一
+"	strex	%2, %1, [%3]\n" //lock->slock = newval。tmp显示独占指令是否成功
+//判断是否有其他的thread插入
 "	teq	%2, #0\n"
 "	bne	1b"
 	: "=&r" (lockval), "=&r" (newval), "=&r" (tmp)
 	: "r" (&lock->slock), "I" (1 << TICKET_SHIFT)
 	: "cc");
-
+	//判断当前spin lock的状态，如果是unlocked，那么直接获取到该锁
 	while (lockval.tickets.next != lockval.tickets.owner) {
+		//如果当前spin lock的状态是locked，那么调用wfe进入等待状态
 		wfe();
+		//其他的CPU唤醒了本cpu的执行，说明owner发生了变化，该新的own赋给lockval，然后继续判断spin lock的状态，也就是回到step 5
 		lockval.tickets.owner = ACCESS_ONCE(lock->tickets.owner);
 	}
-
+	//memory barrier的操作
 	smp_mb();
 }
 
