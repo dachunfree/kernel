@@ -2,8 +2,8 @@
  * Core registration and callback routines for MTD
  * drivers and users.
  *
- * Copyright © 1999-2010 David Woodhouse <dwmw2@infradead.org>
- * Copyright © 2006      Red Hat UK Limited 
+ * Copyright ? 1999-2010 David Woodhouse <dwmw2@infradead.org>
+ * Copyright ? 2006      Red Hat UK Limited
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -456,7 +456,7 @@ int add_mtd_device(struct mtd_info *mtd)
 	/* No need to get a refcount on the module containing
 	   the notifier, since we hold the mtd_table_mutex */
 	list_for_each_entry(not, &mtd_notifiers, list)
-		not->add(mtd);
+		not->add(mtd); // mtd_notify_add  和 blktrans_notify_add
 
 	mutex_unlock(&mtd_table_mutex);
 	/* We _know_ we aren't being removed, because

@@ -1251,7 +1251,7 @@ dev_t blk_lookup_devt(const char *name, int partno)
 	return devt;
 }
 EXPORT_SYMBOL(blk_lookup_devt);
-
+//内核来初始化，minors是这个磁盘使用的次设备号的数量。
 struct gendisk *alloc_disk(int minors)
 {
 	return alloc_disk_node(minors, NUMA_NO_NODE);

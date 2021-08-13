@@ -448,12 +448,12 @@ struct address_space {
 struct request_queue;
 
 struct block_device {
-	dev_t			bd_dev;  /* not a kdev_t - it's a search key */
-	int			bd_openers;
-	struct inode *		bd_inode;	/* will die */
+	dev_t			bd_dev;   //块设备号  /* not a kdev_t - it's a search key */
+	int			bd_openers;  //用do_open打开块设备的次数
+	struct inode *		bd_inode;	/* 将不用 will die */
 	struct super_block *	bd_super;
 	struct mutex		bd_mutex;	/* open/close mutex */
-	struct list_head	bd_inodes;
+	struct list_head	bd_inodes; //是一个链表头，表示该块设备的设备特殊文件所有inode
 	void *			bd_claiming;
 	void *			bd_holder;
 	int			bd_holders;
@@ -463,13 +463,13 @@ struct block_device {
 #endif
 	struct block_device *	bd_contains;
 	unsigned		bd_block_size;
-	struct hd_struct *	bd_part;
+	struct hd_struct *	bd_part; //指向一个专用的数据结构。表示包含在该设备上的分区。
 	/* number of times partitions within this device have been opened. */
-	unsigned		bd_part_count;
-	int			bd_invalidated;
+	unsigned		bd_part_count; //引用计数，表示引用该设备分区的次数。
+	int			bd_invalidated; //设置为1，表示该分区在内核中的信息无效，因为磁盘信息已经改变，下一次打开设备时候，需要重新扫描。
 	struct gendisk *	bd_disk;
 	struct request_queue *  bd_queue;
-	struct list_head	bd_list;
+	struct list_head	bd_list; //系统中所有可用的block_device实例。
 	/*
 	 * Private data.  You must have bd_claim'ed the block_device
 	 * to use this.  NOTE:  bd_claim allows an owner to claim

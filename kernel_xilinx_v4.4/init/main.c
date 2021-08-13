@@ -424,6 +424,7 @@ static int __init do_early_param(char *param, char *val,
 		    (strcmp(param, "console") == 0 &&
 		     strcmp(p->str, "earlycon") == 0)
 		) {
+			//setup_early_printk
 			if (p->setup_func(val) != 0)
 				pr_warn("Malformed early option '%s'\n", param);
 		}
@@ -525,7 +526,7 @@ asmlinkage __visible void __init start_kernel(void)
  */
 	boot_cpu_init();
 	page_address_init();
-	pr_notice("%s", linux_banner);
+	pr_notice("%s", linux_banner); //printk
 	//fdt解析，内存memblock建立。
 	setup_arch(&command_line);
 	mm_init_cpumask(&init_mm);

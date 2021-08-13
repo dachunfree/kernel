@@ -2124,7 +2124,7 @@ blk_qc_t submit_bio(int rw, struct bio *bio)
 				count);
 		}
 	}
-
+	//把bio数据提交到相应块设备的请求队列中
 	return generic_make_request(bio);
 }
 EXPORT_SYMBOL(submit_bio);

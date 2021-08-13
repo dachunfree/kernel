@@ -297,7 +297,7 @@ struct request_queue {
 	 */
 	struct request_list	root_rl;
 
-	request_fn_proc		*request_fn;
+	request_fn_proc		*request_fn; //向队列添加新请求的标准接口
 	make_request_fn		*make_request_fn;
 	prep_rq_fn		*prep_rq_fn;
 	unprep_rq_fn		*unprep_rq_fn;
@@ -1618,9 +1618,11 @@ static inline bool integrity_req_gap_front_merge(struct request *req,
 #endif /* CONFIG_BLK_DEV_INTEGRITY */
 
 struct block_device_operations {
+	//打开和释放
 	int (*open) (struct block_device *, fmode_t);
 	void (*release) (struct gendisk *, fmode_t);
 	int (*rw_page)(struct block_device *, sector_t, struct page *, int rw);
+	// io控制
 	int (*ioctl) (struct block_device *, fmode_t, unsigned, unsigned long);
 	int (*compat_ioctl) (struct block_device *, fmode_t, unsigned, unsigned long);
 	long (*direct_access)(struct block_device *, sector_t, void __pmem **,

@@ -1,5 +1,5 @@
 /*
- * Copyright © 1999-2010 David Woodhouse <dwmw2@infradead.org> et al.
+ * Copyright ? 1999-2010 David Woodhouse <dwmw2@infradead.org> et al.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -110,17 +110,17 @@ struct nand_ecclayout {
 };
 
 struct module;	/* only needed for owner field in mtd_info */
-
+// Memory Technology Device即内存技术设备
 struct mtd_info {
-	u_char type;
-	uint32_t flags;
+	u_char type;  /* MTD类型，包括MTD_NORFLASH,MTD_NANDFLASH等(可参考mtd-abi.h) */
+	uint32_t flags;  /* MTD属性标志，MTD_WRITEABLE,MTD_NO_ERASE等(可参考mtd-abi.h) */
 	uint64_t size;	 // Total size of the MTD
 
-	/* "Major" erase size for the device. Naïve users may take this
+	/* "Major" erase size for the device. Na?ve users may take this
 	 * to be the only erase size available, or may use the more detailed
 	 * information below if they desire
 	 */
-	uint32_t erasesize;
+	uint32_t erasesize; /* MTD设备的擦除单元大小，对于NandFlash来说就是Block的大小 */
 	/* Minimal writable flash unit size. In case of NOR flash it is 1 (even
 	 * though individual bits can be cleared), in case of NAND flash it is
 	 * one NAND page (or half, or one-fourths of it), in case of ECC-ed NOR
@@ -128,7 +128,7 @@ struct mtd_info {
 	 * Any driver registering a struct mtd_info must ensure a writesize of
 	 * 1 or larger.
 	 */
-	uint32_t writesize;
+	uint32_t writesize; /* 写大小, 对于norFlash是字节,对nandFlash为一页 */
 
 	/*
 	 * Size of the write buffer used by the MTD. MTD devices having a write
@@ -180,7 +180,7 @@ struct mtd_info {
 	 * it means that the whole device has erasesize as given above.
 	 */
 	int numeraseregions;
-	struct mtd_erase_region_info *eraseregions;
+	struct mtd_erase_region_info *eraseregions; /* 可变擦除区域 */
 
 	/*
 	 * Do not call via these pointers, use corresponding mtd_*()
@@ -200,6 +200,7 @@ struct mtd_info {
 		       size_t *retlen, const u_char *buf);
 	int (*_panic_write) (struct mtd_info *mtd, loff_t to, size_t len,
 			     size_t *retlen, const u_char *buf);
+	/* 带oob读写Flash函数 */
 	int (*_read_oob) (struct mtd_info *mtd, loff_t from,
 			  struct mtd_oob_ops *ops);
 	int (*_write_oob) (struct mtd_info *mtd, loff_t to,
@@ -223,8 +224,11 @@ struct mtd_info {
 	int (*_unlock) (struct mtd_info *mtd, loff_t ofs, uint64_t len);
 	int (*_is_locked) (struct mtd_info *mtd, loff_t ofs, uint64_t len);
 	int (*_block_isreserved) (struct mtd_info *mtd, loff_t ofs);
+
+	/* 坏块管理函数 */
 	int (*_block_isbad) (struct mtd_info *mtd, loff_t ofs);
 	int (*_block_markbad) (struct mtd_info *mtd, loff_t ofs);
+	/* 电源管理函数 */
 	int (*_suspend) (struct mtd_info *mtd);
 	void (*_resume) (struct mtd_info *mtd);
 	void (*_reboot) (struct mtd_info *mtd);
