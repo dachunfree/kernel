@@ -86,7 +86,7 @@ static inline void flush_tlb_all(void)
 	//指令同步屏障，冲刷处理器的流水线，重新读取屏蔽指令后面的所有命令。
 	isb();
 }
-
+//使指定用户地址空间所有TLB失效
 static inline void flush_tlb_mm(struct mm_struct *mm)
 {
 	unsigned long asid = ASID(mm) << 48;
@@ -95,7 +95,7 @@ static inline void flush_tlb_mm(struct mm_struct *mm)
 	asm("tlbi	aside1is, %0" : : "r" (asid));
 	dsb(ish);
 }
-
+//使指定用户空间里面指定的虚拟页失效
 static inline void flush_tlb_page(struct vm_area_struct *vma,
 				  unsigned long uaddr)
 {
@@ -112,6 +112,7 @@ static inline void flush_tlb_page(struct vm_area_struct *vma,
  */
 #define MAX_TLB_RANGE	(1024UL << PAGE_SHIFT)
 
+//使指定用户空间某一个范围TLB表项失效
 static inline void __flush_tlb_range(struct vm_area_struct *vma,
 				     unsigned long start, unsigned long end,
 				     bool last_level)

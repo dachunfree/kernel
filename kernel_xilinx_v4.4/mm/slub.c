@@ -1570,7 +1570,9 @@ static void free_slab(struct kmem_cache *s, struct page *page)
 
 static void discard_slab(struct kmem_cache *s, struct page *page)
 {
+	 /* 更新slab数和对象数 */
 	dec_slabs_node(s, page_to_nid(page), page->objects);
+	 /* 释放slab */
 	free_slab(s, page);
 }
 
@@ -2680,7 +2682,7 @@ static void __slab_free(struct kmem_cache *s, struct page *page,
          inuse，objects，frozen字段赋值 */
 		prior = page->freelist;
 		counters = page->counters;
-		//object =   page->freelist;
+		//object->next =   page->freelist;freelist 头部插入链表
 		set_freepointer(s, tail, prior);
 		new.counters = counters;
 		was_frozen = new.frozen;
