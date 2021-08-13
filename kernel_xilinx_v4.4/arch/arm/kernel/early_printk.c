@@ -31,7 +31,7 @@ static void early_console_write(struct console *con, const char *s, unsigned n)
 
 static struct console early_console_dev = {
 	.name =		"earlycon",
-	.write =	early_console_write,
+	.write =	early_console_write, //通过硬件底层实现
 	.flags =	CON_PRINTBUFFER | CON_BOOT,
 	.index =	-1,
 };
@@ -42,5 +42,5 @@ static int __init setup_early_printk(char *buf)
 	register_console(&early_console_dev);
 	return 0;
 }
-
+//parse_early_param 通过cmdline 下来的参数，compare成功后。进行调用
 early_param("earlyprintk", setup_early_printk);

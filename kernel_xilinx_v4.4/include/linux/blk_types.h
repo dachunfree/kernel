@@ -44,31 +44,30 @@ struct bvec_iter {
  * stacking drivers)
  */
 struct bio {
-	struct bio		*bi_next;	/* request queue link */
-	struct block_device	*bi_bdev;
-	unsigned int		bi_flags;	/* status, command, etc */
+	struct bio		*bi_next; /* 用于链接处于同一个request中的BIO */
+	struct block_device	*bi_bdev;/* 该bio所请求的块设备 */
+	unsigned int		bi_flags;	 /* 状态和命令标志 */
 	int			bi_error;
-	unsigned long		bi_rw;		/* bottom bits READ/WRITE,
-						 * top bits priority
-						 */
-
+	unsigned long		bi_rw;		   /* 末尾 bit 表示 READ/WRITE,
+                                       * 起始 bit 表示优先级
+                                       */
 	struct bvec_iter	bi_iter;
 
 	/* Number of segments in this BIO after
 	 * physical address coalescing is performed.
 	 */
-	unsigned int		bi_phys_segments;
+	unsigned int		bi_phys_segments;/* 合并后的片段数目 */
 
 	/*
 	 * To keep track of the max segment size, we account for the
 	 * sizes of the first and last mergeable segments in this bio.
 	 */
-	unsigned int		bi_seg_front_size;
-	unsigned int		bi_seg_back_size;
+	unsigned int		bi_seg_front_size;/* 第一个可合并段的大小，与request合并相关 */
+	unsigned int		bi_seg_back_size;/* 最后一个可合并段的大小，与request合并相关 */
 
 	atomic_t		__bi_remaining;
 
-	bio_end_io_t		*bi_end_io;
+	bio_end_io_t		*bi_end_io; /* 该bio结束时的回调函数，一般用于通知调用者该bio的完成情况 */
 
 	void			*bi_private;
 #ifdef CONFIG_BLK_CGROUP
@@ -85,17 +84,17 @@ struct bio {
 #endif
 	};
 
-	unsigned short		bi_vcnt;	/* how many bio_vec's */
+	unsigned short		bi_vcnt;	 /* vec向量数组中向量的个数 */
 
 	/*
 	 * Everything starting with bi_max_vecs will be preserved by bio_reset()
 	 */
 
-	unsigned short		bi_max_vecs;	/* max bvl_vecs we can hold */
+	unsigned short		bi_max_vecs;	 /* vec向量数组中向量元素个数的上限 */
 
 	atomic_t		__bi_cnt;	/* pin count */
 
-	struct bio_vec		*bi_io_vec;	/* the actual vec list */
+	struct bio_vec		*bi_io_vec;	/* vec向量数组指针 */
 
 	struct bio_set		*bi_pool;
 

@@ -1,9 +1,9 @@
 /*
  * Simple MTD partitioning layer
  *
- * Copyright © 2000 Nicolas Pitre <nico@fluxnic.net>
- * Copyright © 2002 Thomas Gleixner <gleixner@linutronix.de>
- * Copyright © 2000-2010 David Woodhouse <dwmw2@infradead.org>
+ * Copyright ? 2000 Nicolas Pitre <nico@fluxnic.net>
+ * Copyright ? 2002 Thomas Gleixner <gleixner@linutronix.de>
+ * Copyright ? 2000-2010 David Woodhouse <dwmw2@infradead.org>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -39,11 +39,12 @@ static LIST_HEAD(mtd_partitions);
 static DEFINE_MUTEX(mtd_partitions_mutex);
 
 /* Our partition node structure */
+//Linux内核使用 mtd_part结构体表示分区
 struct mtd_part {
-	struct mtd_info mtd;
-	struct mtd_info *master;
-	uint64_t offset;
-	struct list_head list;
+	struct mtd_info mtd; //分区信息, 大部分由master决定
+	struct mtd_info *master; //分区的主分区
+	uint64_t offset; //分区的偏移地址
+	struct list_head list; //将mtd_part链成一个链表mtd_partitons
 };
 
 /*

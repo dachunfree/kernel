@@ -60,17 +60,17 @@ typedef void (bh_end_io_t)(struct buffer_head *bh, int uptodate);
  * for backward compatibility reasons (e.g. submit_bh).
  */
 struct buffer_head {
-	unsigned long b_state;		/* buffer state bitmap (see above) */
-	struct buffer_head *b_this_page;/* circular list of page's buffers */
-	struct page *b_page;		/* the page this bh is mapped to */
+	unsigned long b_state;		//缓冲区状态标志  /* buffer state bitmap (see above) */
+	struct buffer_head *b_this_page;//页面中的缓冲区  /* circular list of page's buffers */
+	struct page *b_page;		//存储缓冲区位于哪个页面 /* the page this bh is mapped to */
 
-	sector_t b_blocknr;		/* start block number */
-	size_t b_size;			/* size of mapping */
-	char *b_data;			/* pointer to data within the page */
+	sector_t b_blocknr;		//逻辑块号 /* start block number */
+	size_t b_size;			//块的大小 /* size of mapping */
+	char *b_data;			//页面中的缓冲区 /* pointer to data within the page */
 
-	struct block_device *b_bdev;
-	bh_end_io_t *b_end_io;		/* I/O completion */
- 	void *b_private;		/* reserved for b_end_io */
+	struct block_device *b_bdev; //块设备,来表示一个独立的磁盘设备
+	bh_end_io_t *b_end_io;		//I/O完成方法 /* I/O completion */
+ 	void *b_private;		//完成方法数据 /* reserved for b_end_io */
 	struct list_head b_assoc_buffers; /* associated with another mapping */
 	struct address_space *b_assoc_map;	/* mapping this buffer is
 						   associated with */

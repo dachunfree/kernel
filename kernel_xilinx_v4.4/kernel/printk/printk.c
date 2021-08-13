@@ -1823,7 +1823,7 @@ asmlinkage int vprintk_emit(int facility, int level,
 		 * /dev/kmsg and syslog() users.
 		 */
 		if (console_trylock_for_printk())
-			console_unlock();
+			console_unlock(); //call_console_drivers进行打印
 		preempt_enable();
 		lockdep_on();
 	}
@@ -1913,7 +1913,7 @@ asmlinkage __visible int printk(const char *fmt, ...)
 	 * disable preemption here.
 	 */
 	vprintk_func = this_cpu_read(printk_func);
-	r = vprintk_func(fmt, args);
+	r = vprintk_func(fmt, args); // vprintk_emit
 
 	va_end(args);
 
@@ -2452,6 +2452,7 @@ early_param("keep_bootcon", keep_bootcon_setup);
  *  - Once a "real" console is registered, any attempt to register a
  *    bootconsoles will be rejected
  */
+ // printk 中最后会调用call_console_drivers 来将log通过uart 输出。
 void register_console(struct console *newcon)
 {
 	int i;
