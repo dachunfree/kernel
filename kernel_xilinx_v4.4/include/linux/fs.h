@@ -582,10 +582,10 @@ struct posix_acl;
  * of the 'struct inode'
  */
 struct inode {
-	umode_t			i_mode;
+	umode_t			i_mode; //文件类型和访问权限
 	unsigned short		i_opflags;
-	kuid_t			i_uid;
-	kgid_t			i_gid;
+	kuid_t			i_uid; //创建文件用户得标识
+	kgid_t			i_gid; //创建文件用户所属得组标识
 	unsigned int		i_flags;
 
 #ifdef CONFIG_FS_POSIX_ACL
@@ -595,14 +595,14 @@ struct inode {
 
 	const struct inode_operations	*i_op;
 	struct super_block	*i_sb; //超级块
-	struct address_space	*i_mapping;
+	struct address_space	*i_mapping;//指向文件地址的空间
 
 #ifdef CONFIG_SECURITY
 	void			*i_security;
 #endif
 
 	/* Stat data, not accessed from path walking */
-	unsigned long		i_ino;
+	unsigned long		i_ino; //索引结点得编号
 	/*
 	 * Filesystems may only read i_nlink directly.  They shall use the
 	 * following functions for modification:
@@ -611,18 +611,18 @@ struct inode {
 	 *    inode_(inc|dec)_link_count
 	 */
 	union {
-		const unsigned int i_nlink;
+		const unsigned int i_nlink; //硬链接计数
 		unsigned int __i_nlink;
 	};
 	dev_t			i_rdev;
-	loff_t			i_size;
-	struct timespec		i_atime;
-	struct timespec		i_mtime;
-	struct timespec		i_ctime;
+	loff_t			i_size; //文件长度
+	struct timespec		i_atime; //上一次访问文件的时间
+	struct timespec		i_mtime;//上一次修改文件数据的时间
+	struct timespec		i_ctime;//上一次修改文件索引结点的时间
 	spinlock_t		i_lock;	/* i_blocks, i_bytes, maybe i_size */
-	unsigned short          i_bytes;
-	unsigned int		i_blkbits;
-	blkcnt_t		i_blocks;
+	unsigned short          i_bytes;//文件长度%块长度 余数
+	unsigned int		i_blkbits; //块长度以2为底的对数
+	blkcnt_t		i_blocks;//文件块数
 
 #ifdef __NEED_I_SIZE_ORDERED
 	seqcount_t		i_size_seqcount;
@@ -652,7 +652,7 @@ struct inode {
 		struct rcu_head		i_rcu;
 	};
 	u64			i_version;
-	atomic_t		i_count;
+	atomic_t		i_count; //索引结点的引用计数
 	atomic_t		i_dio_count;
 	atomic_t		i_writecount;
 #ifdef CONFIG_IMA
@@ -664,8 +664,8 @@ struct inode {
 	struct list_head	i_devices;
 	union {
 		struct pipe_inode_info	*i_pipe;
-		struct block_device	*i_bdev;
-		struct cdev		*i_cdev;
+		struct block_device	*i_bdev;//指向块设备
+		struct cdev		*i_cdev; //指向字符设备
 		char			*i_link;
 	};
 
