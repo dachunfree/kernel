@@ -109,28 +109,28 @@ struct dentry {
 	/* RCU lookup touched fields */
 	unsigned int d_flags;		/* protected by d_lock */
 	seqcount_t d_seq;		/* per dentry seqlock */
-	struct hlist_bl_node d_hash;	/* lookup hash list */
-	struct dentry *d_parent;	/* parent directory */
-	struct qstr d_name;
-	struct inode *d_inode;		/* Where the name belongs to - NULL is
+	struct hlist_bl_node d_hash;//把目录项加入到散列表 /* lookup hash list */
+	struct dentry *d_parent; //指向父目录 	/* parent directory */
+	struct qstr d_name;		//存储文件的名称
+	struct inode *d_inode;		//文件的索引节点 /* Where the name belongs to - NULL is
 					 * negative */
 	unsigned char d_iname[DNAME_INLINE_LEN];	/* small names */
 
 	/* Ref lookup also touches following */
-	struct lockref d_lockref;	/* per-dentry lock and refcount */
+	struct lockref d_lockref;	//引用计数 /* per-dentry lock and refcount */
 	const struct dentry_operations *d_op;
 	struct super_block *d_sb;	/* The root of the dentry tree */
 	unsigned long d_time;		/* used by d_revalidate */
 	void *d_fsdata;			/* fs-specific data */
 
-	struct list_head d_lru;		/* LRU list */
-	struct list_head d_child;	/* child of parent list */
+	struct list_head d_lru;		//把目录项加入到超级块最近最少使用的链表s_dentry_lru中/* LRU list */
+	struct list_head d_child;	//用来把本目录加入到父目录的子目录链表 /* child of parent list */
 	struct list_head d_subdirs;	/* our children */
 	/*
 	 * d_alias and d_rcu can share memory
 	 */
 	union {
-		struct hlist_node d_alias;	/* inode alias list */
+		struct hlist_node d_alias;//把同一个文件的所有硬链接对应的目录项链接起来	/* inode alias list */
 	 	struct rcu_head d_rcu;
 	} d_u;
 };
@@ -148,13 +148,13 @@ enum dentry_d_lock_class
 };
 
 struct dentry_operations {
-	int (*d_revalidate)(struct dentry *, unsigned int);
+	int (*d_revalidate)(struct dentry *, unsigned int);//对网络文件系统重要，确认目录项是否有效
 	int (*d_weak_revalidate)(struct dentry *, unsigned int);
-	int (*d_hash)(const struct dentry *, struct qstr *);
-	int (*d_compare)(const struct dentry *, const struct dentry *,
+	int (*d_hash)(const struct dentry *, struct qstr *); //用来计算散列值
+	int (*d_compare)(const struct dentry *, const struct dentry *, //比较两个目录文件名称
 			unsigned int, const char *, const struct qstr *);
-	int (*d_delete)(const struct dentry *);
-	void (*d_release)(struct dentry *);
+	int (*d_delete)(const struct dentry *);//用来在目录项的引用计数减到0时判断是否可以释放目录项内存
+	void (*d_release)(struct dentry *);//用来释放目录项的内存之前的调用
 	void (*d_prune)(struct dentry *);
 	void (*d_iput)(struct dentry *, struct inode *);
 	char *(*d_dname)(struct dentry *, char *, int);
@@ -281,7 +281,7 @@ extern void d_rehash(struct dentry *);
  * This adds the entry to the hash queues and initializes @inode.
  * The entry was actually filled in earlier during d_alloc().
  */
- 
+
 static inline void d_add(struct dentry *entry, struct inode *inode)
 {
 	d_instantiate(entry, inode);
@@ -344,7 +344,7 @@ extern char *dentry_path(struct dentry *, char *, int);
  *	@dentry: dentry to get a reference to
  *
  *	Given a dentry or %NULL pointer increment the reference count
- *	if appropriate and return the dentry. A dentry will not be 
+ *	if appropriate and return the dentry. A dentry will not be
  *	destroyed when it has references.
  */
 static inline struct dentry *dget_dlock(struct dentry *dentry)
@@ -369,7 +369,7 @@ extern struct dentry *dget_parent(struct dentry *dentry);
  *
  *	Returns true if the dentry passed is not currently hashed.
  */
- 
+
 static inline int d_unhashed(const struct dentry *dentry)
 {
 	return hlist_bl_unhashed(&dentry->d_hash);

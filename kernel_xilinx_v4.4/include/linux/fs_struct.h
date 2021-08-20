@@ -11,7 +11,7 @@ struct fs_struct {
 	seqcount_t seq;
 	int umask;
 	int in_exec;
-	struct path root, pwd;
+	struct path root, pwd; //存储进程的根目录。pwd存储进进程的当前目录
 };
 
 extern struct kmem_cache *fs_cachep;

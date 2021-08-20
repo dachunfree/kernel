@@ -22,10 +22,10 @@
 #define NR_OPEN_DEFAULT BITS_PER_LONG
 
 struct fdtable {
-	unsigned int max_fds;
-	struct file __rcu **fd;      /* current fd array */
-	unsigned long *close_on_exec;
-	unsigned long *open_fds;
+	unsigned int max_fds; //打开文件表的当前大小。成员fd指向file指针数组的大小
+	struct file __rcu **fd; //指向file指针数组     /* current fd array */
+	unsigned long *close_on_exec; //指向一个位图，指示执行execve()以装载新程序时候需要关闭哪些文件描述符
+	unsigned long *open_fds;//指向文件描述符位图，指示哪些文件描述符被分配
 	unsigned long *full_fds_bits;
 	struct rcu_head rcu;
 };
@@ -47,11 +47,11 @@ struct files_struct {
   /*
    * read mostly part
    */
-	atomic_t count;
+	atomic_t count; //files_struct的引用计数
 	bool resize_in_progress;
 	wait_queue_head_t resize_wait;
 
-	struct fdtable __rcu *fdt;
+	struct fdtable __rcu *fdt; //指向打开的文件表
 	struct fdtable fdtab;
   /*
    * written part on a separate cache line in SMP

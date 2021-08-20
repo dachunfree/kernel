@@ -1024,6 +1024,9 @@ int __init early_init_dt_scan_chosen(unsigned long node, const char *uname,
 	cmdline_len = strlen(cmdline);
 	strncpy(cmdline + cmdline_len, " isolcpus=1", 11);
 	cmdline[cmdline_len + 11] = '\0';
+	cmdline_len = strlen(cmdline);
+	strncpy(cmdline + cmdline_len, " crashkernel=64M", 16);
+	cmdline[cmdline_len + 16] = '\0';
 	/* break now */
 	return 1;
 }

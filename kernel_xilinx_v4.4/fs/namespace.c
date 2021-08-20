@@ -1576,7 +1576,7 @@ out_unlock:
 	namespace_unlock();
 }
 
-/* 
+/*
  * Is the caller allowed to modify his namespace?
  */
 static inline bool may_mount(void)
@@ -2082,7 +2082,7 @@ static int do_loopback(struct path *path, const char *old_name,
 
 	err = -EINVAL;
 	if (mnt_ns_loop(old_path.dentry))
-		goto out; 
+		goto out;
 
 	mp = lock_mount(path);
 	err = PTR_ERR(mp);
@@ -2669,6 +2669,7 @@ long do_mount(const char *dev_name, const char __user *dir_name,
 		((char *)data_page)[PAGE_SIZE - 1] = 0;
 
 	/* ... and get the mountpoint */
+	//找到目录对应的挂载描述符和dentry实体
 	retval = user_path(dir_name, &path);
 	if (retval)
 		return retval;

@@ -1,6 +1,6 @@
 /*
  *
- * Definitions for mount interface. This describes the in the kernel build 
+ * Definitions for mount interface. This describes the in the kernel build
  * linkedlist with mounted filesystems.
  *
  * Author:  Marco van Wieringen <mvw@planets.elm.net>
@@ -64,8 +64,8 @@ struct mnt_namespace;
 #define MNT_UMOUNT		0x8000000
 
 struct vfsmount {
-	struct dentry *mnt_root;	/* root of the mounted tree */
-	struct super_block *mnt_sb;	/* pointer to superblock */
+	struct dentry *mnt_root;	//子文件系统的根目录 /* root of the mounted tree */
+	struct super_block *mnt_sb;  //子文件系统的超级块	/* pointer to superblock */
 	int mnt_flags;
 };
 

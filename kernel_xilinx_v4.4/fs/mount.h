@@ -22,16 +22,16 @@ struct mnt_pcp {
 
 struct mountpoint {
 	struct hlist_node m_hash;
-	struct dentry *m_dentry;
-	struct hlist_head m_list;
+	struct dentry *m_dentry; //指向挂载点的目录
+	struct hlist_head m_list;// 用来把同一个挂载点下的所有挂载描述符链接起来
 	int m_count;
 };
 
 struct mount {
-	struct hlist_node mnt_hash;
-	struct mount *mnt_parent;
-	struct dentry *mnt_mountpoint;
-	struct vfsmount mnt;
+	struct hlist_node mnt_hash; //挂载描述符加入全局散列表 mnt_hashtable.{父挂载描述符，挂载点}
+	struct mount *mnt_parent; //指向父亲
+	struct dentry *mnt_mountpoint;//指向作为挂载点的目录
+	struct vfsmount mnt; //子文件系统相关的
 	union {
 		struct rcu_head mnt_rcu;
 		struct llist_node mnt_llist;
@@ -42,18 +42,18 @@ struct mount {
 	int mnt_count;
 	int mnt_writers;
 #endif
-	struct list_head mnt_mounts;	/* list of children, anchored here */
-	struct list_head mnt_child;	/* and going through their mnt_child */
-	struct list_head mnt_instance;	/* mount instance on sb->s_mounts */
-	const char *mnt_devname;	/* Name of device e.g. /dev/dsk/hda1 */
+	struct list_head mnt_mounts;	//孩子链表的头结点 /* list of children, anchored here */
+	struct list_head mnt_child;	//加入父亲的孩子链表  /* and going through their mnt_child */
+	struct list_head mnt_instance;//用来把挂载描述符添加到超级块的挂载实例链表中，同一个存储设备文件系统，可以挂载多次	/* mount instance on sb->s_mounts */
+	const char *mnt_devname; // 指向存储设备的名称/* Name of device e.g. /dev/dsk/hda1 */
 	struct list_head mnt_list;
 	struct list_head mnt_expire;	/* link in fs-specific expiry list */
 	struct list_head mnt_share;	/* circular list of shared mounts */
 	struct list_head mnt_slave_list;/* list of slave mounts */
 	struct list_head mnt_slave;	/* slave list entry */
 	struct mount *mnt_master;	/* slave is on master->mnt_slave_list */
-	struct mnt_namespace *mnt_ns;	/* containing namespace */
-	struct mountpoint *mnt_mp;	/* where is it mounted */
+	struct mnt_namespace *mnt_ns; //指向挂载命名空间	/* containing namespace */
+	struct mountpoint *mnt_mp;	//指向挂载点/* where is it mounted */
 	struct hlist_node mnt_mp_list;	/* list mounts with the same mountpoint */
 #ifdef CONFIG_FSNOTIFY
 	struct hlist_head mnt_fsnotify_marks;
