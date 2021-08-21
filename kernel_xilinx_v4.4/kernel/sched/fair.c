@@ -9113,7 +9113,7 @@ static u64 sched_slice(struct cfs_rq *cfs_rq, struct sched_entity *se)
 		cfs_rq = cfs_rq_of(se);
 		load = &cfs_rq->load;  //得到就绪队列的权重，也就是就绪队列上所有调度实体权重之和
 
-		if (unlikely(!se->on_rq)) {
+		 if (unlikely(!se->on_rq)) {
 			lw = cfs_rq->load;
 
 			update_load_add(&lw, se->load.weight);
