@@ -6,8 +6,8 @@ git config http.sslVerify "false"
 ssh
 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
 
-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
+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
 
 如果在push的时候没有出现输入用户名密码 请执行 git config --system --unset credential.helper 完了再输入用户名密码
 
-git remote set-url origin https://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@github.com/dachunfree/kernel/
+git remote set-url origin https://dachunfree@github.com/dachunfree/kernel/
