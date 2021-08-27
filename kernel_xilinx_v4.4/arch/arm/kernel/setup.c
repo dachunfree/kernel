@@ -911,7 +911,7 @@ static void __init reserve_crashkernel(void)
 		(unsigned long)(crash_base >> 20),
 		(unsigned long)(total_mem >> 20));
 
-	crashk_res.start = crash_base;
+	crashk_res.start = crash_base; //在 kimage_alloc_init中设置了
 	crashk_res.end = crash_base + crash_size - 1;
 	insert_resource(&iomem_resource, &crashk_res);
 }

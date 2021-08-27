@@ -386,7 +386,7 @@ static struct page *kimage_alloc_normal_control_pages(struct kimage *image,
 
 	return pages;
 }
-
+//把segment的内容准备放到crash kernel内存中。
 static struct page *kimage_alloc_crash_control_pages(struct kimage *image,
 						      unsigned int order)
 {
@@ -799,7 +799,7 @@ static int kimage_load_crash_segment(struct kimage *image,
 			result  = -ENOMEM;
 			goto out;
 		}
-		ptr = kmap(page);
+		ptr = kmap(page); //高端内存映射
 		ptr += maddr & ~PAGE_MASK;
 		mchunk = min_t(size_t, mbytes,
 				PAGE_SIZE - (maddr & ~PAGE_MASK));

@@ -366,14 +366,14 @@ typedef int (*read_actor_t)(read_descriptor_t *, struct page *,
 		unsigned long, unsigned long);
 
 struct address_space_operations {
-	int (*writepage)(struct page *page, struct writeback_control *wbc);
-	int (*readpage)(struct file *, struct page *);
+	int (*writepage)(struct page *page, struct writeback_control *wbc);//写操作，从页写到所有者的磁盘映象
+	int (*readpage)(struct file *, struct page *);//读操作，从所有者的磁盘映像度到页
 
 	/* Write back some dirty pages from this mapping. */
-	int (*writepages)(struct address_space *, struct writeback_control *);
+	int (*writepages)(struct address_space *, struct writeback_control *);//将制定数量的脏业写回到磁盘
 
 	/* Set a page dirty.  Return true if this dirtied it */
-	int (*set_page_dirty)(struct page *page);
+	int (*set_page_dirty)(struct page *page); //把所有者得页设置为脏页
 
 	int (*readpages)(struct file *filp, struct address_space *mapping,
 			struct list_head *pages, unsigned nr_pages);
@@ -388,9 +388,9 @@ struct address_space_operations {
 	/* Unfortunately this kludge is needed for FIBMAP. Don't use it */
 	sector_t (*bmap)(struct address_space *, sector_t);
 	void (*invalidatepage) (struct page *, unsigned int, unsigned int);
-	int (*releasepage) (struct page *, gfp_t);
+	int (*releasepage) (struct page *, gfp_t);//日志文件系统使用以准备释放页
 	void (*freepage)(struct page *);
-	ssize_t (*direct_IO)(struct kiocb *, struct iov_iter *iter, loff_t offset);
+	ssize_t (*direct_IO)(struct kiocb *, struct iov_iter *iter, loff_t offset);//直接IO传输，绕过pagecache
 	/*
 	 * migrate the contents of a page to the specified target. If
 	 * migrate_mode is MIGRATE_ASYNC, it must not block.
@@ -425,7 +425,7 @@ int pagecache_write_end(struct file *, struct address_space *mapping,
 
 struct address_space {
 	struct inode		*host;		/* owner: inode, block_device 指向拥有该对象索引节点的指针 */
-	struct radix_tree_root	page_tree;	/* radix tree of all pages 表示拥有者页的基树的根*/
+	struct radix_tree_root	page_tree;	/* radix tree of all pages 表示拥有者页的基树的根，实现pagecache高效查找*/
 	spinlock_t		tree_lock;	/* and lock protecting it */
 	atomic_t		i_mmap_writable;/* count VM_SHARED mappings */
 	struct rb_root		i_mmap;		/* tree of private and shared mappings   指向vm_area_struct*/
@@ -589,13 +589,10 @@ struct posix_acl;
 struct inode {
 	umode_t			i_mode; //文件类型和访问权限
 	unsigned short		i_opflags;
-<<<<<<< HEAD
 	kuid_t			i_uid; //创建文件用户的标识符
 	kgid_t			i_gid; //创建文件的用户所属的组标识符
-=======
 	kuid_t			i_uid; //创建文件用户得标识
 	kgid_t			i_gid; //创建文件用户所属得组标识
->>>>>>> 1322eebe0665893a4d84aeb66e89c374dc170da5
 	unsigned int		i_flags;
 
 #ifdef CONFIG_FS_POSIX_ACL
@@ -603,26 +600,20 @@ struct inode {
 	struct posix_acl	*i_default_acl;
 #endif
 
-<<<<<<< HEAD
 	const struct inode_operations	*i_op; //操作目录(一个目录下创建或者删除文件)和文件属性
 	struct super_block	*i_sb; //指向文件所属的文件系统超级块
 	struct address_space	*i_mapping; //指向文件的地址空间。页高速缓存
-=======
 	const struct inode_operations	*i_op;
 	struct super_block	*i_sb; //超级块
 	struct address_space	*i_mapping;//指向文件地址的空间
->>>>>>> 1322eebe0665893a4d84aeb66e89c374dc170da5
 
 #ifdef CONFIG_SECURITY
 	void			*i_security;
 #endif
 
 	/* Stat data, not accessed from path walking */
-<<<<<<< HEAD
 	unsigned long		i_ino; //索引节点的编号
-=======
 	unsigned long		i_ino; //索引结点得编号
->>>>>>> 1322eebe0665893a4d84aeb66e89c374dc170da5
 	/*
 	 * Filesystems may only read i_nlink directly.  They shall use the
 	 * following functions for modification:
@@ -634,7 +625,6 @@ struct inode {
 		const unsigned int i_nlink; //硬链接计数
 		unsigned int __i_nlink;
 	};
-<<<<<<< HEAD
 	dev_t			i_rdev; //设备号
 	loff_t			i_size; //文件长度
 	struct timespec		i_atime; //(access time)上一次访问文件的时间
@@ -644,7 +634,6 @@ struct inode {
 	unsigned short          i_bytes;//文件长度%块长度的余数
 	unsigned int		i_blkbits;//是块长度以2为底的对数
 	blkcnt_t		i_blocks; //文件的块数，文件长度/块长度的商
-=======
 	dev_t			i_rdev;
 	loff_t			i_size; //文件长度
 	struct timespec		i_atime; //上一次访问文件的时间
@@ -654,7 +643,6 @@ struct inode {
 	unsigned short          i_bytes;//文件长度%块长度 余数
 	unsigned int		i_blkbits; //块长度以2为底的对数
 	blkcnt_t		i_blocks;//文件块数
->>>>>>> 1322eebe0665893a4d84aeb66e89c374dc170da5
 
 #ifdef __NEED_I_SIZE_ORDERED
 	seqcount_t		i_size_seqcount;
@@ -684,11 +672,8 @@ struct inode {
 		struct rcu_head		i_rcu;
 	};
 	u64			i_version;
-<<<<<<< HEAD
 	atomic_t		i_count; //索引节点的引用计数
-=======
 	atomic_t		i_count; //索引结点的引用计数
->>>>>>> 1322eebe0665893a4d84aeb66e89c374dc170da5
 	atomic_t		i_dio_count;
 	atomic_t		i_writecount;
 #ifdef CONFIG_IMA
@@ -700,11 +685,8 @@ struct inode {
 	struct list_head	i_devices;
 	union {
 		struct pipe_inode_info	*i_pipe;
-<<<<<<< HEAD
 		struct block_device	*i_bdev; //指向块设备
-=======
 		struct block_device	*i_bdev;//指向块设备
->>>>>>> 1322eebe0665893a4d84aeb66e89c374dc170da5
 		struct cdev		*i_cdev; //指向字符设备
 		char			*i_link;
 	};

@@ -42,9 +42,9 @@ static inline unsigned long __xchg(unsigned long x, volatile void *ptr, int size
 #ifndef CONFIG_CPU_V6 /* MIN ARCH >= V6K */
 	case 1:
 		asm volatile("@	__xchg1\n"
-		"1:	ldrexb	%0, [%3]\n"
-		"	strexb	%1, %2, [%3]\n"
-		"	teq	%1, #0\n"
+		"1:	ldrexb	%0, [%3]\n"   //ret = ptr;
+		"	strexb	%1, %2, [%3]\n" //ptr = x;
+		"	teq	%1, #0\n" //是否写入成功
 		"	bne	1b"
 			: "=&r" (ret), "=&r" (tmp)
 			: "r" (x), "r" (ptr)

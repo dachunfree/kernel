@@ -58,7 +58,7 @@ static int kimage_alloc_init(struct kimage **rimage, unsigned long entry,
 		return -ENOMEM;
 
 	image->start = entry;
-
+	//把用户空间的段内容copy到image结构体中
 	ret = copy_user_segment_list(image, nr_segments, segments);
 	if (ret)
 		goto out_free_image;

@@ -296,7 +296,7 @@ ISS, bits[24:0]:指令特定症状(The Instruction specific syndrome field.)。每种异常
 el1_sync:
 	kernel_entry 1
 	mrs	x1, esr_el1			// read the syndrome register
-	lsr	x24, x1, #ESR_ELx_EC_SHIFT	// exception class.异常类别，指示异常引起的原因
+	lsr	x24, x1, #ESR_ELx_EC_SHIFT	// exception class.异常类别，指示异常引起的原因.x24 = x1 >> ESR_ELx_EC_SHIFT;
 	cmp	x24, #ESR_ELx_EC_DABT_CUR	// data abort in EL1 .为0x25
 	b.eq	el1_da					 //访问数据时候生成的异常
 	cmp	x24, #ESR_ELx_EC_SYS64		// configurable trap

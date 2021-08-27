@@ -37,7 +37,7 @@ static inline pte_t get_fixmap_pte(unsigned long vaddr)
 void *kmap(struct page *page)
 {
 	might_sleep();
-	if (!PageHighMem(page))
+	if (!PageHighMem(page)) //如果是低端内存，则直接返内存页对应的直接映射虚拟地址
 		return page_address(page);
 	return kmap_high(page);
 }

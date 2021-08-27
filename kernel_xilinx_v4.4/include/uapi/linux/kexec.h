@@ -49,8 +49,9 @@
  * loading  kernel binaries.
  */
 struct kexec_segment {
-	const void *buf;
-	size_t bufsz;
+	const void *buf; //用户空间缓存
+	size_t bufsz; //大小
+	//段的目标位置和大小
 	const void *mem;
 	size_t memsz;
 };

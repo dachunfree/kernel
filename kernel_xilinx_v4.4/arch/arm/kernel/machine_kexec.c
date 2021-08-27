@@ -35,7 +35,7 @@ static unsigned long dt_mem;
  * Provide a dummy crash_notes definition while crash dump arrives to arm.
  * This prevents breakage of crash_notes attribute in kernel/ksysfs.c.
  */
-
+//建立内核映像所需要的控制页
 int machine_kexec_prepare(struct kimage *image)
 {
 	struct kexec_segment *current_segment;

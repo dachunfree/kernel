@@ -136,18 +136,18 @@ struct kimage {
 	kimage_entry_t *last_entry;
 
 	unsigned long start;
-	struct page *control_code_page;
+	struct page *control_code_page; //crash kernel中存放的内核的各种段信息
 	struct page *swap_page;
 
 	unsigned long nr_segments;
-	struct kexec_segment segment[KEXEC_SEGMENT_MAX];
+	struct kexec_segment segment[KEXEC_SEGMENT_MAX]; //用户空间的segment?
 
 	struct list_head control_pages;
 	struct list_head dest_pages;
 	struct list_head unusable_pages;
 
 	/* Address of next control page to allocate for crash kernels. */
-	unsigned long control_page;
+	unsigned long control_page; //存放分配的crash_kernel地址
 
 	/* Flags to indicate special processing */
 	unsigned int type : 1;

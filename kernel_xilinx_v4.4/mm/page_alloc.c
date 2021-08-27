@@ -6559,7 +6559,7 @@ static inline int pfn_to_bitidx(struct zone *zone, unsigned long pfn)
 	return (pfn >> pageblock_order) * NR_PAGEBLOCK_BITS;
 #else
 	pfn = pfn - round_down(zone->zone_start_pfn, pageblock_nr_pages);
-	return (pfn >> pageblock_order) * NR_PAGEBLOCK_BITS;
+	return (pfn >> pageblock_order) * NR_PAGEBLOCK_BITS; //需要3位管理
 #endif /* CONFIG_SPARSEMEM */
 }
 

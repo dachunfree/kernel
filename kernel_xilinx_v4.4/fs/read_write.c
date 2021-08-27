@@ -4,7 +4,7 @@
  *  Copyright (C) 1991, 1992  Linus Torvalds
  */
 
-#include <linux/slab.h> 
+#include <linux/slab.h>
 #include <linux/stat.h>
 #include <linux/fcntl.h>
 #include <linux/file.h>
@@ -448,7 +448,7 @@ ssize_t vfs_read(struct file *file, char __user *buf, size_t count, loff_t *pos)
 	if (unlikely(!access_ok(VERIFY_WRITE, buf, count)))
 		return -EFAULT;
 
-	ret = rw_verify_area(READ, file, pos, count);
+	ret = rw_verify_area(READ, file, pos, count); // read or write verify
 	if (ret >= 0) {
 		count = ret;
 		ret = __vfs_read(file, buf, count, pos);
@@ -558,18 +558,23 @@ static inline void file_pos_write(struct file *file, loff_t pos)
 {
 	file->f_pos = pos;
 }
+/*
+#define __SYSCALL_DEFINEx(x, name, ...)					\
+	asmlinkage long sys##name(__MAP(x,__SC_DECL,__VA_ARGS__))	\
+		__attribute__((alias(__stringify(SyS##name))));
+*/
 
 SYSCALL_DEFINE3(read, unsigned int, fd, char __user *, buf, size_t, count)
 {
-	struct fd f = fdget_pos(fd);
+	struct fd f = fdget_pos(fd);  //get struct fd from fd array
 	ssize_t ret = -EBADF;
 
 	if (f.file) {
-		loff_t pos = file_pos_read(f.file);
+		loff_t pos = file_pos_read(f.file); //获取文件的位置
 		ret = vfs_read(f.file, buf, count, &pos);
 		if (ret >= 0)
-			file_pos_write(f.file, pos);
-		fdput_pos(f);
+			file_pos_write(f.file, pos); //更新文件的pos位置
+		fdput_pos(f); //更新fd到fd array
 	}
 	return ret;
 }
@@ -623,7 +628,7 @@ SYSCALL_DEFINE4(pwrite64, unsigned int, fd, const char __user *, buf,
 	f = fdget(fd);
 	if (f.file) {
 		ret = -ESPIPE;
-		if (f.file->f_mode & FMODE_PWRITE)  
+		if (f.file->f_mode & FMODE_PWRITE)
 			ret = vfs_write(f.file, buf, count, &pos);
 		fdput(f);
 	}
