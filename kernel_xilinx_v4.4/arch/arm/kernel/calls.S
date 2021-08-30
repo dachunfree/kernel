@@ -13,7 +13,7 @@
 /* 0 */		CALL(sys_restart_syscall)
 		CALL(sys_exit)
 		CALL(sys_fork)
-		CALL(sys_read)
+		CALL(sys_read) //SYSCALL_DEFINE3(read, unsigned int, fd, char __user *, buf, size_t, count)
 		CALL(sys_write)
 /* 5 */		CALL(sys_open)
 		CALL(sys_close)

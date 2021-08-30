@@ -1682,7 +1682,7 @@ readpage:
 		 */
 		ClearPageError(page);
 		/* Start the actual read. The read will unlock the page. */
-		error = mapping->a_ops->readpage(filp, page);
+		error = mapping->a_ops->readpage(filp, page); //struct address_space_operations ext2_aops
 
 		if (unlikely(error)) {
 			if (error == AOP_TRUNCATED_PAGE) {
