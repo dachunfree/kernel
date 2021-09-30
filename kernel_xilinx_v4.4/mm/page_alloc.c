@@ -3292,9 +3292,9 @@ __alloc_pages_nodemask(gfp_t gfp_mask, unsigned int order,
 	int alloc_flags = ALLOC_WMARK_LOW|ALLOC_CPUSET|ALLOC_FAIR;
 	gfp_t alloc_mask; /* The gfp_t that was actually used for allocation */
 	struct alloc_context ac = {
-		.high_zoneidx = gfp_zone(gfp_mask), //获取从哪个最高zone分配(ZONE_DMA,ZONE_NORMAL,ZONE_MIGRATE)，可以向下低区域借用
+		.high_zoneidx = gfp_zone(gfp_mask), //获取从哪个最高zone分配(ZONE_DMA,ZONE_NORMAL,ZONE_MOVABLE)，可以向下低区域借用
 		.nodemask = nodemask,
-		.migratetype = gfpflags_to_migratetype(gfp_mask), //分配行为
+		.migratetype = gfpflags_to_migratetype(gfp_mask), //分配行为 (__GFP_RECLAIMABLE|__GFP_MOVABLE)
 	};
 
 	gfp_mask &= gfp_allowed_mask;
@@ -5390,6 +5390,7 @@ static void __paginginit free_area_init_core(struct pglist_data *pgdat)
 			continue;
 
 		set_pageblock_order();
+		//分配usemap，里面有 NR_PAGEBLOCK_BITS 标志位。
 		setup_usemap(pgdat, zone, zone_start_pfn, size);
 		ret = init_currently_empty_zone(zone, zone_start_pfn, size);
 		BUG_ON(ret);

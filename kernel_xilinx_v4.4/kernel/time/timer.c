@@ -1553,7 +1553,7 @@ signed long __sched schedule_timeout(signed long timeout)
 	}
 
 	expire = timeout + jiffies;
-
+	//设置超时执行函数process_timeout(current)
 	setup_timer_on_stack(&timer, process_timeout, (unsigned long)current);
 	__mod_timer(&timer, expire, false, TIMER_NOT_PINNED);
 	schedule();

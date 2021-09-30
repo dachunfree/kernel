@@ -1333,6 +1333,7 @@ static int try_to_unmap_one(struct page *page, struct vm_area_struct *vma,
 	 * If it's recently referenced (perhaps page_referenced
 	 * skipped over this mm) then we should reactivate it.
 	 */
+	 //如果是mlock，不能把它交换出去。
 	if (!(flags & TTU_IGNORE_MLOCK)) {
 		if (vma->vm_flags & VM_LOCKED) {
 			/* Holding pte lock, we do *not* need mmap_sem here */
@@ -1618,6 +1619,7 @@ static int rmap_walk_anon(struct page *page, struct rmap_walk_control *rwc)
 	//遍历anon_vma->rb_root红黑树中的AVC，从AVC得到相应的VMA
 	anon_vma_interval_tree_foreach(avc, &anon_vma->rb_root, pgoff, pgoff) {
 		struct vm_area_struct *vma = avc->vma;
+		//获取vma的虚拟地址
 		unsigned long address = vma_address(page, vma);
 
 		cond_resched();

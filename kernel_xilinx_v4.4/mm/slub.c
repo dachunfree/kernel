@@ -2688,9 +2688,7 @@ static void __slab_free(struct kmem_cache *s, struct page *page,
 		was_frozen = new.frozen;
 		new.inuse -= cnt;
 		 /*
-         !new.inuse = true，slab中没有分配出去的对象，目前我
-         只想到了一种情况，即当前释放的对象是slab中的最后一个
-         对象，释放之后slab为空。
+         !new.inuse = true，slab中没有分配出去的对象，即当前释放的对象是slab中的最后一个对象，释放之后slab为空。
          !prior = true，slab中没有可用的对象，即slab为满。
          !was_frozen = true，slab没有被冻结，即不属于某一个CPU
          的slab cache

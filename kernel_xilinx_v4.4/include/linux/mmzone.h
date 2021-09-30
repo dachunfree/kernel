@@ -344,7 +344,7 @@ struct zone {
 	/* Read-mostly fields */
 
 	/* zone watermarks, access with *_wmark_pages(zone) macros */
-	//水位值，WMARK_MIN/WMARK_LOV/WMARK_HIGH，页面分配器和kswapd页面回收中会用到
+	//水位值，WMARK_MIN/WMARK_LOW/WMARK_HIGH，页面分配器和kswapd页面回收中会用到
 	//首选的内存区域在什么情况下从备用区域借物理页呢?
 	unsigned long watermark[NR_WMARK];
 	//用来记录高阶原子类型的总页数。并限制其数量。nr_reserved_highatomic < managed_pages /100 + 分组阶数对应的页数。
@@ -394,7 +394,7 @@ struct zone {
 如果使用稀疏内存模型，这个位图在结构体mem_section中。
 enum pageblock_bits;
 */
-	unsigned long		*pageblock_flags;
+	unsigned long		*pageblock_flags; //use_map
 #endif /* CONFIG_SPARSEMEM */
 
 #ifdef CONFIG_NUMA

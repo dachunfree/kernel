@@ -62,6 +62,7 @@ static inline void set_section_nid(unsigned long section_nr, int nid)
 static struct mem_section noinline __init_refok *sparse_index_alloc(int nid)
 {
 	struct mem_section *section = NULL;
+	//里面就是实际的内容了，一个二维数组
 	unsigned long array_size = SECTIONS_PER_ROOT *
 				   sizeof(struct mem_section);
 

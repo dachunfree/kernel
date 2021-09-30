@@ -958,7 +958,7 @@ static unsigned long shrink_page_list(struct list_head *page_list,
 		bool dirty, writeback;
 
 		cond_resched();
-
+		//从尾部-->pre开始扫描
 		page = lru_to_page(page_list);
 		list_del(&page->lru);
 

@@ -591,8 +591,6 @@ struct inode {
 	unsigned short		i_opflags;
 	kuid_t			i_uid; //创建文件用户的标识符
 	kgid_t			i_gid; //创建文件的用户所属的组标识符
-	kuid_t			i_uid; //创建文件用户得标识
-	kgid_t			i_gid; //创建文件用户所属得组标识
 	unsigned int		i_flags;
 
 #ifdef CONFIG_FS_POSIX_ACL
@@ -603,9 +601,6 @@ struct inode {
 	const struct inode_operations	*i_op; //操作目录(一个目录下创建或者删除文件)和文件属性
 	struct super_block	*i_sb; //指向文件所属的文件系统超级块
 	struct address_space	*i_mapping; //指向文件的地址空间。页高速缓存
-	const struct inode_operations	*i_op;
-	struct super_block	*i_sb; //超级块
-	struct address_space	*i_mapping;//指向文件地址的空间
 
 #ifdef CONFIG_SECURITY
 	void			*i_security;
@@ -613,7 +608,6 @@ struct inode {
 
 	/* Stat data, not accessed from path walking */
 	unsigned long		i_ino; //索引节点的编号
-	unsigned long		i_ino; //索引结点得编号
 	/*
 	 * Filesystems may only read i_nlink directly.  They shall use the
 	 * following functions for modification:
@@ -636,13 +630,6 @@ struct inode {
 	blkcnt_t		i_blocks; //文件的块数，文件长度/块长度的商
 	dev_t			i_rdev;
 	loff_t			i_size; //文件长度
-	struct timespec		i_atime; //上一次访问文件的时间
-	struct timespec		i_mtime;//上一次修改文件数据的时间
-	struct timespec		i_ctime;//上一次修改文件索引结点的时间
-	spinlock_t		i_lock;	/* i_blocks, i_bytes, maybe i_size */
-	unsigned short          i_bytes;//文件长度%块长度 余数
-	unsigned int		i_blkbits; //块长度以2为底的对数
-	blkcnt_t		i_blocks;//文件块数
 
 #ifdef __NEED_I_SIZE_ORDERED
 	seqcount_t		i_size_seqcount;
@@ -673,7 +660,6 @@ struct inode {
 	};
 	u64			i_version;
 	atomic_t		i_count; //索引节点的引用计数
-	atomic_t		i_count; //索引结点的引用计数
 	atomic_t		i_dio_count;
 	atomic_t		i_writecount;
 #ifdef CONFIG_IMA

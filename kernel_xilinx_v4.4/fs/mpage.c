@@ -94,8 +94,8 @@ mpage_alloc(struct block_device *bdev,
  * them.  So when the buffer is up to date and the page size == block size,
  * this marks the page up to date instead of adding new buffers.
  */
-static void 
-map_buffer_to_page(struct page *page, struct buffer_head *bh, int page_block) 
+static void
+map_buffer_to_page(struct page *page, struct buffer_head *bh, int page_block)
 {
 	struct inode *inode = page->mapping->host;
 	struct buffer_head *page_bh, *head;
@@ -106,9 +106,9 @@ map_buffer_to_page(struct page *page, struct buffer_head *bh, int page_block)
 		 * don't make any buffers if there is only one buffer on
 		 * the page and the page just needs to be set up to date
 		 */
-		if (inode->i_blkbits == PAGE_CACHE_SHIFT && 
+		if (inode->i_blkbits == PAGE_CACHE_SHIFT &&
 		    buffer_uptodate(bh)) {
-			SetPageUptodate(page);    
+			SetPageUptodate(page);
 			return;
 		}
 		create_empty_buffers(page, 1 << inode->i_blkbits, 0);
@@ -136,6 +136,17 @@ map_buffer_to_page(struct page *page, struct buffer_head *bh, int page_block)
  * represent the validity of its disk mapping and to decide when to do the next
  * get_block() call.
  */
+
+/*这个函数试图读取文件中的一个page大小的数据，最理想的情况下就是这个page大小
+的数据都是在连续的物理磁盘上面的，然后函数只需要提交一个bio请求就可以获取
+所有的数据，这个函数大部分工作在检查page上所有的物理块是否连续，检查的方法
+就是调用文件系统提供的get_block函数，如果不连续，需要调用block_read_full_page
+函数采用buffer 缓冲区的形式来逐个块获取数据*/
+/*
+     1、调用get_block函数检查page中是不是所有的物理块都连续
+     2、如果连续调用mpage_bio_submit函数请求整个page的数据
+     3、如果不连续调用block_read_full_page逐个block读取
+*/
 static struct bio *
 do_mpage_readpage(struct bio *bio, struct page *page, unsigned nr_pages,
 		sector_t *last_block_in_bio, struct buffer_head *map_bh,
@@ -160,7 +171,11 @@ do_mpage_readpage(struct bio *bio, struct page *page, unsigned nr_pages,
 
 	if (page_has_buffers(page))
 		goto confused;
-
+	/*
+    block_in_file 本page中的第一个block number
+    last_block 本page中最后一个block 的大小
+    last_block_in_file 文件大小求出文件的最后一个block 大小
+    */
 	block_in_file = (sector_t)page->index << (PAGE_CACHE_SHIFT - blkbits);
 	last_block = block_in_file + nr_pages * blocks_per_page;
 	last_block_in_file = (i_size_read(inode) + blocksize - 1) >> blkbits;
@@ -226,7 +241,7 @@ do_mpage_readpage(struct bio *bio, struct page *page, unsigned nr_pages,
 			map_buffer_to_page(page, map_bh, page_block);
 			goto confused;
 		}
-	
+
 		if (first_hole != blocks_per_page)
 			goto confused;		/* hole -> non-hole */
 
@@ -420,7 +435,7 @@ EXPORT_SYMBOL(mpage_readpage);
  *
  * If all blocks are found to be contiguous then the page can go into the
  * BIO.  Otherwise fall back to the mapping's writepage().
- * 
+ *
  * FIXME: This code wants an estimate of how many pages are still to be
  * written, so it can intelligently allocate a suitably-sized BIO.  For now,
  * just allocate full-size (16-page) BIOs.
