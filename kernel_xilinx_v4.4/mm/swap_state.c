@@ -87,11 +87,13 @@ int __add_to_swap_cache(struct page *page, swp_entry_t entry)
 	VM_BUG_ON_PAGE(!PageSwapBacked(page), page);
 
 	page_cache_get(page);
+	//设置标志，表示此页加入到swapcache中
 	SetPageSwapCache(page);
 	set_page_private(page, entry.val);
 
 	address_space = swap_address_space(entry);
 	spin_lock_irq(&address_space->tree_lock);
+	//将page加入到page_tree中
 	error = radix_tree_insert(&address_space->page_tree,
 					entry.val, page);
 	if (likely(!error)) {

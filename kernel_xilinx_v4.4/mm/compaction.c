@@ -764,7 +764,7 @@ isolate_migratepages_block(struct compact_control *cc, unsigned long low_pfn,
 		 * racy, but we can consider only valid values and the only
 		 * danger is skipping too much.
 		 */
-		 //如果是hugepage或者hugetlbfs巨型页，那么不能移动。
+		 //如果是hugepage或者hugetlbfs巨型页，那么不能移动。 THP:transparent huge page
 		if (PageCompound(page)) {
 			unsigned int comp_order = compound_order(page);
 
@@ -1166,7 +1166,7 @@ static isolate_migrate_t isolate_migratepages(struct zone *zone,
 		if (!page)
 			continue;
 		/* If isolation recently failed, do not retry */
-		//如果最近隔离失败，那么不要重试.(是否隔离这个块)
+		//如果最近隔离失败，那么不要重试.(是否隔离这个块).PB_migrate_skip 不隔离
 		if (!isolation_suitable(cc, page))
 			continue;
 
@@ -1337,7 +1337,7 @@ static unsigned long __compaction_suitable(struct zone *zone, int order,
 	 * This is because during migration, copies of pages need to be
 	 * allocated and for a short time, the footprint is higher
 	 */
-	//水线提高；如果空闲页数- 申请页数 >=水线+2*申请页数，说明空闲页太少，不适合回收
+	//水线提高；如果空闲页数- 2*申请页数 <=水线，说明空闲页太少，不适合回收
 	//!注意和上面函数对比。order的区别
 	watermark += (2UL << order);
 	if (!zone_watermark_ok(zone, 0, watermark, classzone_idx, alloc_flags))
@@ -1760,7 +1760,7 @@ void compact_pgdat(pg_data_t *pgdat, int order)
 		.order = order,
 		.mode = MIGRATE_ASYNC,
 	};
-
+	//order = 0不用内存规整
 	if (!order)
 		return;
 

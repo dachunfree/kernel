@@ -597,9 +597,9 @@ static pageout_t pageout(struct page *page, struct address_space *mapping,
 			.range_end = LLONG_MAX,
 			.for_reclaim = 1,
 		};
-
+		//设置正在回收标志，开始回写
 		SetPageReclaim(page);
-		res = mapping->a_ops->writepage(page, &wbc);
+		res = mapping->a_ops->writepage(page, &wbc); //__swap_writepage 里面设置了write_back标志
 		if (res < 0)
 			handle_write_error(mapping, page, res);
 		if (res == AOP_WRITEPAGE_ACTIVATE) {
@@ -820,7 +820,7 @@ PG_referenced 用于表示页面最近是否被访问过，每次页面被访问，该位都会被置位。
 其 PG_active 位被置位，如果 PG_referenced 位未被置位，给定一段时间之后，该页面如果还是没有被访问，那么该页面会被清除其
 PG_active 位，挪到 inactive 链表上去。
 
-PTE_YOUNG是在页表中，硬件控制的bit位。
+PTE_YOUNG 是在页表中，硬件控制的bit位。
 PG_referenced，PG_active是软件bit位。
 */
 static enum page_references page_check_references(struct page *page,
@@ -842,6 +842,10 @@ static enum page_references page_check_references(struct page *page,
 		return PAGEREF_RECLAIM;
 	//根据引用PTE的数量(referenced_ptes)和PG_referenced来判断放到那个LRU链表中.
 	//当该页访问 引用PTE时候，要放回到活跃LRU链表中
+	/*如果有访问的pte
+	 1.如果是匿名页，直接加入活动链表
+	 2.第二次访问的pagecache，加入活动链表
+	 3.可执行文件的pagecache，加入活动链表*/
 	if (referenced_ptes) {
 		//该页是匿名页面，加入到ACTIVE LRU链表中。表示匿名页面的内容已经从磁盘换回(backed)到内存中.
 		if (PageSwapBacked(page))
@@ -860,7 +864,7 @@ static enum page_references page_check_references(struct page *page,
 		 * so that recently deactivated but used pages are
 		 * quickly recovered.
 		 */
-		 //第二次访问的页面置PG_reference标志位1。
+		 //第二次访问的页面置PG_reference标志位1。page_flag.h中
 		SetPageReferenced(page);
 		// referenced_ptes.表示有多个文件同时映射到该页面，应该把他们放到活跃的LRU链表中，方便其他用户再次访问到
 		// referenced_page:第二次访问到的页面
@@ -880,7 +884,7 @@ static enum page_references page_check_references(struct page *page,
 	/* Reclaim if clean, defer dirty pages to writeback */
 	if (referenced_page && !PageSwapBacked(page))
 		return PAGEREF_RECLAIM_CLEAN;
-
+	// 页表没有 AF 标志，说明近期没有访问 则进行回收
 	return PAGEREF_RECLAIM;
 }
 
@@ -1065,7 +1069,7 @@ static unsigned long shrink_page_list(struct list_head *page_list,
 				 * then wait_on_page_writeback() to avoid OOM;
 				 * and it's also appropriate in global reclaim.
 				 */
-				SetPageReclaim(page);
+				SetPageReclaim(page); /*对应PageReclaim page_flag.h中*/
 				nr_writeback++;
 				goto keep_locked;
 
@@ -1092,7 +1096,7 @@ static unsigned long shrink_page_list(struct list_head *page_list,
 		case PAGEREF_RECLAIM_CLEAN:
 			; /* try to reclaim the page below */
 		}
-
+		/*****************************************回收步骤************************************/
 		/*
 		 * Anonymous process memory has backing store?
 		 * Try to allocate it some swap space here.
@@ -1115,6 +1119,7 @@ static unsigned long shrink_page_list(struct list_head *page_list,
 		 */
 		 //如果是页表映射的页，调用try_to_unmap从页表中删除映射(通过反向映射得到哪些物理页映射到虚拟页)。
 		if (page_mapped(page) && mapping) {
+			//里面设置PageDirty
 			switch (try_to_unmap(page,
 					ttu_flags|TTU_BATCH_FLUSH)) {
 			case SWAP_FAIL:
@@ -1127,7 +1132,12 @@ static unsigned long shrink_page_list(struct list_head *page_list,
 				; /* try to free the page below */
 			}
 		}
-		//如果是脏页，把文件页写回到存储设备或者把匿名页写回到交换区。
+		/*
+		如果是脏页，把文件页写回到存储设备或者把匿名页写回到交换区。
+		1.如果是文件映射页，则设置page为 pageReclaim且继续保持在不活动的页表中。kswap达到一定程度
+		  设置zone_dirty bit位，然后进行回收。
+		2.如果是匿名页面，调用pageout写入交换分区
+		*/
 		if (PageDirty(page)) {
 			/*
 			 * Only kswapd can writeback filesystem pages to
@@ -1358,6 +1368,8 @@ int __isolate_lru_page(struct page *page, isolate_mode_t mode)
 	 *
 	 * ISOLATE_ASYNC_MIGRATE is used to indicate that it only wants to pages
 	 * that it is possible to migrate without blocking
+	 ISOLATE_CLEAN:不能进行回写
+	 ISOLATE_ASYNC_MIGRATE:
 	 */
 	if (mode & (ISOLATE_CLEAN|ISOLATE_ASYNC_MIGRATE)) {
 		/* All the caller can do on PageWriteback is block */
@@ -1384,7 +1396,7 @@ int __isolate_lru_page(struct page *page, isolate_mode_t mode)
 
 	if ((mode & ISOLATE_UNMAPPED) && page_mapped(page))
 		return ret;
-
+	//获取的page count 不是0
 	if (likely(get_page_unless_zero(page))) {
 		/*
 		 * Be careful not to clear PageLRU until after we're
@@ -1396,6 +1408,11 @@ int __isolate_lru_page(struct page *page, isolate_mode_t mode)
 		 __activate_page
 		 if (PageLRU(page) && !PageActive(page) && !PageUnevictable(page)) {
 		 }
+		*/
+		/*
+		#define CLEARPAGEFLAG(uname, lname)					\
+		static inline void ClearPage##uname(struct page *page)			\
+			{ clear_bit(PG_##lname, &page->flags); }
 		*/
 		ClearPageLRU(page);
 		ret = 0;
@@ -3228,7 +3245,10 @@ static bool pgdat_balanced(pg_data_t *pgdat, int order, int classzone_idx)
 		else if (!order)
 			return false;
 	}
-
+	/*对于order > 0的内存分配，需要统计从最低端的zone到classzone_idx的zone中所有处于平衡状态的
+	zone的页面数量balanced_pages > 这个节点的所有管理页面managed_pages 的百分之25.
+	如果这个zone的空闲页面高于water_HIGH水位，就可以当做 balanced_pages
+	*/
 	if (order)
 		return balanced_pages >= (managed_pages >> 2);
 	else
@@ -3582,19 +3602,20 @@ static void kswapd_try_to_sleep(pg_data_t *pgdat, int order, int classzone_idx)
 	prepare_to_wait(&pgdat->kswapd_wait, &wait, TASK_INTERRUPTIBLE);
 
 	/* Try to sleep for a short interval */
-	//remaining为0，检查kswapd是否准备好睡眠。
+	//remaining为0，检查kswapd是否准备好睡眠。有高水位的zone 占到总zone的百分之25以上，就休息吧
 	if (prepare_kswapd_sleep(pgdat, order, remaining, classzone_idx)) {
-		//尝试短睡100ms，如果返回不为0，则说明没有100ms之内被唤醒了
+		//尝试短睡100ms，如果返回不为0(expire - jiffies)，则说明没有100ms之内被唤醒了
 		remaining = schedule_timeout(HZ/10);
 		finish_wait(&pgdat->kswapd_wait, &wait);
 		prepare_to_wait(&pgdat->kswapd_wait, &wait, TASK_INTERRUPTIBLE);
 	}
 
 	/*
-	 * After a short sleep, check if it was a premature sleep. If not, then
-	 * go fully to sleep until explicitly woken up.
+	 * After a short sleep, check if it was a premature(过早的) sleep. If not, then
+	 * go fully to sleep until explicitly(明确的) woken up.
 	 */
 	 //如果短睡被唤醒，则没有必要继续睡眠。如果短睡没有被唤醒，则可以尝试进入睡眠
+	 //如果中途没有被唤醒，说明kswap可以睡眠，让出CPU，schedule出去
 	if (prepare_kswapd_sleep(pgdat, order, remaining, classzone_idx)) {
 		trace_mm_vmscan_kswapd_sleep(pgdat->node_id);
 
@@ -3720,6 +3741,7 @@ static int kswapd(void *p)
 		}
 
 		ret = try_to_freeze();
+		//Kswapd的主循环是一个死循环，只有当kthread _should_stop的时候才会break跳出循环体
 		if (kthread_should_stop())
 			break;
 
@@ -3763,6 +3785,7 @@ void wakeup_kswapd(struct zone *zone, int order, enum zone_type classzone_idx)
 	}
 	if (!waitqueue_active(&pgdat->kswapd_wait))
 		return;
+	//高水线
 	if (zone_balanced(zone, order, 0, 0))
 		return;
 
@@ -3888,7 +3911,7 @@ static int __init kswapd_init(void)
 
 	swap_setup();
 	for_each_node_state(nid, N_MEMORY)
- 		kswapd_run(nid);
+ 		kswapd_run(nid); //遍历系统上所有内存节点，创建kswapd进程
 	hotcpu_notifier(cpu_callback, 0);
 	return 0;
 }
@@ -3957,7 +3980,7 @@ static unsigned long zone_pagecache_reclaimable(struct zone *zone)
 	if (zone_reclaim_mode & RECLAIM_UNMAP)
 		nr_pagecache_reclaimable = zone_page_state(zone, NR_FILE_PAGES);
 	else
-		nr_pagecache_reclaimable = zone_unmapped_file_pages(zone);
+		nr_pagecache_reclaimable = zone_unmapped_file_pages(zone); //do_read_fault 中有 NR_FILE_MAPPED
 
 	/* If we can't clean pages, remove dirty pages from consideration */
 	if (!(zone_reclaim_mode & RECLAIM_WRITE))

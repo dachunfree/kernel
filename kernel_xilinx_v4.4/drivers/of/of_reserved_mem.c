@@ -200,7 +200,7 @@ static int __init __reserved_mem_init_node(struct reserved_mem *rmem)
 
 		if (!of_flat_dt_is_compatible(rmem->fdt_node, compat))
 			continue;
-		//调用rmem_cma_setup
+		//调用 rmem_cma_setup
 		if (initfn(rmem) == 0) {
 			pr_info("Reserved memory: initialized node %s, compatible id %s\n",
 				rmem->name, compat);

@@ -1547,10 +1547,12 @@ static ssize_t do_generic_file_read(struct file *filp, loff_t *ppos,
 	unsigned long offset;      /* offset into pagecache page */
 	unsigned int prev_offset;
 	int error = 0;
-
+	/*计算本次读取的是文件中的第几个page*/
 	index = *ppos >> PAGE_CACHE_SHIFT;
+	/*上次读取的是第几个page*/
 	prev_index = ra->prev_pos >> PAGE_CACHE_SHIFT;
 	prev_offset = ra->prev_pos & (PAGE_CACHE_SIZE-1);
+	/*要读取的最后一个page*/
 	last_index = (*ppos + iter->count + PAGE_CACHE_SIZE-1) >> PAGE_CACHE_SHIFT;
 	offset = *ppos & ~PAGE_CACHE_MASK;
 
@@ -1562,20 +1564,26 @@ static ssize_t do_generic_file_read(struct file *filp, loff_t *ppos,
 
 		cond_resched();
 find_page:
+		/*在radix树中查找相应的page*/
 		page = find_get_page(mapping, index);
+		/*如果没有找到page，说明内存中没有将数据读入进来先进行预读*/
 		if (!page) {
 			page_cache_sync_readahead(mapping,
 					ra, filp,
 					index, last_index - index);
+			 /*预读一般是可以找到page的，但是也有可能找不到*/
 			page = find_get_page(mapping, index);
 			if (unlikely(page == NULL))
 				goto no_cached_page;
 		}
+		 /*发现找到的page已经是预读的情况了，再继续预读*/
+         /*这里预读就是一种经验的猜测*/
 		if (PageReadahead(page)) {
 			page_cache_async_readahead(mapping,
 					ra, filp, page,
 					index, last_index - index);
 		}
+		 /*page的内容还没有从磁盘上读出来*/
 		if (!PageUptodate(page)) {
 			if (inode->i_blkbits == PAGE_CACHE_SHIFT ||
 					!mapping->a_ops->is_partially_uptodate)
@@ -1590,6 +1598,7 @@ find_page:
 				goto page_not_up_to_date_locked;
 			unlock_page(page);
 		}
+		/*page的内容已经是最新的了，接下来准备拷贝到用户空间*/
 page_ok:
 		/*
 		 * i_size must be checked after we know the page is Uptodate.
@@ -1599,7 +1608,10 @@ page_ok:
 		 * part of the page is not copied back to userspace (unless
 		 * another truncate extends the file - this is desired though).
 		 */
-
+		/*下面这段代码是在page中的内容ok的情况下将page中的内容
+        拷贝到用户空间去，主要的逻辑分为检查参数是否合法
+        进性拷贝操作*/
+        /*合法性检查，是不是长度为0，或者超出文件范围*/
 		isize = i_size_read(inode);
 		end_index = (isize - 1) >> PAGE_CACHE_SHIFT;
 		if (unlikely(!isize || index > end_index)) {
@@ -1682,7 +1694,8 @@ readpage:
 		 */
 		ClearPageError(page);
 		/* Start the actual read. The read will unlock the page. */
-		error = mapping->a_ops->readpage(filp, page); //struct address_space_operations ext2_aops
+		 /*实际的读取数据*/
+		error = mapping->a_ops->readpage(filp, page); //struct address_space_operations ext4_aops
 
 		if (unlikely(error)) {
 			if (error == AOP_TRUNCATED_PAGE) {

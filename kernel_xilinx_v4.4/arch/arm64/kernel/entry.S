@@ -86,16 +86,22 @@
 	stp	x26, x27, [sp, #16 * 13]
 	stp	x28, x29, [sp, #16 * 14]
 
-	.if	\el == 0
+	.if	\el == 0   /*el0 进入异常*/
+	/*
+	第二步如果是从用户空间进入该异常的话，需要先保存用户空间的栈指针，
+	因为用户空间的栈指针用于存放tsk的地址；如果是从内核空间进入该异常的话，
+	可以直接从SP_EL0获得tsk，因为内核空间就是通过SP_EL0存放tsk的
+	*/
 	mrs	x21, sp_el0             //将sp_el0保存到x21中。sp和sp_el0啥区别呢?
 	get_thread_info tsk			// Ensure MDSCR_EL1.SS is clear,
 	ldr	x19, [tsk, #TI_FLAGS]		// since we can unmask debug
 	disable_step_tsk x19, x20		// exceptions when scheduling.
-	.else
+
+	.else /*el1 进入异常*/
 	add	x21, sp, #S_FRAME_SIZE
 	.endif
-	mrs	x22, elr_el1
-	mrs	x23, spsr_el1
+	mrs	x22, elr_el1 ///lr
+	mrs	x23, spsr_el1 //spsr
 	stp	lr, x21, [sp, #S_LR]
 	stp	x22, x23, [sp, #S_PC]
 
@@ -197,6 +203,7 @@ tsk	.req	x28		// current thread_info
 /*（1）EL1的异常向量表保存在VBAR_EL1寄存器中（Vector Base Address Register (EL1)），
 该寄存器的低11bit是reserve的，11～63表示了Vector Base Address，因此这里的异常向量表是2K对齐的。
 el2在kvm时候开始。
+devicemaps_init 进行 vectors设置。
 */
 
 	.align	11
@@ -211,6 +218,7 @@ ENTRY(vectors)
 	ventry	el1_fiq_invalid			// FIQ EL1h		   0x300
 	ventry	el1_error_invalid		// Error EL1h		   0x380
 
+	//el0 在el1中迁移
 	ventry	el0_sync			// Synchronous 64-bit EL0   0x400
 	ventry	el0_irq				// IRQ 64-bit EL0			 0x480
 	ventry	el0_fiq_invalid			// FIQ 64-bit EL0		 0x500
@@ -315,7 +323,10 @@ el1_da:
 	 * Data abort handling
 	 */
 	 /*官方解释Holds the faulting Virtual Address for all synchronous Instruction or Data Abort, PC alignment fault
-		and Watchpoint exceptions that are taken to EL1.*/
+		and Watchpoint exceptions that are taken to EL1.
+		far:data fault address register.失效地址寄存器。
+		fsr:data fault status register.失效状态寄存器。
+		*/
 	mrs	x0, far_el1
 	enable_dbg
 	// re-enable interrupts if they were enabled in the aborted context
@@ -408,7 +419,7 @@ ISS:指令特定症状
 	.align	6
 el0_sync:
 	kernel_entry 0                //保存现场x0-x29到sp_el0中
-	mrs	x25, esr_el1			// read the syndrome register.异常症状寄存器
+	mrs	x25, esr_el1			// read the syndrome register.异常症状寄存器。生成异常的原因
 	lsr	x24, x25, #ESR_ELx_EC_SHIFT	// exception class
 	cmp	x24, #ESR_ELx_EC_SVC64		// SVC in 64-bit state
 	b.eq	el0_svc
@@ -484,7 +495,7 @@ el0_da:
 	/*
 	 * Data abort handling
 	 */
-	mrs	x26, far_el1
+	mrs	x26, far_el1  //获取数据的虚拟地址，放在x26中
 	// enable interrupts before calling the main handler
 	enable_dbg_and_irq
 	ct_user_exit

@@ -19,7 +19,7 @@
  */
 static inline int page_is_file_cache(struct page *page)
 {
-	return !PageSwapBacked(page);
+	return !PageSwapBacked(page); //page_flag.h. 此页可写入swap分区，一般用于表示此页是非文件页 */
 }
 
 static __always_inline void add_page_to_lru_list(struct page *page,

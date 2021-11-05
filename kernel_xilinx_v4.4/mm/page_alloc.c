@@ -572,6 +572,7 @@ static inline void clear_page_guard(struct zone *zone, struct page *page,
 
 static inline void set_page_order(struct page *page, unsigned int order)
 {
+	//该order用于标记这个page属于哪个zone->frea_area[order];
 	set_page_private(page, order);
 	__SetPageBuddy(page);
 }
@@ -1290,7 +1291,7 @@ void __init init_cma_reserved_pageblock(struct page *page)
 		__ClearPageReserved(p);
 		set_page_count(p, 0);
 	} while (++p, --i);
-
+	//设置为MIGRATE_CMA类型
 	set_pageblock_migratetype(page, MIGRATE_CMA);
 
 	if (pageblock_order >= MAX_ORDER) {
@@ -1298,6 +1299,7 @@ void __init init_cma_reserved_pageblock(struct page *page)
 		p = page;
 		do {
 			set_page_refcounted(p);
+			//讲此类型的页放到buddy中
 			__free_pages(p, MAX_ORDER - 1);
 			p += MAX_ORDER_NR_PAGES;
 		} while (i -= MAX_ORDER_NR_PAGES);
@@ -1353,6 +1355,7 @@ static inline void expand(struct zone *zone, struct page *page,
 		}
 		list_add(&page[size].lru, &area->free_list[migratetype]); //挂入该阶的对应迁移类型下的链表中.
 		area->nr_free++; //该阶上的内存块增加
+		//该order用于标记这个page属于哪个zone->frea_area[order];
 		set_page_order(&page[size], high);//设置private为高阶，清除掉buddy标识，因为该页已经不是伙伴系统的页了
 	}
 }
@@ -1617,7 +1620,7 @@ static bool can_steal_fallback(unsigned int order, int start_mt)
 static void steal_suitable_fallback(struct zone *zone, struct page *page,
 							  int start_type)
 {
-	unsigned int current_order = page_order(page);
+	unsigned int current_order = page_order(page); //从page_private中获取当前页的order
 	int pages;
 
 	/* Take ownership for orders >= pageblock_order */
@@ -3031,7 +3034,7 @@ gfp_to_alloc_flags(gfp_t gfp_mask)
 	if (likely(!(gfp_mask & __GFP_NOMEMALLOC))) {
 		if (gfp_mask & __GFP_MEMALLOC)
 			alloc_flags |= ALLOC_NO_WATERMARKS;
-		else if (in_serving_softirq() && (current->flags & PF_MEMALLOC))
+		else if (in_serving_softirq() && (current->flags & PF_MEMALLOC)) /*有PF_MEMALLOC标志位,不显示水位*/
 			alloc_flags |= ALLOC_NO_WATERMARKS;
 		else if (!in_interrupt() &&
 				((current->flags & PF_MEMALLOC) ||
@@ -4634,6 +4637,7 @@ void __meminit memmap_init_zone(unsigned long size, int nid, unsigned long zone,
 		 * check here not to call set_pageblock_migratetype() against
 		 * pfn out of zone.
 		 */
+		 //如果正好是pageblock_nr_pages的整数倍，按照pageblock_nr_pages进行设置bitmap的迁移类型为可迁移类型
 		if (!(pfn & (pageblock_nr_pages - 1))) {
 			struct page *page = pfn_to_page(pfn);
 			//内存初始化的时候，把所有页块初始化为可移动类型，其它类型页是盗用产生的；
@@ -6629,6 +6633,7 @@ void set_pfnblock_flags_mask(struct page *page, unsigned long flags,
 
 	word = READ_ONCE(bitmap[word_bitidx]);
 	for (;;) {
+		//bitmap[word_bitidx] = (word & ~mask) | flags,并返回word。
 		old_word = cmpxchg(&bitmap[word_bitidx], word, (word & ~mask) | flags);
 		if (word == old_word)
 			break;
@@ -6786,11 +6791,11 @@ static int __alloc_contig_migrate_range(struct compact_control *cc,
 			ret = ret < 0 ? ret : -EBUSY;
 			break;
 		}
-
+		//回收干净的文件页，文件页不可移动，只可回收
 		nr_reclaimed = reclaim_clean_pages_from_list(cc->zone,
 							&cc->migratepages);
 		cc->nr_migratepages -= nr_reclaimed;
-
+		//把可移动的物理页迁移到其他地方
 		ret = migrate_pages(&cc->migratepages, alloc_migrate_target,
 				    NULL, 0, cc->mode, MR_CMA);
 	}
@@ -6860,13 +6865,13 @@ int alloc_contig_range(unsigned long start, unsigned long end,
 	 * aligned range but not in the unaligned, original range are
 	 * put back to page allocator so that buddy can use them.
 	 */
-
+	//把页的迁移类型设置为隔离类型,隔离物理页，防止页分配器把空闲页分配出去
 	ret = start_isolate_page_range(pfn_max_align_down(start),
 				       pfn_max_align_up(end), migratetype,
 				       false);
 	if (ret)
 		return ret;
-
+	//处理页分配器已经分配出去的物理页
 	ret = __alloc_contig_migrate_range(&cc, start, end);
 	if (ret)
 		goto done;
@@ -6910,6 +6915,7 @@ int alloc_contig_range(unsigned long start, unsigned long end,
 	}
 
 	/* Grab isolated pages from freelists. */
+	//处理空闲页，把空闲页从页分配器的空闲链表中删除
 	outer_end = isolate_freepages_range(&cc, outer_start, end);
 	if (!outer_end) {
 		ret = -EBUSY;
@@ -6918,11 +6924,13 @@ int alloc_contig_range(unsigned long start, unsigned long end,
 
 	/* Free head and tail (if any) */
 	if (start != outer_start)
+		//迭代所有的页面并将其返还给伙伴系统。
 		free_contig_range(outer_start, start - outer_start);
 	if (end != outer_end)
 		free_contig_range(end, outer_end - end);
 
 done:
+	//撤销对物理页的隔离，把物理页的迁移类型设置为CMA类型
 	undo_isolate_page_range(pfn_max_align_down(start),
 				pfn_max_align_up(end), migratetype);
 	return ret;

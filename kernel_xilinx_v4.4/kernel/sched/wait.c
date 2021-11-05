@@ -77,7 +77,7 @@ static void __wake_up_common(wait_queue_head_t *q, unsigned int mode,
 	list_for_each_entry_safe(curr, next, &q->task_list, task_list) {
 		unsigned flags = curr->flags;
 
-		if (curr->func(curr, mode, wake_flags, key) &&
+		if (curr->func(curr, mode, wake_flags, key) &&   //autoremove_wake_function
 				(flags & WQ_FLAG_EXCLUSIVE) && !--nr_exclusive)
 			break;
 	}
@@ -211,15 +211,18 @@ long prepare_to_wait_event(wait_queue_head_t *q, wait_queue_t *wait, int state)
 		return -ERESTARTSYS;
 
 	wait->private = current;
+	//唤醒函数
 	wait->func = autoremove_wake_function;
 
 	spin_lock_irqsave(&q->lock, flags);
 	if (list_empty(&wait->task_list)) {
+		//根据标志位决定将 wait_queue_t 加入到 wait_queue_head_t的队尾还是队头
 		if (wait->flags & WQ_FLAG_EXCLUSIVE)
 			__add_wait_queue_tail(q, wait);
 		else
 			__add_wait_queue(q, wait);
 	}
+	//设置当前进程的状态 TASK_INTERRUPTIBLE
 	set_current_state(state);
 	spin_unlock_irqrestore(&q->lock, flags);
 

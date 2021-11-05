@@ -934,6 +934,12 @@ u64 __init dt_mem_next_cell(int s, const __be32 **cellp)
 /**
  * early_init_dt_scan_memory - Look for an parse memory nodes
  */
+ /*
+memory {
+	device_type="memoey";
+	reg=<0x0 0x40000000>
+};
+*/
 int __init early_init_dt_scan_memory(unsigned long node, const char *uname,
 				     int depth, void *data)
 {
@@ -1015,7 +1021,7 @@ int __init early_init_dt_scan_chosen(unsigned long node, const char *uname,
 #endif
 		strlcpy(data, CONFIG_CMDLINE, COMMAND_LINE_SIZE);
 #endif /* CONFIG_CMDLINE */
-
+	//ver=v001 console=ttyS0,115200 mem=512M root=/dev/mmcblk1p1 rw rootwait init=/sbin/init earlyprintk product=npes01h_pro_ant4_S
 	pr_debug("Command line is: %s\n", (char*)data);
 
 	char *cmdline = data;

@@ -876,7 +876,7 @@ static int page_referenced_one(struct page *page, struct vm_area_struct *vma,
 			pra->vm_flags |= VM_LOCKED;
 			return SWAP_FAIL; /* To break the loop */
 		}
-
+		//检测 页表*PTE PTE_AF标志位(pte_young是否被访问过)，并清0
 		if (ptep_clear_flush_young_notify(vma, address, pte)) {
 			/*
 			 * Don't treat a reference through a sequentially read
@@ -897,7 +897,7 @@ static int page_referenced_one(struct page *page, struct vm_area_struct *vma,
 		referenced++;
 
 	if (referenced) {
-		pra->referenced++;
+		pra->referenced++; //会返回出去，记录访问次数
 		pra->vm_flags |= vma->vm_flags;
 	}
 
@@ -1400,6 +1400,7 @@ static int try_to_unmap_one(struct page *page, struct vm_area_struct *vma,
 			dec_mm_counter(mm, MM_ANONPAGES);
 		else
 			dec_mm_counter(mm, MM_FILEPAGES);
+	// TTU_MIGRATION 是迁移类型，页面规整用到
 	} else if (IS_ENABLED(CONFIG_MIGRATION) && (flags & TTU_MIGRATION)) {
 		swp_entry_t entry;
 		pte_t swp_pte;
@@ -1626,7 +1627,7 @@ static int rmap_walk_anon(struct page *page, struct rmap_walk_control *rwc)
 
 		if (rwc->invalid_vma && rwc->invalid_vma(vma, rwc->arg))
 			continue;
-		//page_referenced_one
+		//page_referenced_one进行reference 检测
 		ret = rwc->rmap_one(page, vma, address, rwc->arg); //实际的断开用户PTE页表项操作try_to_unmap_one
 		if (ret != SWAP_AGAIN)
 			break;

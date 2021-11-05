@@ -10,7 +10,9 @@ struct cma {
 	/*cma模块使用bitmap来管理其内存的分配，0表示free，1表示已经分配*/
 	unsigned long   *bitmap;
 	/*order_per_bit成员相关，如果order_per_bit等于0，表示按照一个一个page来分配和释放，
-	 如果order_per_bit等于1，表示按照2个page组成的block来分配和释放*/
+	 如果order_per_bit等于1，表示按照2个page组成的block来分配和释放
+	 指示位图中的每个位描述的物理页的阶数，目前取值为0，表示每个位描述一页
+	 */
 	unsigned int order_per_bit; /* Order of pages represented by one bit */
 	struct mutex    lock;
 #ifdef CONFIG_CMA_DEBUGFS

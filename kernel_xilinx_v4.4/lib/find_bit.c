@@ -35,7 +35,7 @@ static unsigned long _find_next_bit(const unsigned long *addr,
 
 	if (!nbits || start >= nbits)
 		return nbits;
-
+	//找到第一个bitmap为0的tmp
 	tmp = addr[start / BITS_PER_LONG] ^ invert;
 
 	/* Handle 1st word. */

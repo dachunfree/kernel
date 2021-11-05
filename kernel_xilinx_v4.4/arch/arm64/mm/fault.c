@@ -367,7 +367,7 @@ retry:
 
 	__do_user_fault(tsk, addr, esr, sig, code, regs);
 	return 0;
-//处理内核模式生成的也错误异常。
+//处理内核模式生成的页错误异常。
 no_context:
 	__do_kernel_fault(mm, addr, esr, regs);
 	return 0;

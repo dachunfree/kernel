@@ -254,7 +254,8 @@ static const struct reserved_mem_ops rmem_cma_ops = {
 	.device_release = rmem_cma_device_release,
 };
 
-//core_initcall(cma_init_reserved_areas);
+//core_initcall(cma_init_reserved_areas);用于进一步设置:分配bitmap 并加入到buddy中
+//__reserved_mem_init_node 中调用
 static int __init rmem_cma_setup(struct reserved_mem *rmem)
 {
 	phys_addr_t align = PAGE_SIZE << max(MAX_ORDER - 1, pageblock_order);
@@ -292,6 +293,7 @@ static int __init rmem_cma_setup(struct reserved_mem *rmem)
 	return 0;
 }
 //dma-coherent用来分配per device coherent memory的
+//__reserved_mem_init_node 调用 rmem_cma_setup。
 RESERVEDMEM_OF_DECLARE(cma, "shared-dma-pool", rmem_cma_setup);
 /*
 #define RESERVEDMEM_OF_DECLARE(name, compat, init)

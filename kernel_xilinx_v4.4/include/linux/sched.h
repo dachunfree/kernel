@@ -1458,7 +1458,7 @@ struct task_struct {
 	struct mm_struct *mm, *active_mm;
 	/* per-thread vma caching */
 	u32 vmacache_seqnum;
-	struct vm_area_struct *vmacache[VMACACHE_SIZE];
+	struct vm_area_struct *vmacache[VMACACHE_SIZE]; //vma 地址缓存，表示最近访问过的
 #if defined(SPLIT_RSS_COUNTING)
 	struct task_rss_stat	rss_stat;
 #endif

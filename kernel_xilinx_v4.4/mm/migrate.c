@@ -823,7 +823,7 @@ static int __unmap_and_move(struct page *page, struct page *newpage,
 	 *在异步非紧急的迁移流程中必须要在此获取到page的锁，否立即返回-EAGAIN，该次页迁移失败。
 	 *为了防止后面lock_page(page)获取锁，可能会导致阻塞等待
 	 */
-		if (!force || mode == MIGRATE_ASYNC) //加锁失败，且强制迁移或异步模式，则忽略这个页面
+		if (!force || mode == MIGRATE_ASYNC) //加锁失败，且强制迁移或异步模式，则忽略这个页面。没必要睡眠
 			goto out;
 
 		/*
@@ -842,7 +842,7 @@ static int __unmap_and_move(struct page *page, struct page *newpage,
 		 //可能在直接内存压缩路径上，睡眠等待页面锁是不安全的，忽略此页面。
 		if (current->flags & PF_MEMALLOC)
 			goto out;
-		//同步和轻同步的情况下，都有可能会为了拿到这个锁而阻塞在这
+		//同步和轻同步的情况下，都有可能会为了拿到这个锁而阻塞在这。没看懂IO?
 		lock_page(page);
 	}
 	//页正在回写
@@ -1202,7 +1202,7 @@ int migrate_pages(struct list_head *from, new_page_t get_new_page,
 		//从from 链表中 逐个遍历要迁移的页.
 		list_for_each_entry_safe(page, page2, from, lru) {
 			cond_resched();
-
+			//前面隔离页面判断 PageCompound 不能进行隔离 PageHead(page) || PageTail(page) PG_head
 			if (PageHuge(page))
 				//如果是巨型页，调用如下函数来移动页。
 				rc = unmap_and_move_huge_page(get_new_page,

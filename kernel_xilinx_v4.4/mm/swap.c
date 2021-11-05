@@ -668,7 +668,7 @@ EXPORT_SYMBOL(mark_page_accessed);
 static void __lru_cache_add(struct page *page)
 {
 	struct pagevec *pvec = &get_cpu_var(lru_add_pvec);
-
+	//page->count++;
 	page_cache_get(page);
 	/* 检查LRU缓存是否已满，如果满则将此lru缓存中的页放到lru链表中 */
 	if (!pagevec_space(pvec))

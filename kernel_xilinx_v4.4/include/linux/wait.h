@@ -237,7 +237,7 @@ wait_queue_head_t *bit_waitqueue(void *, int);
 			}						\
 			break;						\
 		}							\
-									\
+		/*执行 schedule 函数，将task interruptible进程调度出去*/						\
 		cmd;							\
 	}								\
 	finish_wait(&wq, &__wait);					\
