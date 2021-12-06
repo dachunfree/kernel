@@ -812,7 +812,7 @@ void unlock_page(struct page *page)
 	VM_BUG_ON_PAGE(!PageLocked(page), page);
 	clear_bit_unlock(PG_locked, &page->flags);
 	smp_mb__after_atomic();
-	wake_up_page(page, PG_locked);
+	wake_up_page(page, PG_locked); //唤醒do_swap_page中因为迁移引起的加入特殊的swap entry而睡眠的页
 }
 EXPORT_SYMBOL(unlock_page);
 

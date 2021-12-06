@@ -1471,7 +1471,7 @@ void run_local_timers(void)
 {
 	//如果开了高精度，转换中断处理函数为hrtimer_interrupt
 	hrtimer_run_queues(); //检测one-shotmode 还是 period mode。开始global timer初始化是低精度的。里面如果开了高精度，转换成高精度定时器。
-	raise_softirq(TIMER_SOFTIRQ);  //时间轮处理普通定时器时间。
+	raise_softirq(TIMER_SOFTIRQ);  //时间轮处理普通定时器时间。 run_timer_softirq
 }
 
 #ifdef __ARCH_WANT_SYS_ALARM

@@ -68,7 +68,8 @@ struct clk *clk_register_fixed_rate_with_accuracy(struct device *dev,
 	fixed = kzalloc(sizeof(*fixed), GFP_KERNEL);
 	if (!fixed)
 		return ERR_PTR(-ENOMEM);
-
+	/*定义一个struct clk_init_data类型的变量（init），
+	并根据传入的参数以及fixed rate clock的特性，初始化该变量；*/
 	init.name = name;
 	init.ops = &clk_fixed_rate_ops;
 	init.flags = flags | CLK_IS_BASIC;

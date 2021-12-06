@@ -176,7 +176,9 @@ static struct platform_device *of_platform_device_create_pdata(
 	if (!of_device_is_available(np) ||
 	    of_node_test_and_set_flag(np, OF_POPULATED))
 		return NULL;
-
+	/*of_device_alloc除了分配struct platform_device的内存，还分配了该platform device
+		需要的resource的内存（参考struct platform_device 中的resource成员）。当然，这就需要
+		解析该device node的interrupt资源以及memory address资源*/
 	dev = of_device_alloc(np, bus_id, parent);
 	if (!dev)
 		goto err_clear_flag;
@@ -185,7 +187,7 @@ static struct platform_device *of_platform_device_create_pdata(
 	dev->dev.platform_data = platform_data;
 	of_dma_configure(&dev->dev, dev->dev.of_node);
 	of_msi_configure(&dev->dev, dev->dev.of_node);
-
+	/*把这个platform device加入统一设备模型系统中*/
 	if (of_device_add(dev) != 0) {
 		of_dma_deconfigure(&dev->dev);
 		platform_device_put(dev);
@@ -338,6 +340,7 @@ static int of_platform_bus_create(struct device_node *bus,
 	int rc = 0;
 
 	/* Make sure it has a compatible property */
+	/* 只有包含"compatible"属性的node节点才会生成相应的platform_device结构体 */
 	if (strict && (!of_get_property(bus, "compatible", NULL))) {
 		pr_debug("%s() - skipping %s, no compatible prop\n",
 			 __func__, bus->full_name);
@@ -358,10 +361,16 @@ static int of_platform_bus_create(struct device_node *bus,
 		of_amba_device_create(bus, bus_id, platform_data, parent);
 		return 0;
 	}
-
+	/*
+	 * 针对节点下面得到status = "ok" 或者status = "okay"或者不存在status属性的
+	 * 节点分配内存并填充platform_device结构体
+	 */
 	dev = of_platform_device_create_pdata(bus, bus_id, platform_data, parent);
 	if (!dev || !of_match_node(matches, bus))
 		return 0;
+	/* 递归调用节点解析函数，为子节点继续生成platform_device结构体，前提是父节点
+	* 的“compatible” = “simple-bus”，也就是匹配of_default_bus_match_table结构体中的数据
+	*/
 
 	for_each_child_of_node(bus, child) {
 		pr_debug("   create child: %s\n", child->full_name);
@@ -442,11 +451,11 @@ int of_platform_populate(struct device_node *root,
 {
 	struct device_node *child;
 	int rc = 0;
-
-	root = root ? of_node_get(root) : of_find_node_by_path("/");
+	/* 获取根节点 */
+	root = root ? of_node_get(root) : of_find_node_by_path("/"); //里面有从dtb解析出来的 device_node结构体 of_root
 	if (!root)
 		return -EINVAL;
-
+	/* 为根节点下面的每一个节点创建platform_device结构体 */
 	for_each_child_of_node(root, child) {
 		rc = of_platform_bus_create(child, matches, lookup, parent, true);
 		if (rc) {
@@ -454,6 +463,7 @@ int of_platform_populate(struct device_node *root,
 			break;
 		}
 	}
+	/* 更新device_node flag标志位 */
 	of_node_set_flag(root, OF_POPULATED_BUS);
 
 	of_node_put(root);

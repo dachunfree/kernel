@@ -1411,7 +1411,7 @@ static int try_to_unmap_one(struct page *page, struct vm_area_struct *vma,
 		 */
 		/*
 		把页表项设置为特殊的迁移页表项。如果其他处理器访问这一页，生成页错误异常，异常
-		处理程序发现页表项是迁移页表项，那么睡眠等待页迁移完成。do_swap_page
+		处理程序发现页表项是迁移页表项，那么睡眠等待页迁移完成。 do_swap_page
 
 		 /* 建立一个迁移使用的swp_entry_t，用于文件页迁移 */
 		entry = make_migration_entry(page, pte_write(pteval));
@@ -1627,7 +1627,7 @@ static int rmap_walk_anon(struct page *page, struct rmap_walk_control *rwc)
 
 		if (rwc->invalid_vma && rwc->invalid_vma(vma, rwc->arg))
 			continue;
-		//page_referenced_one进行reference 检测
+		//page_referenced_one进行reference 检测。断开旧链接，使用新链接 remove_migration_pte
 		ret = rwc->rmap_one(page, vma, address, rwc->arg); //实际的断开用户PTE页表项操作try_to_unmap_one
 		if (ret != SWAP_AGAIN)
 			break;

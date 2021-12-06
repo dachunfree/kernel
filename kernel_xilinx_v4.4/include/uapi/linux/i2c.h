@@ -66,7 +66,10 @@
  * need (one or more of IGNORE_NAK, NO_RD_ACK, NOSTART, and REV_DIR_ADDR).
  */
 struct i2c_msg {
-	__u16 addr;	/* slave address			*/
+	__u16 addr;	/* I2C slave device的地址.slave address			*/
+/*数据传输可携带的flag，包括（具体可参考include/uapi/linux/i2c.h中的定义和注释）：
+I2C_M_TEN，支持10-bit的slave地址；
+I2C_M_RD，此次传输是读操作；*/
 	__u16 flags;
 #define I2C_M_TEN		0x0010	/* this is a ten bit chip address */
 #define I2C_M_RD		0x0001	/* read data, from slave to master */
@@ -76,7 +79,9 @@ struct i2c_msg {
 #define I2C_M_IGNORE_NAK	0x1000	/* if I2C_FUNC_PROTOCOL_MANGLING */
 #define I2C_M_NO_RD_ACK		0x0800	/* if I2C_FUNC_PROTOCOL_MANGLING */
 #define I2C_M_RECV_LEN		0x0400	/* length will be first received byte */
+	/*数据传输的长度，单位为byte*/
 	__u16 len;		/* msg length				*/
+	/*数据buf*/
 	__u8 *buf;		/* pointer to msg data			*/
 };
 

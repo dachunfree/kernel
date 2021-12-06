@@ -1062,7 +1062,8 @@ static void isolate_freepages(struct compact_control *cc)
  */
  /*
 compaction_alloc:从空闲扫描器的空闲页链表中取出一个空闲页，如果空闲页链表是空的，
-空闲扫描器扫描空闲页并将之添加到空闲链表中
+空闲扫描器扫描空闲页并将之添加到空闲链表中。
+如果不够用 则隔离出来
 */
 static struct page *compaction_alloc(struct page *migratepage,
 					unsigned long data,

@@ -260,7 +260,7 @@ preserve_boot_args:
 
 	adr_l	x0, boot_args			// x0保存了boot_args变量的地址
 	//stp(str变种，可操作2个寄存器):把Xt1，Xt2两个双字/字数据写到Memory地址addr中
-	stp	x21, x1, [x0]			//保存x0和x1的值到boot_args[0]和boot_args[1]
+	stp	x21, x1, [x0]			//保存x21和x1的值到boot_args[0]和boot_args[1]
 	stp	x2, x3, [x0, #16]    //保存x2和x3的值到boot_args[2]和boot_args[3]
 
 	/*

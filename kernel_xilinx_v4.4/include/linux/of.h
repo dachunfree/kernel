@@ -47,15 +47,15 @@ struct of_irq_controller;
 #endif
 
 struct device_node {
-	const char *name;
-	const char *type;
-	phandle phandle;
-	const char *full_name;
+	const char *name; //device node name
+	const char *type; //对应device_type的属性
+	phandle phandle; //对应该节点的phandle属性
+	const char *full_name; //从“/”开始的，表示该node的full path
 	struct fwnode_handle fwnode;
 
-	struct	property *properties;
-	struct	property *deadprops;	/* removed properties */
-	struct	device_node *parent;
+	struct	property *properties; //该节点的属性列表
+	struct	property *deadprops;	/* removed properties 如果需要删除某些属性，kernel并非真的删除，而是挂入到deadprops的列表*/
+	struct	device_node *parent; //parent、child以及sibling将所有的device node连接起来
 	struct	device_node *child;
 	struct	device_node *sibling;
 	struct	kobject kobj;

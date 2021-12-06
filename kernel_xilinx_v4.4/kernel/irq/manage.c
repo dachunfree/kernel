@@ -1927,11 +1927,12 @@ int request_percpu_irq(unsigned int irq, irq_handler_t handler,
 	struct irqaction *action;
 	struct irq_desc *desc;
 	int retval;
-
+	//通过per-cpu变量来区分中断处理函数
 	if (!dev_id)
 		return -EINVAL;
 
 	desc = irq_to_desc(irq);
+	//用来判断一个中断描述符是否需要传递per cpu的device ID
 	if (!desc || !irq_settings_can_request(desc) ||
 	    !irq_settings_is_per_cpu_devid(desc))
 		return -EINVAL;

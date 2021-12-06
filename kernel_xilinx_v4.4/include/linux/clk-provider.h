@@ -21,12 +21,18 @@
  * top-level framework.  custom flags for dealing with hardware specifics
  * belong in struct clk_foo
  */
+ /*表示在改变该clock的rate时，必须gated（关闭）*/
 #define CLK_SET_RATE_GATE	BIT(0) /* must be gated across rate change */
+/*表示在改变该clock的parent时，必须gated（关闭）*/
 #define CLK_SET_PARENT_GATE	BIT(1) /* must be gated across re-parent */
+/*表示改变该clock的rate时，要将该改变传递到上层parent*/
 #define CLK_SET_RATE_PARENT	BIT(2) /* propagate rate change up one level */
+/*忽略disable unused的调用*/
 #define CLK_IGNORE_UNUSED	BIT(3) /* do not gate even if unused */
+/*该clock为root clock，没有parent*/
 #define CLK_IS_ROOT		BIT(4) /* root clk, has no parent */
 #define CLK_IS_BASIC		BIT(5) /* Basic clk, can't do a to_clk_foo() */
+/*get rate时，不要从缓存中拿，而是从新计算*/
 #define CLK_GET_RATE_NOCACHE	BIT(6) /* do not use the cached clk rate */
 #define CLK_SET_RATE_NO_REPARENT BIT(7) /* don't re-parent on rate change */
 #define CLK_GET_ACCURACY_NOCACHE BIT(8) /* do not use the cached clk accuracy */
@@ -186,6 +192,8 @@ struct clk_rate_request {
  * called before clk_enable.
  */
 struct clk_ops {
+/*判断clock是否已经prepared。可以不提供，clock framework core会维护一个prepare的计数
+（该计数在clk_prepare调用时加一，在clk_unprepare时减一），并依据该计数判断是否prepared；*/
 	int		(*prepare)(struct clk_hw *hw);
 	void		(*unprepare)(struct clk_hw *hw);
 	int		(*is_prepared)(struct clk_hw *hw);
@@ -226,10 +234,10 @@ struct clk_ops {
  * @flags: framework-level hints and quirks
  */
 struct clk_init_data {
-	const char		*name;
-	const struct clk_ops	*ops;
-	const char		* const *parent_names;
-	u8			num_parents;
+	const char		*name; //该clock的名称
+	const struct clk_ops	*ops; //该clock相关的操作函数集
+	const char		* const *parent_names; //该clock所有的parent clock的名称。这是一个字符串数组，保存了所有可能的parent；
+	u8			num_parents; //parent的个数
 	unsigned long		flags;
 };
 

@@ -943,6 +943,18 @@ MODULE_DEVICE_TABLE(of, cdns_i2c_of_match);
  *
  * Return: 0 on success, negative error otherwise
  */
+ /*
+i2c0: i2c@e0004000 {
+	compatible = "cdns,i2c-r1p10";
+	status = "disabled";
+	clocks = <&clkc 38>;
+	interrupt-parent = <&intc>;
+	interrupts = <0 25 4>;
+	reg = <0xe0004000 0x1000>;
+	#address-cells = <1>;
+	#size-cells = <0>;
+};
+*/
 static int cdns_i2c_probe(struct platform_device *pdev)
 {
 	struct resource *r_mem;
@@ -1078,7 +1090,7 @@ static struct platform_driver cdns_i2c_drv = {
 	.probe  = cdns_i2c_probe,
 	.remove = cdns_i2c_remove,
 };
-
+//platform_driver_register
 module_platform_driver(cdns_i2c_drv);
 
 MODULE_AUTHOR("Xilinx Inc.");

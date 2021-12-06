@@ -3,8 +3,9 @@ git config http.sslVerify "false"
 //https 改为git
  git pull git://github.com/dachunfree/kernel/
 
+https://github.com/settings/tokens
 ssh
-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
+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
 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
 
 如果在push的时候没有出现输入用户名密码 请执行 git config --system --unset credential.helper 完了再输入用户名密码

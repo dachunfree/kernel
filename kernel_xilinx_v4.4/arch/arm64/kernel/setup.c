@@ -334,6 +334,7 @@ void __init setup_arch(char **cmdline_p)
 	early_ioremap_reset();
 
 	if (acpi_disabled) {
+		//Éè±¸Ê÷½âÎö
 		unflatten_device_tree();
 		psci_dt_init();
 	} else {

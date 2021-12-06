@@ -287,12 +287,12 @@ static bool is_hardlockup(void)
 
 static int is_softlockup(unsigned long touch_ts)
 {
-	unsigned long now = get_timestamp();
+	unsigned long now = get_timestamp(); //获取当前时间戳
 
 	if ((watchdog_enabled & SOFT_WATCHDOG_ENABLED) && watchdog_thresh){
 		/* Warn about unreasonable delays. */
-		if (time_after(now, touch_ts + get_softlockup_thresh()))
-			return now - touch_ts;
+		if (time_after(now, touch_ts + get_softlockup_thresh())) //是否大于20s
+			return now - touch_ts; //超时时间
 	}
 	return 0;
 }
@@ -326,6 +326,7 @@ static void watchdog_overflow_callback(struct perf_event *event,
 	 * fired multiple times before we overflow'd.  If it hasn't
 	 * then this is a good indication the cpu is stuck
 	 */
+	 //判断是否10s 没有更新中断次数
 	if (is_hardlockup()) {
 		int this_cpu = smp_processor_id();
 		struct pt_regs *regs = get_irq_regs();
@@ -376,6 +377,7 @@ static void watchdog_disable_all_cpus(void);
 /* watchdog kicker functions */
 static enum hrtimer_restart watchdog_timer_fn(struct hrtimer *hrtimer)
 {
+	/*获取执行函数watchdog时候更新watchdog_touch_ts时间戳*/
 	unsigned long touch_ts = __this_cpu_read(watchdog_touch_ts);
 	struct pt_regs *regs = get_irq_regs();
 	int duration;
@@ -388,8 +390,10 @@ static enum hrtimer_restart watchdog_timer_fn(struct hrtimer *hrtimer)
 	wake_up_process(__this_cpu_read(softlockup_watchdog));
 
 	/* .. and repeat */
+	//重置定时器
 	hrtimer_forward_now(hrtimer, ns_to_ktime(sample_period));
-
+	/*第一次执行,watchdog_touch_ts时间戳可能为零,需要更新touch_ts
+    为当前时间戳*/
 	if (touch_ts == 0) {
 		if (unlikely(__this_cpu_read(softlockup_touch_sync))) {
 			/*
@@ -412,6 +416,7 @@ static enum hrtimer_restart watchdog_timer_fn(struct hrtimer *hrtimer)
 	 * indicate it is getting cpu time.  If it hasn't then
 	 * this is a good indication some task is hogging the cpu
 	 */
+	 /*检测系统是否处于内核mode超过20s,并做出决策*/
 	duration = is_softlockup(touch_ts);
 	if (unlikely(duration)) {
 		/*
@@ -495,10 +500,12 @@ static void watchdog_enable(unsigned int cpu)
 	struct hrtimer *hrtimer = raw_cpu_ptr(&watchdog_hrtimer);
 
 	/* kick off the timer for the hardlockup detector */
+	//softlock的时钟函数
 	hrtimer_init(hrtimer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
 	hrtimer->function = watchdog_timer_fn;
 
 	/* Enable the perf event */
+	//hardlock的初始化函数
 	watchdog_nmi_enable(cpu);
 
 	/* done here because hrtimer_start can only pin to smp_processor_id() */
@@ -541,8 +548,10 @@ static int watchdog_should_run(unsigned int cpu)
  */
 static void watchdog(unsigned int cpu)
 {
+	/*将变量hrtimer_interrupts数值赋值给 soft_lockup_hrtimer_cnt*/
 	__this_cpu_write(soft_lockup_hrtimer_cnt,
 			 __this_cpu_read(hrtimer_interrupts));
+	/*获取当前时间并赋值给watchdog_touch_ts,目的是周期性的检测是否是soft_lockup*/
 	__touch_watchdog();
 
 	/*
@@ -587,9 +596,12 @@ static int watchdog_nmi_enable(unsigned int cpu)
 		goto out_enable;
 
 	wd_attr = &wd_hw_attr;
+	/*获取hard lockup周期性检测的时间 10s*/
 	wd_attr->sample_period = hw_nmi_get_sample_period(watchdog_thresh);
 
 	/* Try to register using hardware perf events */
+	 /* 通过HW event,即通过NMI将信号发送给cpu来处理hard lockup.
+	   核心函数watchdog_overflow_callback */
 	event = perf_event_create_kernel_counter(wd_attr, cpu, NULL, watchdog_overflow_callback, NULL);
 
 	/* save cpu0 error for future comparision */
@@ -783,6 +795,8 @@ static int watchdog_enable_all_cpus(void)
 	int err = 0;
 
 	if (!watchdog_running) {
+		/*初始化的时候,创建watchdog线程,同时关联percpu
+              watchdog_cpumask=cpu_possible_mask*/
 		err = smpboot_register_percpu_thread_cpumask(&watchdog_threads,
 							     &watchdog_cpumask);
 		if (err)
@@ -1030,6 +1044,7 @@ out:
 
 void __init lockup_detector_init(void)
 {
+	/*获取采用周期放在全局变量:sample_period*/
 	set_sample_period();
 
 #ifdef CONFIG_NO_HZ_FULL
@@ -1041,7 +1056,7 @@ void __init lockup_detector_init(void)
 #else
 	cpumask_copy(&watchdog_cpumask, cpu_possible_mask);
 #endif
-
+	/*在系统初始化的时候,为每个online cpu创建watch_threads线程信息.*/
 	if (watchdog_enabled)
 		watchdog_enable_all_cpus();
 }

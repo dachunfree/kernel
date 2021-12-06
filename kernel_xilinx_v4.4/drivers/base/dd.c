@@ -313,7 +313,7 @@ static int really_probe(struct device *dev, struct device_driver *drv)
 	devices_kset_move_last(dev);
 	//调用i2c总线 i2c_bus_type 的probe函数
 	if (dev->bus->probe) {
-		ret = dev->bus->probe(dev);
+		ret = dev->bus->probe(dev); //比如 at24_probe
 		if (ret)
 			goto probe_failed;
 	} else if (drv->probe) {

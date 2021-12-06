@@ -415,6 +415,10 @@ static void __unflatten_device_tree(const void *blob,
 	pr_debug("  size is %lx, allocating...\n", size);
 
 	/* Allocate memory for the expanded device tree */
+	/*
+	初始化的时候，并不是扫描到一个node或者property就分配相应的内存，实际上内核是一次性的
+	分配了一大片内存，这些内存包括了所有的struct device_node、node name、struct property所需要的内存。
+	*/
 	mem = dt_alloc(size + 4, __alignof__(struct device_node));
 	memset(mem, 0, size);
 

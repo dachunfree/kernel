@@ -592,7 +592,7 @@ hrtimer_force_reprogram(struct hrtimer_cpu_base *cpu_base, int skip_equal)
 	 */
 	if (cpu_base->hang_detected)
 		return;
-	//调用下一次触发事件�??
+	//调用下一次触发事件???
 	tick_program_event(cpu_base->expires_next, 1);
 }
 
@@ -699,7 +699,7 @@ static void hrtimer_switch_to_hres(void)
 	}
 	base->hres_active = 1;
 	hrtimer_resolution = HIGH_RES_NSEC;
-	//实现jiffies 的增加，负载均衡的计�?(初始化一个高精度定时器来实现)
+	//实现jiffies 的增加，负载均衡的计??(初始化一个高精度定时器来实现)
 	tick_setup_sched_timer();
 	/* "Retrigger" the interrupt to get things going */
 	retrigger_next_event(NULL);
@@ -830,7 +830,7 @@ void unlock_hrtimer_base(const struct hrtimer *timer, unsigned long *flags)
  * Note: This only updates the timer expiry value and does not requeue
  * the timer.
  */
- //重置定时器�??
+ //重置定时器
 u64 hrtimer_forward(struct hrtimer *timer, ktime_t now, ktime_t interval)
 {
 	u64 orun = 1;
@@ -1140,7 +1140,7 @@ static void __hrtimer_init(struct hrtimer *timer, clockid_t clock_id,
  * hrtimer_init - initialize a timer to the given clock
  * @timer:	the timer to be initialized
  * @clock_id:	the clock to be used.
- * @mode:	timer mode abs/rel.?????�?????????
+ * @mode:	timer mode abs/rel.???????????????
  */
  /*
  HRTIMER_MODE_ABS:??????????
@@ -1295,7 +1295,7 @@ static void __hrtimer_run_queues(struct hrtimer_cpu_base *cpu_base, ktime_t now)
 			if (basenow.tv64 < hrtimer_get_softexpires_tv64(timer))
 				break;
 
-			__run_hrtimer(cpu_base, base, timer, &basenow); //调用中断注册函数�?
+			__run_hrtimer(cpu_base, base, timer, &basenow); //调用中断注册函数??
 		}
 	}
 }
@@ -1313,7 +1313,7 @@ void hrtimer_interrupt(struct clock_event_device *dev)
 	int retries = 0;
 
 	BUG_ON(!cpu_base->hres_active);
-	cpu_base->nr_events++;   //时钟中断的�?�数
+	cpu_base->nr_events++;   //时钟中断的???数
 	dev->next_event.tv64 = KTIME_MAX;
 
 	raw_spin_lock(&cpu_base->lock);

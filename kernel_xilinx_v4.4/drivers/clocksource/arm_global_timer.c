@@ -243,7 +243,16 @@ static int gt_cpu_notify(struct notifier_block *self, unsigned long action,
 static struct notifier_block gt_cpu_nb = {
 	.notifier_call = gt_cpu_notify,
 };
+/*
+global_timer: timer@f8f00200 {
+	compatible = "arm,cortex-a9-global-timer";
+	reg = <0xf8f00200 0x20>;
+	interrupts = <1 11 0x301>;
+	interrupt-parent = <&intc>;
+	clocks = <&clkc 4>;
+};
 
+*/
 static void __init global_timer_of_register(struct device_node *np)
 {
 	struct clk *gt_clk;

@@ -61,20 +61,23 @@ enum kobject_action {
 };
 
 struct kobject {
-	const char		*name;
-	struct list_head	entry;
-	struct kobject		*parent;
-	struct kset		*kset;
-	struct kobj_type	*ktype;
-	struct kernfs_node	*sd; /* sysfs directory entry */
-	struct kref		kref;
+	const char		*name; /*该Kobject的名称，同时也是sysfs中的目录名称*/
+	struct list_head	entry;/*用于将Kobject加入到Kset中的list_head*/
+	struct kobject		*parent;/*指向parent kobject，以此形成层次结构（在sysfs就表现为目录结构）*/
+	struct kset		*kset;/*该kobject属于的Kset。可以为NULL。如果存在，且没有指定parent，则会把Kset作为parent（别忘了Kset是一个特殊的Kobject）。*/
+	struct kobj_type	*ktype; /*该Kobject属于的kobj_type。每个Kobject必须有一个ktype，或者Kernel会提示错误。*/
+	struct kernfs_node	*sd; /* 该Kobject在sysfs中的表示.sysfs directory entry */
+	struct kref		kref;/*"struct kref”类型（在include/linux/kref.h中定义）的变量，为一个可用于原子操作的引用计数*/
 #ifdef CONFIG_DEBUG_KOBJECT_RELEASE
 	struct delayed_work	release;
 #endif
-	unsigned int state_initialized:1;
-	unsigned int state_in_sysfs:1;
+	unsigned int state_initialized:1; /*指示该Kobject是否已经初始化，以在Kobject的Init，Put，Add等操作时进行异常校验。*/
+	unsigned int state_in_sysfs:1;/*指示该Kobject是否已在sysfs中呈现，以便在自动注销时从sysfs中移除。*/
+	/*记录是否已经向用户空间发送ADD uevent，如果有，且没有发送remove uevent，
+	则在自动注销时，补发REMOVE uevent，以便让用户空间正确处理。*/
 	unsigned int state_add_uevent_sent:1;
 	unsigned int state_remove_uevent_sent:1;
+	/*如果该字段为1，则表示忽略所有上报的uevent事件。*/
 	unsigned int uevent_suppress:1;
 };
 
@@ -114,8 +117,14 @@ extern const void *kobject_namespace(struct kobject *kobj);
 extern char *kobject_get_path(struct kobject *kobj, gfp_t flag);
 
 struct kobj_type {
+	/*通过该回调函数，可以将包含该种类型kobject的数据结构的内存空间释放掉。*/
 	void (*release)(struct kobject *kobj);
+	/*该种类型的Kobject的sysfs文件系统接口*/
 	const struct sysfs_ops *sysfs_ops;
+	/*
+	该种类型的Kobject的atrribute列表（所谓attribute，就是sysfs文件系统中的一个文件）。
+	将会在Kobject添加到内核时，一并注册到sysfs中
+	*/
 	struct attribute **default_attrs;
 	const struct kobj_ns_type_operations *(*child_ns_type)(struct kobject *kobj);
 	const void *(*namespace)(struct kobject *kobj);
@@ -166,9 +175,9 @@ struct sock;
  * desired.
  */
 struct kset {
-	struct list_head list;
+	struct list_head list; //用于保存该kset下所有的kobject的链表。
 	spinlock_t list_lock;
-	struct kobject kobj;
+	struct kobject kobj;//该kset自己的kobject（kset是一个特殊的kobject，也会在sysfs中以目录的形式体现）
 	const struct kset_uevent_ops *uevent_ops;
 };
 

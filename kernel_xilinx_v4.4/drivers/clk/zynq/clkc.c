@@ -3,7 +3,7 @@
  *
  *  Copyright (C) 2012 - 2013 Xilinx
  *
- *  Sören Brinkmann <soren.brinkmann@xilinx.com>
+ *  S?ren Brinkmann <soren.brinkmann@xilinx.com>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License v2 as published by
@@ -265,7 +265,31 @@ err:
 	if (two_gates)
 		clks[clk1] = ERR_PTR(-ENOMEM);
 }
-
+/*
+clkc: clkc@100 {
+	#clock-cells = <1>;
+	compatible = "xlnx,ps7-clkc";
+	fclk-enable = <0xf>;
+	clock-output-names = "armpll", "ddrpll", "iopll", "cpu_6or4x",
+			"cpu_3or2x", "cpu_2x", "cpu_1x", "ddr2x", "ddr3x",
+			"dci", "lqspi", "smc", "pcap", "gem0", "gem1",
+			"fclk0", "fclk1", "fclk2", "fclk3", "can0", "can1",
+			"sdio0", "sdio1", "uart0", "uart1", "spi0", "spi1",
+			"dma", "usb0_aper", "usb1_aper", "gem0_aper",
+			"gem1_aper", "sdio0_aper", "sdio1_aper",
+			"spi0_aper", "spi1_aper", "can0_aper", "can1_aper",
+			"i2c0_aper", "i2c1_aper", "uart0_aper", "uart1_aper",
+			"gpio_aper", "lqspi_aper", "smc_aper", "swdt",
+			"dbg_trc", "dbg_apb";
+	reg = <0x100 0x100>;
+};
+clock framework将clock分为fixed rate、gate、devider、mux、fixed factor、composite六类
+1. clk_register_fixed_rate(NULL, "ps_clk", NULL, CLK_IS_ROOT,tmp)
+2.clk_register_mux(NULL, clk_output_name[armpll],armpll_parents, 2, CLK_SET_RATE_NO_REPARENT)
+3.clk_register_divider
+4.clk_register_gate
+5.clk_register_fixed_factor
+*/
 static void __init zynq_clk_setup(struct device_node *np)
 {
 	int i;
@@ -284,6 +308,7 @@ static void __init zynq_clk_setup(struct device_node *np)
 	pr_info("Zynq clock init\n");
 
 	/* get clock output names from DT */
+	//从dts中获取clock-output-names
 	for (i = 0; i < clk_max; i++) {
 		if (of_property_read_string_index(np, "clock-output-names",
 				  i, &clk_output_name[i])) {
@@ -300,6 +325,7 @@ static void __init zynq_clk_setup(struct device_node *np)
 	periph_parents[2] = clk_output_name[armpll];
 	periph_parents[3] = clk_output_name[ddrpll];
 
+	//fclk_enable = 0xf
 	of_property_read_u32(np, "fclk-enable", &fclk_enable);
 
 	/* ps_clk */
@@ -308,6 +334,7 @@ static void __init zynq_clk_setup(struct device_node *np)
 		pr_warn("ps_clk frequency not specified, using 33 MHz.\n");
 		tmp = 33333333;
 	}
+	/*这一类clock具有固定的频率，不能开关、不能调整频率、不能选择parent、不需要提供任何的clk_ops回调函数*/
 	ps_clk = clk_register_fixed_rate(NULL, "ps_clk", NULL, CLK_IS_ROOT,
 			tmp);
 
@@ -628,6 +655,7 @@ static void __init zynq_clk_setup(struct device_node *np)
 
 	clk_data.clks = clks;
 	clk_data.clk_num = ARRAY_SIZE(clks);
+	//将clk_data 的时钟的提供者 加入到of_clk_providers
 	of_clk_add_provider(np, of_clk_src_onecell_get, &clk_data);
 }
 

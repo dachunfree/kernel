@@ -327,7 +327,9 @@ static struct clk_core *clk_core_lookup(const char *name)
 
 	if (!name)
 		return NULL;
-
+	/*clk_root_list和clk_orphan_list。所有设置了CLK_IS_ROOT属性的clock都会挂在clk_root_list中。
+	其它clock，如果有valid的parent ，则会挂到parent的“children”链表中，如果没有valid的parent，
+	则会挂到clk_orphan_list中。*/
 	/* search the 'proper' clk tree first */
 	hlist_for_each_entry(root_clk, &clk_root_list, child_node) {
 		ret = __clk_lookup_subtree(name, root_clk);
@@ -2306,7 +2308,8 @@ static int __clk_init(struct device *dev, struct clk *clk_user)
 	core = clk_user->core;
 
 	clk_prepare_lock();
-
+	/*以clock name为参数，调用__clk_lookup接口，查找是否已有相同name的clock注册，如果有，则返回错误。
+	由此可以看出，clock framework以name唯一识别一个clock，因此不能有同名的clock存在*/
 	/* check to see if a clock with this name is already registered */
 	if (clk_core_lookup(core->name)) {
 		pr_debug("%s: clk %s already initialized\n",
@@ -2314,7 +2317,10 @@ static int __clk_init(struct device *dev, struct clk *clk_user)
 		ret = -EEXIST;
 		goto out;
 	}
-
+	/*
+	 检查clk ops的完整性，例如：如果提供了set_rate接口，就必须提供round_rate和recalc_rate接口；
+	 如果提供了set_parent，就必须提供get_parent。这些逻辑背后的含义，会在后面相应的地方详细描述
+	 */
 	/* check that clk_ops are sane.  See Documentation/clk.txt */
 	if (core->ops->set_rate &&
 	    !((core->ops->round_rate || core->ops->determine_rate) &&
@@ -2356,6 +2362,8 @@ static int __clk_init(struct device *dev, struct clk *clk_user)
 	 * If core->parents is not NULL we skip this entire block.  This allows
 	 * for clock drivers to statically initialize core->parents.
 	 */
+	 /*分配一个struct clk *类型的数组，缓存该clock的parents clock。
+	 	具体方法是根据parents_name，查找相应的struct clk指针；*/
 	if (core->num_parents > 1 && !core->parents) {
 		core->parents = kcalloc(core->num_parents, sizeof(struct clk *),
 					GFP_KERNEL);
@@ -2370,7 +2378,7 @@ static int __clk_init(struct device *dev, struct clk *clk_user)
 				core->parents[i] =
 					clk_core_lookup(core->parent_names[i]);
 	}
-
+	//获取当前的parent clock，并将其保存在parent指针中
 	core->parent = __clk_init_parent(core);
 
 	/*
@@ -2383,6 +2391,7 @@ static int __clk_init(struct device *dev, struct clk *clk_user)
 	 * clocks and re-parent any that are children of the clock currently
 	 * being clk_init'd.
 	 */
+	 /*根据该clock的特性，将它添加到clk_root_list、clk_orphan_list或者parent->children三个链表中的一个*/
 	if (core->parent) {
 		hlist_add_head(&core->child_node,
 				&core->parent->children);
@@ -2426,6 +2435,7 @@ static int __clk_init(struct device *dev, struct clk *clk_user)
 	 * parent's rate.  If a clock doesn't have a parent (or is orphaned)
 	 * then rate is set to zero.
 	 */
+	 /*计算clock的初始rate*/
 	if (core->ops->recalc_rate)
 		rate = core->ops->recalc_rate(core->hw,
 				clk_core_get_rate_nolock(core->parent));
@@ -2439,6 +2449,7 @@ static int __clk_init(struct device *dev, struct clk *clk_user)
 	 * walk the list of orphan clocks and reparent any that are children of
 	 * this clock
 	 */
+	 /*尝试reparent当前所有的孤儿（orphan）clock*/
 	hlist_for_each_entry_safe(orphan, tmp2, &clk_orphan_list, child_node) {
 		if (orphan->num_parents && orphan->ops->get_parent) {
 			i = orphan->ops->get_parent(orphan->hw);
@@ -2463,6 +2474,7 @@ static int __clk_init(struct device *dev, struct clk *clk_user)
 	 * Please consider other ways of solving initialization problems before
 	 * using this callback, as its use is discouraged.
 	 */
+	 /*如果clock ops提供了init接口，执行之（由注释可知，kernel不建议提供init接口）*/
 	if (core->ops->init)
 		core->ops->init(core->hw);
 

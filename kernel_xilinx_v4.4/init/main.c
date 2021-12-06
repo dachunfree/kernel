@@ -686,6 +686,7 @@ asmlinkage __visible void __init start_kernel(void)
 	ftrace_init();
 
 	/* Do the rest non-__init'ed, we're now alive */
+	//watchdog init
 	rest_init();
 }
 

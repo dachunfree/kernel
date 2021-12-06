@@ -726,7 +726,8 @@ bool out_of_memory(struct oom_control *oc)
 		oc->nodemask = NULL;
 	//检查是否允许执行内核恐慌
 	check_panic_on_oom(oc, constraint, NULL);
-
+	/*sysctl_oom_kill_allocating_task 是否允许杀死正在申请分配内存并触发内存耗尽的进程
+	避免扫描进程链表选择进程*/
 	if (sysctl_oom_kill_allocating_task && current->mm &&
 	    !oom_unkillable_task(current, NULL, oc->nodemask) &&
 	    current->signal->oom_score_adj != OOM_SCORE_ADJ_MIN) {

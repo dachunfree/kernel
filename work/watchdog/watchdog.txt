@@ -1,0 +1,95 @@
+
+先理解下watchdog引起的softlock和hardlock：
+
+在linux kernel里，有一个debug选项CONFIG_HARDLOCKUP_DETECTOR。使能它可以打开kernel中的soft lockup和hard lockup探测。
+这两个东西到底有什么用处那？首先，soft/hard lockup的实现在kernel/watchdog.c中，主体涉及到了3个东西：kernel线程，
+时钟中断，NMI中断（不可屏蔽中断）。这3个东西具有不一样的优先级，依次是kernel线程 < 时钟中断 < NMI中断。
+而正是用到了他们之间优先级的区别，所以才可以调试系统运行中的两种问题：
+
+1.由于某种原因导致系统处于内核态超过20s导致进程无法运行(soft lockup)
+2.由于某种原因导致系统处于内核态超过10s导致中断无法运行(hard lockup)
+
+英文注释：
+soft lockup:
+
+A ‘softlockup’ is defined as a bug that causes the kernel to loop in kernel mode for more than 20 seconds 
+(see “Implementation” below for details), without giving other tasks（进程） a chance to run. The current stack trace 
+is displayed upon detection and, by default, the system will stay locked up. Alternatively, the kernel can be 
+configured to panic; a sysctl, “kernel.softlockup_panic”, a kernel parameter,“softlockup_panic”
+(see “Documentation/kernel-parameters.txt” for details), and a compile option,“BOOTPARAM_SOFTLOCKUP_PANIC”, 
+are provided for this.
+
+hard lockup:
+A ‘hardlockup’ is defined as a bug that causes the CPU to loop in kernel mode for more than 10 seconds 
+(see “Implementation” below for details), without letting other interrupts(中断) have a chance to run. Similarly 
+to the softlockup case, the current stack trace is displayed upon detection and the system will stay locked up 
+unless the default behavior is changed, which can be done through a sysctl, ‘hardlockup_panic’, a compile time 
+knob,“BOOTPARAM_HARDLOCKUP_PANIC”, and a kernel parameter, “nmi_watchdog”
+
+
+
+1.首先了解watchdog的调用和引起的softlock，hardlock。
+主要是启动watchdog线程（RT线程 优先级99），主要负责更新watchdog_touch_ts（当前时间戳）。
+然后高精度定时器同样获取当前时间戳 - watchdog的时间戳，如果超过设置时间，就产生softlock;
+hardlock 同理：是获取中断的次数，10s没有更新就panic。
+每cpu线程创建流程：
+kernel_init
+	kernel_init_freeable
+		lockup_detector_init
+			set_sample_period(); //设置采样周期 
+			watchdog_enable_all_cpus();//创建线程。
+				smpboot_register_percpu_thread_cpumask(&watchdog_threads,&watchdog_cpumask);
+
+watchdog_threads进程相关的函数：
+static struct smp_hotplug_thread watchdog_threads = {
+	.store			= &softlockup_watchdog,
+	.thread_should_run	= watchdog_should_run,
+	.thread_fn		= watchdog,
+	.thread_comm		= "watchdog/%u",
+	.setup			= watchdog_enable,
+	.cleanup		= watchdog_cleanup,
+	.park			= watchdog_disable,
+	.unpark			= watchdog_enable,
+};
+
+1.1 watchdog_enable函数：
+	watchdog_nmi_enable(cpu); //nmi统计，超时引起hardlock
+	hrtimer_init(hrtimer, CLOCK_MONOTONIC, HRTIMER_MODE_REL); //初始化高精度定时器
+	hrtimer->function = watchdog_timer_fn;//超时执行函数
+	hrtimer_start(hrtimer, ns_to_ktime(sample_period),HRTIMER_MODE_REL_PINNED) //sample_period为20s。
+	watchdog_set_prio(SCHED_FIFO, MAX_RT_PRIO - 1);	//设置watchdog线程的RT线程，优先级为99.
+
+
+1.1.1 超时引起 hardlock：
+watchdog_enable
+	static int watchdog_nmi_enable(unsigned int cpu)
+		struct perf_event_attr *wd_attr;
+		wd_attr->sample_period = hw_nmi_get_sample_period(watchdog_thresh); //获取hard lockup周期性检测的时间
+		event = perf_event_create_kernel_counter(wd_attr, cpu, NULL, watchdog_overflow_callback, NULL); //处理hardlock函数
+
+watchdog_overflow_callback处理函数：
+if (is_hardlockup())
+hrint = __this_cpu_read(hrtimer_interrupts)
+__this_cpu_read(hrtimer_interrupts_saved) 两个进行中断比对，相等就是出现问题了，没有更新中断次数
+	pr_emerg("Watchdog detected hard LOCKUP on cpu %d", this_cpu);
+	
+	
+1.1.2 超时引起softlock：
+enum hrtimer_restart watchdog_timer_fn(struct hrtimer *hrtimer)
+	touch_ts = __this_cpu_read(watchdog_touch_ts); //获取执行watchdog函数时候的时间戳
+	watchdog_interrupt_count(); //增加hrtimer_interrupts变量次数
+	hrtimer_forward_now(hrtimer, ns_to_ktime(sample_period)); //重置定时器
+	duration = is_softlockup(touch_ts);
+		now = get_timestamp();//获取当前的时间戳
+		time_after(now, touch_ts + get_softlockup_thresh())//是否大于20s
+		return now - touch_ts; //返回超时时间
+	if (unlikely(duration)) //如果引起超时了，进行softlock打印
+
+1.1.3 watchdog 函数：
+系统会为每个cpu core注册一个一般的kernel线程，名字叫watchdog/0, watchdog/1…以此类推。这个线程会定期得调用watchdog函数.
+watchdog	
+	__this_cpu_write(soft_lockup_hrtimer_cnt, __this_cpu_read(hrtimer_interrupts));	
+	__touch_watchdog(); //把当前时间戳给watchdog_touch_ts
+	
+2. zynq 7000的watch dog驱动
+kernel_xilinx_v4.4/drivers/watchdog/cadence_wdt.c

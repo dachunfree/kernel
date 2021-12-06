@@ -399,13 +399,21 @@ struct i2c_algorithm {
 	   using common I2C messages */
 	/* master_xfer should return the number of messages successfully
 	   processed, or a negative value on error */
+	/*I2C协议有关的数据传输接口，输入参数是struct i2c_msg类型的数组
+	  （大小由num指定）。返回值是成功传输的msg的个数，如有错误返回负值。*/
 	int (*master_xfer)(struct i2c_adapter *adap, struct i2c_msg *msgs,
 			   int num);
+	/*SMBUS有关的数据传输接口，如果为NULL，I2C core会尝试使用master_xfer模拟*/
 	int (*smbus_xfer) (struct i2c_adapter *adap, u16 addr,
 			   unsigned short flags, char read_write,
 			   u8 command, int size, union i2c_smbus_data *data);
 
 	/* To determine what the adapter supports */
+	/*通过一个bitmap，告诉调用者该I2C adapter支持的功能，
+	包括（具体可参考include/uapi/linux/i2c.h中的定义和注释）：
+	I2C_FUNC_I2C，支持传统的I2C功能；
+	I2C_FUNC_10BIT_ADDR，支持10bit地址；
+	*/
 	u32 (*functionality) (struct i2c_adapter *);
 
 #if IS_ENABLED(CONFIG_I2C_SLAVE)
@@ -509,9 +517,10 @@ struct i2c_adapter {
 	struct rt_mutex bus_lock;
 
 	int timeout;			/* in jiffies */
-	int retries;
+	int retries; //重新发送的次数
 	struct device dev;		/* the adapter device */
-
+	/*该I2C bus的ID，会体现在sysfs中（/sys/bus/i2c/devices/i2c-n中的‘n’），
+	 可由I2C controller driver在注册adapter时指定，或者通过DTS解析*/
 	int nr;
 	char name[48];
 	struct completion dev_released;

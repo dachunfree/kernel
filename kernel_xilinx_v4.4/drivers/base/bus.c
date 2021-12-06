@@ -525,6 +525,7 @@ int bus_add_device(struct device *dev)
 				&dev->bus->p->subsys.kobj, "subsystem");
 		if (error)
 			goto out_subsys;
+		/*把 platform_device 放入 platform_bus_type的device链表中*/
 		klist_add_tail(&dev->p->knode_bus, &bus->p->klist_devices);
 	}
 	return 0;
@@ -555,6 +556,7 @@ void bus_probe_device(struct device *dev)
 		return;
 
 	if (bus->p->drivers_autoprobe)
+		//进行match
 		device_initial_probe(dev);
 
 	mutex_lock(&bus->p->mutex);

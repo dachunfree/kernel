@@ -102,6 +102,18 @@ enum {
  *
  * Returns 1 when the thread should exit, 0 otherwise.
  */
+ /*
+ static struct smp_hotplug_thread watchdog_threads = {
+	.store			= &softlockup_watchdog,
+	.thread_should_run	= watchdog_should_run,
+	.thread_fn		= watchdog,
+	.thread_comm		= "watchdog/%u",
+	.setup			= watchdog_enable,
+	.cleanup		= watchdog_cleanup,
+	.park			= watchdog_disable,
+	.unpark			= watchdog_enable,
+};
+*/
 static int smpboot_thread_fn(void *data)
 {
 	struct smpboot_thread_data *td = data;
@@ -291,6 +303,7 @@ int smpboot_register_percpu_thread_cpumask(struct smp_hotplug_thread *plug_threa
 
 	get_online_cpus();
 	mutex_lock(&smpboot_threads_lock);
+	//遍历所有online，为每个online的cpu建立一个thread
 	for_each_online_cpu(cpu) {
 		ret = __smpboot_create_thread(plug_thread, cpu);
 		if (ret) {
@@ -298,9 +311,11 @@ int smpboot_register_percpu_thread_cpumask(struct smp_hotplug_thread *plug_threa
 			free_cpumask_var(plug_thread->cpumask);
 			goto out;
 		}
+		//如果online cpu不再cpumask中的话，则unpark 这个thread
 		if (cpumask_test_cpu(cpu, cpumask))
 			smpboot_unpark_thread(plug_thread, cpu);
 	}
+	//将所有通过smpboot_register_percpu_thread_cpumask 创建的thread都添加到hotplug_threads 中
 	list_add(&plug_thread->list, &hotplug_threads);
 out:
 	mutex_unlock(&smpboot_threads_lock);
