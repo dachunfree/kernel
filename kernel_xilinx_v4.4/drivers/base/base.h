@@ -32,7 +32,8 @@ struct subsys_private {
 	struct mutex mutex;
 
 	struct kset *drivers_kset;
-	struct klist klist_devices;
+	//两条链表 一条添加device，一条添加drivers
+	struct klist klist_devices; //klist_add_tail
 	struct klist klist_drivers;
 	struct blocking_notifier_head bus_notifier;
 	unsigned int drivers_autoprobe:1;

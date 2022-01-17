@@ -8,6 +8,7 @@ enum tick_device_mode {
 	TICKDEV_MODE_ONESHOT,   //另外一种是one shot模式
 };
 
+//tick device其实就是工作在某种模式下的clock event设备
 struct tick_device {
 	struct clock_event_device *evtdev;
 	/*该clock event device对应的HW timer必须是和该CPU core是有关联的的

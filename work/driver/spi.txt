@@ -1,0 +1,157 @@
+
+/********************************************************************************************/
+
+								zynq ultrascale spi 驱动分析
+
+/*******************************************************************************************/
+spi read函数：
+spi_read(struct spi_device *spi, void *buf, size_t len)
+		struct spi_transfer	t = {  //读取spi buf的地址和长度
+			.rx_buf		= buf,
+			.len		= len,
+		};
+		struct spi_message	m;
+		spi_message_init(&m);/*message 的list_head初始化 */
+		spi_message_add_tail(&t, &m);/*将spi_transfer加入到spi_message链表中*/
+		spi_sync(spi, &m); //同步模式开始处理message
+			__spi_sync(spi, message, 0); /**/
+				DECLARE_COMPLETION_ONSTACK(done);/*初始化工作队列*/
+				message->complete = spi_complete;
+				message->context = &done;
+				message->spi = spi;
+				if (master->transfer == spi_queued_transfer) //同步方式
+					__spi_queued_transfer(spi, message, false);
+						queue_kthread_work(&master->kworker, &master->pump_messages);
+							insert_kthread_work(worker, work, &worker->work_list);
+								wake_up_process(worker->task);
+					spi_async_locked(spi, message);//开启异步传输模式
+						__spi_async(spi, message);
+							master->transfer(spi, message); // spi_queued_transfer。
+			if (status == 0)//上面加入队列成功，同步模式开始进行等待发送完成
+				__spi_pump_messages(master, false);//这个函数下面讲解
+				wait_for_completion(&done);
+			 
+spi read函数 理解下这几个关键结构体之间的数据传输：
+			 
+spi_transfer											| list_add	|				spi_message																					struct spi_master
+	struct list_head transfer_list; --------------->			struct list_head	transfers;		  | list_add |			struct device	dev;
+	rx_buf		= buf,//存放read的数据地址									struct list_head	queue;------------------------> 	struct list_head	queue;			
+	.len		= len, //要读取的长度													void(*complete)(void *context); //spi_complete			struct kthread_worker	kworker;
+	.speed_hz  //设置spi时钟频率													void	*context; //&done,任务完成标志								struct kthread_work	pump_messages;											
+	
+理解下struct kthread_worker	和 struct kthread_work 两个结构体：
+worker即工人，一个工人有很多工作要做
+
+												  |--<----------<------------------<-----------------------------<------------
+struct kthread_worker { <-|           list_add_tail          struct kthread_work {           			    |
+   struct list_head	work_list; <------------------------------- struct list_head	node;								|       
+	 struct task_struct	*task;  //wake up                         kthread_work_func_t	func;							|     
+	  struct kthread_work	*current_work;//正在做的工作            struct kthread_worker	*worker;---->---| 			                         																		};                              
+};
+
+上面是加入到worker队列中，工人要完成那些工作呢？这些工作在哪里完成呢？
+dts：
+spi0: spi@ff040000 {
+	compatible = "cdns,spi-r1p6";
+	status = "disabled";
+	interrupt-parent = <&gic>;
+	interrupts = <0 19 4>;
+	reg = <0x0 0xff040000 0x0 0x1000>;
+	clock-names = "ref_clk", "pclk";
+	#address-cells = <1>;
+	#size-cells = <0>;
+	power-domains = <&zynqmp_firmware PD_SPI_0>;
+};
+重点看下spicontroller驱动函数：
+cdns_spi_probe
+	spi_register_master(master)
+		init_completion(&master->xfer_completion);
+		spi_master_initialize_queue(master);
+			master->transfer = spi_queued_transfer;
+			master->transfer_one_message = spi_transfer_one_message;
+			spi_init_queue(master);
+				init_kthread_worker(&master->kworker); //初始化worker
+					master->kworker_task = kthread_run(kthread_worker_fn,&master->kworker, "%s",dev_name(&master->dev));
+						kthread_worker_fn(void *worker_ptr)
+							worker->task = current; //设置当前进程到task中
+							if (!list_empty(&worker->work_list)) //遍历工人有哪些要做的工作。
+								 work = list_first_entry(&worker->work_list,struct kthread_work, node); //取出第一个工作
+								 list_del_init(&work->node);//把要做的工作从从工人任务中删除
+							worker->current_work = work; //工人现在正在做的工作
+							work->func(work); //开始工作，调用work的回调函数
+						init_kthread_work(&master->pump_messages, spi_pump_messages); //初始化工作的回调函数
+							(work)->func = (fn) //即func	= spi_pump_messages；
+		of_register_spi_devices(master); //进行dtb解析
+			of_register_spi_device(master, nc);
+				spi = spi_alloc_device(master); //分配spi master
+				rc = of_property_read_u32(nc, "reg", &value); //获取片选信号
+				of_find_property(nc, "spi-cpha", NULL) //获取极性
+				of_find_property(nc, "spi-cpol", NULL)
+				of_find_property(nc, "spi-cs-high")
+				of_property_read_u32(nc, "spi-rx-bus-width", &value)
+				of_property_read_u32(nc, "spi-max-frequency", &value) //可以个transiver 表示当前信息的传输速率
+				
+		
+
+来继续看一下工人的工作是什么呢？肯定是要操作spi controller寄存器来实现真正的填写tx fifo操作了。
+spi_pump_messages(struct kthread_work *work)
+	__spi_pump_messages(master, true); //从work中获取当前master，进行传输
+		ret = master->transfer_one_message(master, master->cur_msg);//直接上重点看这个传输函数
+		spi_transfer_one_message(struct spi_master *master,struct spi_message *msg)
+			spi_set_cs(msg->spi, true); //设置片选信号
+			list_for_each_entry(xfer, &msg->transfers, transfer_list) //开始遍历那些消息要发送
+				master->transfer_one(master, msg->spi, xfer);//	cdns_transfer_one
+				cdns_transfer_one //里面就是设置spi的时钟频率，进行pclk分频，最后填写 tx fifo
+				wait_for_completion_timeout(&master->xfer_completion,msecs_to_jiffies(ms));	//设置超时函数，等待中断唤醒
+			spi_set_cs(msg->spi, false); //设置片选信号，传输完成
+			spi_finalize_current_message(master);									
+				mesg->complete(mesg->context)//spi_complete 进行等待队列done++操作
+
+spi_gpio_setup
+
+
+看下怎么注册spi driver。进行id table 或者name匹配，调用probe函数
+__spi_register_driver(THIS_MODULE, driver)
+	drv->driver.bus = &spi_bus_type;
+	driver_register(&sdrv->driver);
+	
+dts:	
+&spi0 {
+	status = "okay";
+	mmwave_rf0: mmwave_rf@trx0 {
+		compatible = "siversima,trx_bf0";
+		spi-max-frequency = <50000000>;
+		reg = <0>; //chip -select
+	};
+};
+从of_register_spi_device函数中获取参数
+
+
+
+
+
+
+/**********************GPIO 模拟spi的驱动**********************/
+dts可以这样写：
+	spi_gpio: spi-gpio {
+		compatible = "spi-gpio";
+		#address-cells = <1>;
+		#size-cells = <0>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_gpiospi0>;
+		status = "okay";
+
+		gpio-sck = <&gpio4 15 GPIO_ACTIVE_HIGH>;
+		gpio-mosi = <&gpio4 12 GPIO_ACTIVE_HIGH>;
+		gpio-miso = <&gpio4 11 GPIO_ACTIVE_HIGH>;
+		num-chipselects = <1>;
+		cs-gpios = <&gpio4 14 GPIO_ACTIVE_HIGH>;
+
+		eeprom@0 {
+			compatible = "eeprom-93xx46";
+			reg = <0>;
+			spi-max-frequency = <1000000>;
+			spi-cs-high;
+			data-size = <8>;
+		};
+	};

@@ -1,0 +1,37 @@
+
+device_node 解析成功后放到 of_root结构体中，最终要把device_node和device进行绑定。
+dts -> dtb -> device_node -> platform_device
+绑定过程如下：
+arch_initcall(customize_machine);
+customize_machine
+			of_platform_populate(NULL, of_default_bus_match_table,NULL, NULL);	
+				获取根节点，遍历子节点
+					rc = of_platform_bus_create(child, matches, lookup, parent, true);
+						dev = of_platform_device_create_pdata(bus, bus_id, platform_data, parent);//status = ok okay 才创建
+						
+						
+						
+zynq的时钟驱动：
+
+clkc: clkc@100 {
+	#clock-cells = <1>;
+	compatible = "xlnx,ps7-clkc";
+	fclk-enable = <0xf>;
+	clock-output-names = "armpll", "ddrpll", "iopll", "cpu_6or4x",
+			"cpu_3or2x", "cpu_2x", "cpu_1x", "ddr2x", "ddr3x",
+			"dci", "lqspi", "smc", "pcap", "gem0", "gem1",
+			"fclk0", "fclk1", "fclk2", "fclk3", "can0", "can1",
+			"sdio0", "sdio1", "uart0", "uart1", "spi0", "spi1",
+			"dma", "usb0_aper", "usb1_aper", "gem0_aper",
+			"gem1_aper", "sdio0_aper", "sdio1_aper",
+			"spi0_aper", "spi1_aper", "can0_aper", "can1_aper",
+			"i2c0_aper", "i2c1_aper", "uart0_aper", "uart1_aper",
+			"gpio_aper", "lqspi_aper", "smc_aper", "swdt",
+			"dbg_trc", "dbg_apb";
+	reg = <0x100 0x100>;
+};
+					
+zynq_clk_setup
+		for (i = 0; i < clk_max; i++) 
+			of_property_read_string_index(np, "clock-output-names"） //从dts中获取clock-output-names 
+			

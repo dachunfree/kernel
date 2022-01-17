@@ -87,8 +87,8 @@ struct clocksource {
 	const char *name;
 	struct list_head list;
 	int rating; //表示时钟源的质量
-	int (*enable)(struct clocksource *cs);
-	void (*disable)(struct clocksource *cs);
+	int (*enable)(struct clocksource *cs); //启动该clock
+	void (*disable)(struct clocksource *cs);//关闭clock
 	unsigned long flags; //标志位。
 	void (*suspend)(struct clocksource *cs);
 	void (*resume)(struct clocksource *cs);

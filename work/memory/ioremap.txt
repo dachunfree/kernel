@@ -1,0 +1,65 @@
+
+__ioremap((addr), (size), __pgprot(PROT_DEVICE_nGnRE))
+
+了解下：PROT_DEVICE_nGnRE 的问题
+
+
+
+
+1 normal memory
+2 device memory
+3 ARM64 linux的内存类型
+4 参考文档
+ARM memory类型分为normal memory和device memory。
+
+1 normal memory
+normal memory就是我们平常所说的内存，对该种memory访问时无副作用(side effect)，即第n次访问与第n+1次访问没有任何差别（对比device memory的side effect特性，更容易理解一些）。
+
+进一步地，通过memory attribute可以对normal memory进行细分，一段vma（virtual memory address）的memory attribute定义在页表的描述符中。
+
+是否可共享：
+shareable:可以被所有PE（Processing Element，处理元素）访问，包括inner shareable和outer shareable。
+non-shareable：只能被唯一的PE访问。
+是否支持缓存：
+write-through cacheable：同时写入cache与内存，可以理解为写穿；
+write-back cacheable：只写入cache，不更新内存，内存更新操作放到之后的适当时机；
+non-cacheable：无cache，直接读写内存。
+2 device memory
+定义： The Device memory type attributes define memory locations where an access to the location can cause side-effects, or where the value returned for a load can vary depending on the number of loads performed. Typically, the Device memory attributes are used for memory-mapped peripherals and similar locations.
+
+简言之，device memory是外设对应的物理地址空间，对该部分memory访问时，可能存在副作用（side effect），比如
+
+某些状态寄存器可能read clear；
+某些寄存器有写入顺序（否则写入不成功）；
+设备fifo地址固定不变，但是每次访问，内部的移位寄存器就会将下一个数据移出来^[1]^，因此访问同一地址第n次访问与第n+1次访问结果是不同的。
+进一步地，通过memory attribute可以对device memory进行细分
+
+是否可合并访问
+non-Gathering（nG）：处理器必须严格按照代码中内存访问来进行，不能把多次访问合并成一次。例如，代码中有两次对同样一个地址的读访问，此时处理器必须严格进行两次read操作。
+Gathering（G）：处理器可以对内存访问进行合并。
+是否可乱序
+non re-ordering（nR）：处理器不允许对内存访问指令进行重排，必须严格执行program order；
+re-ordering（R）：处理器允许对内存访问指令进行重排。
+写入是否可中途返回（Early Write Acknowledgement--EWA）（E or nE）
+PE对内存的访问是有问有答的（专业术语叫transaction）1，对于写入操作，PE需要收到write ack才能确定完成了一个transaction。为了加快写的速度，系统的中间环节可能会设定一些write buffer（比如cache），nE代表写操作的write ack必须来自最终目的地，而不是中间的write buffer。
+
+3 ARM64 linux的内存类型
+linux5.4.0 arm64定义了以下6种内存类型（memory type），用于设定页表中的内存类型标志位。
+
+/* arch/arm64/include/asm/memory.h */
+/*
+ * Memory types available.
+ */
+#define MT_DEVICE_nGnRnE 0
+#define MT_DEVICE_nGnRE  1 //ioremap特性
+#define MT_DEVICE_GRE  2
+#define MT_NORMAL_NC  3
+#define MT_NORMAL  4
+#define MT_NORMAL_WT  5
+
+MT_DEVICE_nGnRnE:不使用cache、不允许合并对内存的访问、不允许对指令重排、写操作的ack必须来自最终的目的地而不能是中间write buffer的设备内存;
+MT_DEVICE_nGnRE:不使用cache、不允许合并对内存的访问、不允许对指令重排的设备内存；
+MT_DEVICE_GRE:不使用cache的设备内存;
+MT_NORMAL_NC:non-cached系统内存，cpu直接进行内存读写，不经过缓存;
+MT_NORMAL:可缓存的系统内存(采用write back机制，只写入cache，不马上更新内存，留待适当时机更新内存);
+MT_NORMAL_WT:带write-through的系统内存,同时写cache和内存。

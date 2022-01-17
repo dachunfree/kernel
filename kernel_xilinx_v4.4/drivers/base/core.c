@@ -1089,6 +1089,7 @@ int device_add(struct device *dev)
 	error = device_add_attrs(dev);
 	if (error)
 		goto AttrsError;
+	//将device 添加到bus的私有链表中
 	error = bus_add_device(dev);
 	if (error)
 		goto BusError;

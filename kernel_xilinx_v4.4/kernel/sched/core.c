@@ -2238,7 +2238,7 @@ int sched_fork(unsigned long clone_flags, struct task_struct *p)
 	}
 
 	if (p->sched_class->task_fork)
-		p->sched_class->task_fork(p);
+		p->sched_class->task_fork(p); // task_fork_fair
 
 	/*
 	 * The child is not yet in the pid-hash so no cgroup attach races,

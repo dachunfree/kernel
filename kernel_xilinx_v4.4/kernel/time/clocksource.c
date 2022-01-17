@@ -100,7 +100,7 @@ clocks_calc_mult_shift(u32 *mult, u32 *shift, u32 from, u32 to, u32 maxsec)
  * override_name:
  *	Name of the user-specified clocksource.
  */
-static struct clocksource *curr_clocksource;
+static struct clocksource *curr_clocksource; //当前精度最高的时钟。
 static LIST_HEAD(clocksource_list);
 static DEFINE_MUTEX(clocksource_mutex);
 static char override_name[CS_NAME_LEN];
@@ -734,6 +734,8 @@ int __clocksource_register_scale(struct clocksource *cs, u32 scale, u32 freq)
 	/* Add clocksource to the clocksource list */
 	mutex_lock(&clocksource_mutex);
 	clocksource_enqueue(cs); //将该clock source按照rating的顺序插入到全局clock source list中
+	/*clocksource watch dog当然是用来监视clock source的运行情况，
+	  如果watch dog发现它监视的clocksource的精度有问题，会修改其rating*/
 	clocksource_enqueue_watchdog(cs);
 	/*选择一个合适的clock source。kernel当然是选用一个rating最高的clocksource作为当
 	  前的正在使用的那个clock source。当注册一个新的clock source的时候当然要调用clocksource_select，

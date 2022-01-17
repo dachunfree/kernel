@@ -309,7 +309,7 @@ static int cdns_spi_setup_transfer(struct spi_device *spi,
 static void cdns_spi_fill_tx_fifo(struct cdns_spi *xspi)
 {
 	unsigned long trans_cnt = 0;
-
+	//填满tx fifo
 	while ((trans_cnt < CDNS_SPI_FIFO_DEPTH) &&
 	       (xspi->tx_bytes > 0)) {
 		if (xspi->txbuf)
@@ -362,6 +362,7 @@ static irqreturn_t cdns_spi_irq(int irq, void *dev_id)
 		trans_cnt = xspi->rx_bytes - xspi->tx_bytes;
 
 		/* Read out the data from the RX FIFO */
+		//从RX FIFO中获取数据。
 		while (trans_cnt) {
 			u8 data;
 
@@ -372,12 +373,13 @@ static irqreturn_t cdns_spi_irq(int irq, void *dev_id)
 			xspi->rx_bytes--;
 			trans_cnt--;
 		}
-
+		//发送方向的数据
 		if (xspi->tx_bytes) {
 			/* There is more data to send */
 			cdns_spi_fill_tx_fifo(xspi);
 		} else {
 			/* Transfer is completed */
+			//传输完成。唤醒进程。spi_transfer_one_message中
 			cdns_spi_write(xspi, CDNS_SPI_IDR_OFFSET,
 				       CDNS_SPI_IXR_DEFAULT_MASK);
 			spi_finalize_current_transfer(master);
@@ -406,6 +408,7 @@ static int cdns_prepare_message(struct spi_master *master,
  *
  * Return:	Number of bytes transferred in the last transfer
  */
+ /*配置spi控制器。填入tx fifo,起送spi 传输。*/
 static int cdns_transfer_one(struct spi_master *master,
 			     struct spi_device *spi,
 			     struct spi_transfer *transfer)
@@ -416,7 +419,7 @@ static int cdns_transfer_one(struct spi_master *master,
 	xspi->rxbuf = transfer->rx_buf;
 	xspi->tx_bytes = transfer->len;
 	xspi->rx_bytes = transfer->len;
-
+	//里面设置spi时钟相关的
 	cdns_spi_setup_transfer(spi, transfer);
 
 	cdns_spi_fill_tx_fifo(xspi);
@@ -472,6 +475,19 @@ static int cdns_unprepare_transfer_hardware(struct spi_master *master)
  *
  * Return:	0 on success and error value on error
  */
+ /*
+ spi0: spi@ff040000 {
+	compatible = "cdns,spi-r1p6";
+	status = "disabled";
+	interrupt-parent = <&gic>;
+	interrupts = <0 19 4>;
+	reg = <0x0 0xff040000 0x0 0x1000>;
+	clock-names = "ref_clk", "pclk";
+	#address-cells = <1>;
+	#size-cells = <0>;
+	power-domains = <&zynqmp_firmware PD_SPI_0>;
+};
+*/
 static int cdns_spi_probe(struct platform_device *pdev)
 {
 	int ret = 0, irq;

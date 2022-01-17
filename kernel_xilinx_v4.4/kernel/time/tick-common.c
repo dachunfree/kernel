@@ -86,6 +86,7 @@ int tick_is_oneshot_available(void)
  都会调用tick_handle_periodic函数进行周期性tick中要处理的task，具体如下：*/
 static void tick_periodic(int cpu)
 {
+	//tick_setup_device 中设置了 tick_do_timer_cpu。
 	if (tick_do_timer_cpu == cpu) { //选择一个全局时钟负责运行
 		write_seqlock(&jiffies_lock);
 
@@ -152,7 +153,7 @@ void tick_handle_periodic(struct clock_event_device *dev)
  //period中断处理函数。per-cpu的 clock_event_device
 void tick_setup_periodic(struct clock_event_device *dev, int broadcast)
 {
-	tick_set_periodic_handler(dev, broadcast); //设置dev->event_handler，即时钟中断处理函数
+	tick_set_periodic_handler(dev, broadcast); //设置dev->event_handler，即时钟中断处理函数.tick_handle_periodic
 
 	/* Broadcast setup ? */
 	if (!tick_device_is_functional(dev))
@@ -199,6 +200,10 @@ static void tick_setup_device(struct tick_device *td,
 		 * If no cpu took the do_timer update, assign it to
 		 * this cpu:
 		 */
+		 /*在multi core的环境下，每一个CPU core都自己的tick device（可以称之local tick device），
+		 这些tick device中有一个被选择做global tick device，负责维护整个系统的jiffies。
+		 如果该tick device的是第一次设定，并且目前系统中没有global tick设备，那么可以考
+		 虑选择该tick设备作为global设备，进行系统时间和jiffies的更新*/
 		if (tick_do_timer_cpu == TICK_DO_TIMER_BOOT) {
 			if (!tick_nohz_full_cpu(cpu))
 				tick_do_timer_cpu = cpu;
@@ -211,8 +216,11 @@ static void tick_setup_device(struct tick_device *td,
 		/*
 		 * Startup in periodic mode first.
 		 */
+		/*在最初设定tick device的时候，缺省被设定为周期性的tick。当然，这仅仅是初始设定，
+		 实际上在满足一定的条件下，在适当的时间，tick device是可以切换到其他模式的*/
 		td->mode = TICKDEV_MODE_PERIODIC;
 	} else {
+		//旧的clockevent设备就要退居二线了，将其handler修改为clockevents_handle_noop
 		handler = td->evtdev->event_handler;
 		next_event = td->evtdev->next_event;
 		td->evtdev->event_handler = clockevents_handle_noop;
@@ -224,6 +232,7 @@ static void tick_setup_device(struct tick_device *td,
 	 * When the device is not per cpu, pin the interrupt to the
 	 * current cpu:
 	 */
+	 //如果不是local timer，那么还需要调用irq_set_affinity函数，将该clockevent的中断，定向到本CPU。
 	if (!cpumask_equal(newdev->cpumask, cpumask))
 		irq_set_affinity(newdev->irq, cpumask); //适合spi的ttc，绑定到当前cpu
 
@@ -317,9 +326,13 @@ void tick_check_new_device(struct clock_event_device *newdev)
 	int cpu;
 
 	cpu = smp_processor_id();
+	//在多核架构下，系统为每一个cpu建立了一个tick device
 	td = &per_cpu(tick_cpu_device, cpu);
 	curdev = td->evtdev;
-
+	/*
+	是否为本CPU服务的clock event device？如果不是，那么不需要考虑per cpu tick device的初始化
+	或者更换该cpu tick device的clock event device。当然，这是还是可以考虑用在broadcast tick device的
+	*/
 	/* cpu local device ? */
 	if (!tick_check_percpu(curdev, newdev, cpu))
 		goto out_bc;
@@ -340,6 +353,8 @@ void tick_check_new_device(struct clock_event_device *newdev)
 		clockevents_shutdown(curdev);
 		curdev = NULL;
 	}
+	/*上层的tick device驱动层会根据情况（clock event的精度，是否local cpu的）
+	调用clockevents_exchange_device 进行clock event设备的更换，*/
 	clockevents_exchange_device(curdev, newdev);
 	tick_setup_device(td, newdev, cpu, cpumask_of(cpu));
 	if (newdev->features & CLOCK_EVT_FEAT_ONESHOT)

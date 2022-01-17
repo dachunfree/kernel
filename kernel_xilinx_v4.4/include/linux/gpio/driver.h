@@ -121,7 +121,7 @@ struct gpio_chip {
 	void			(*dbg_show)(struct seq_file *s,
 						struct gpio_chip *chip);
 	int			base;
-	u16			ngpio;
+	u16			ngpio; //这个gpio控制器管理的gpio数量
 	struct gpio_desc	*desc;
 	const char		*const *names;
 	bool			can_sleep;

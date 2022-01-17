@@ -1026,7 +1026,7 @@ static void setup_object_debug(struct kmem_cache *s, struct page *page,
 {
 	if (!(s->flags & (SLAB_STORE_USER|SLAB_RED_ZONE|__OBJECT_POISON)))
 		return;
-
+	//RED ZONE 设置为0xbb
 	init_object(s, object, SLUB_RED_INACTIVE);
 	init_tracking(s, object);
 }
@@ -1451,6 +1451,7 @@ static struct page *allocate_slab(struct kmem_cache *s, gfp_t flags, int node)
 
 	order = compound_order(page);
 	page->slab_cache = s;
+	//设置page的标志位为slab
 	__SetPageSlab(page);
 	if (page_is_pfmemalloc(page))
 		SetPageSlabPfmemalloc(page);
@@ -1461,7 +1462,7 @@ static struct page *allocate_slab(struct kmem_cache *s, gfp_t flags, int node)
 		memset(start, POISON_INUSE, PAGE_SIZE << order);
 
 	kasan_poison_slab(page);
-
+	//开始把物理页进行分割成object
 	for_each_object_idx(p, idx, s, start, page->objects) {
 		//设置object中的魔数
 		setup_object(s, page, p);
@@ -1643,6 +1644,7 @@ static inline void *acquire_slab(struct kmem_cache *s,
 	}
 
 	VM_BUG_ON(new.frozen);
+	//冻结标志为per-cpu 的页
 	new.frozen = 1;
 
 	if (!__cmpxchg_double_slab(s, page,
@@ -1685,13 +1687,14 @@ static void *get_partial_node(struct kmem_cache *s, struct kmem_cache_node *n,
 
 		if (!pfmemalloc_match(page, flags))
 			continue;
-
+		//从 kmem_cache_node 中获取一页
 		t = acquire_slab(s, n, page, object == NULL, &objects);
 		if (!t)
 			break;
 
 		available += objects;
 		if (!object) {
+			//从kmem_cache_node 中分配的一页放到 kmem_cache_cpu中，并从 kmem_cache_node LRU中删除
 			c->page = page;
 			stat(s, ALLOC_FROM_PARTIAL);
 			object = t;
@@ -2100,7 +2103,7 @@ static void put_cpu_partial(struct kmem_cache *s, struct page *page, int drain)
 		pobjects = 0;
 		//获取本地slab partial链表
 		oldpage = this_cpu_read(s->cpu_slab->partial);
-
+		//pobjects(第一个page)存储着per cpu partial链表中所有slab可供分配obj的总数
 		if (oldpage) {
 			pobjects = oldpage->pobjects;
 			pages = oldpage->pages;
@@ -2277,7 +2280,7 @@ static inline void *new_slab_objects(struct kmem_cache *s, gfp_t flags,
 
 	if (freelist)
 		return freelist;
-	//如果numa node中也没有，那就从buddy中分配一页当slab
+	//如果numa node中也没有，那就从buddy中分配一页当slab。其中也会设置slub debug相关的信息
 	page = new_slab(s, flags, node);
 	if (page) {
 		c = raw_cpu_ptr(s->cpu_slab);
@@ -2566,6 +2569,13 @@ redo:
 		 * against code executing on this cpu *not* from access by
 		 * other cpus.
 		 */
+		/*
+		进行判断并交换:
+		if(s->cpu_slab->freelist == object && s->cpu_slab->tid == tid) {
+			 s->cpu_slab->freelist = next_object;
+			 s->cpu_slab->tid = next_tid(tid);
+		}
+		*/
 		if (unlikely(!this_cpu_cmpxchg_double(
 				s->cpu_slab->freelist, s->cpu_slab->tid,
 				object, tid,
@@ -2692,6 +2702,9 @@ static void __slab_free(struct kmem_cache *s, struct page *page,
          !prior = true，slab中没有可用的对象，即slab为满。
          !was_frozen = true，slab没有被冻结，即不属于某一个CPU
          的slab cache
+         was_frozen //是否属于per-cpu
+
+         freelist链表 为空 或者 为满 && 不属于per-cpu
         */
 		if ((!new.inuse || !prior) && !was_frozen) {
 
@@ -2858,9 +2871,9 @@ redo:
 	barrier();
 	//最简单的释放情形1：此对象x的slab正好处于当前cpu的缓存中
 	if (likely(page == c->page)) {
-		//object->next = c->freelist
+		//tail_obj->next = c->freelist.头插法
 		set_freepointer(s, tail_obj, c->freelist);
-
+		/*进行交换:s->cpu_slab->freelist = head*/
 		if (unlikely(!this_cpu_cmpxchg_double(
 				s->cpu_slab->freelist, s->cpu_slab->tid,
 				c->freelist, tid,
@@ -4050,7 +4063,7 @@ __kmem_cache_alias(const char *name, size_t size, size_t align,
 int __kmem_cache_create(struct kmem_cache *s, unsigned long flags)
 {
 	int err;
-
+	// object 外围增加debug信息监测越界
 	err = kmem_cache_open(s, flags);
 	if (err)
 		return err;

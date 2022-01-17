@@ -155,7 +155,7 @@ struct hrtimer_clock_base {
 } __attribute__((__aligned__(HRTIMER_CLOCK_BASE_ALIGN)));
 
 enum  hrtimer_base_type {
-	HRTIMER_BASE_MONOTONIC,   //单调递增的monotonic时间，不包含休眠时间
+	HRTIMER_BASE_MONOTONIC,   //单调递增时间，不包含休眠时间
 	HRTIMER_BASE_REALTIME,    //平常使用的墙上真实时间
 	HRTIMER_BASE_BOOTTIME,    //单调递增的boottime，包含休眠时间
 	HRTIMER_BASE_TAI,

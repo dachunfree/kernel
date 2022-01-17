@@ -1,0 +1,132 @@
+/********************************************************************************************/
+
+								zynq ultrascale gpio 驱动分析
+
+/*******************************************************************************************/
+
+3大硬件配置功能
+1.pin controller。配置引脚的特性：普通GPIO 还是 spi cs？
+2.可以配置成spi controller，也可以配置成 gpio controller。配置完成后，配置输入输出，配置拉高拉低
+3.gpio controller。中断的enable和disable，触发方式，中断状态清除。
+
+3个结构体之间的关系：
+
+struct pinctrl {
+    struct list_head node;－－系统中的所有device的pin control state holder被挂入到了一个全局链表中
+    struct device *dev;－－－该pin control state holder对应的device
+    struct list_head states;－－－－该设备的所有的状态被挂入到这个链表中
+    struct pinctrl_state *state;－－－当前的pin control state------------
+    struct list_head dt_maps;－－－－mapping table											|
+    struct kref users;－－－－－－reference count												|
+};																																			|
+																																				|
+struct pinctrl_state {--------<--------------------<--------------------|
+    struct list_head node;－－－挂入链表头的节点-------------------------
+    const char *name;－－－－－该state的名字														|
+    struct list_head settings;－－－属于该状态的所有的settings					|
+};																																			|
+																																				|
+struct pinctrl_setting {--<----------------<-----------------<----------|
+    struct list_head node;
+    enum pinctrl_map_type type;
+    struct pinctrl_dev *pctldev;
+    const char *dev_name;
+    union {
+        struct pinctrl_setting_mux mux;
+        struct pinctrl_setting_configs configs;
+    } data;
+};
+
+enum pinctrl_map_type {
+	PIN_MAP_TYPE_INVALID,
+	PIN_MAP_TYPE_DUMMY_STATE,
+	PIN_MAP_TYPE_MUX_GROUP, //功能复用的setting
+	PIN_MAP_TYPE_CONFIGS_PIN, //设定单一一个pin的电气特性
+	PIN_MAP_TYPE_CONFIGS_GROUP,//定单pin group的电气特性
+};
+
+看一眼代码设置吧，光看这个结构太晕了：
+gpio_set_value(spi->cs_gpio, !enable);
+	__gpio_set_value(gpio, value);
+		gpiod_set_raw_value(gpio_to_desc(gpio), value); //int gpio转换成gpio describe
+			_gpiod_set_raw_value(desc, value);
+				chip->set(chip, gpio_chip_hwgpio(desc), value);
+					chip->get = zynq_gpio_get_value;
+						struct zynq_gpio *gpio = to_zynq_gpio(chip); //通过
+gpio的dts：
+gpio: gpio@ff0a0000 {
+	compatible = "xlnx,zynqmp-gpio-1.0";
+	status = "disabled";
+	#gpio-cells = <0x2>;
+	gpio-controller;
+	interrupt-parent = <&gic>;
+	interrupts = <0 16 4>;
+	interrupt-controller;
+	#interrupt-cells = <2>;
+	reg = <0x0 0xff0a0000 0x0 0x1000>;
+	power-domains = <&zynqmp_firmware PD_GPIO>;
+};							
+	
+应用：
+具体看下 pinctrl-bindings.txt
+https://www.bilibili.com/read/cv5153694
+dts
+/******************pin controller***************************/
+inctrl_gpio0_default: gpio0-default {
+     mux {
+         function = "gpio0";  //复用为哪个功能？
+         groups = "gpio0_7_grp", "gpio0_8_grp", "gpio0_20_grp", "gpio0_21_grp"; //用到那些引脚
+     };
+     conf {
+         groups = "gpio0_7_grp", "gpio0_8_grp", "gpio0_20_grp", "gpio0_21_grp";
+         slew-rate = <0>;
+         io-standard = <1>;
+     };
+     conf-pull-none {
+         pins = "MIO7", "MIO8";
+         bias-disable;
+     };
+ };
+/*******************gpio controller **************************/
+&gpio0 {
+    pinctrl-names = "default";
+    pinctrl-0 = <&pinctrl_gpio0_default>;
+};
+ 
+{
+		gpio_pa1 = <&gpio0 21 0>;
+		gpio_pa2 = <&gpio0 20 0>;
+}
+
+io-standard表示的含义：
+ - io-standard: Configure the pin to use the selected IO standard according to this mapping: 
+ 1: LVCMOS18 
+ 2: LVCMOS25 
+ 3: LVCMOS33 
+ 4: HSTL
+ 
+再看个mux复用的例子：
+
+device { 
+	pinctrl-names = "active", "idle";
+	pinctrl-0 = <&state_0_node_a>;
+	pinctrl-1 = <&state_1_node_a &state_1_node_b>; 
+}; 
+state_0_node_a { 
+	uart0 { 
+		function = "uart0";
+		groups = "u0rxtx", "u0rtscts";
+		}; 
+}; 
+state_1_node_a { 
+	spi0 { 
+	function = "spi0";
+	groups = "spi0pins"; 
+	}; 
+}; 
+state_2_node_a { 
+	function = "i2c0";
+	pins = "mfio29", "mfio30"; 
+}; 
+
+

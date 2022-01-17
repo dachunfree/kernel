@@ -911,7 +911,7 @@ static int __gpiod_request(struct gpio_desc *desc, const char *label)
 	if (chip->request) {
 		/* chip->request may sleep */
 		spin_unlock_irqrestore(&gpio_lock, flags);
-		status = chip->request(chip, gpio_chip_hwgpio(desc));
+		status = chip->request(chip, gpio_chip_hwgpio(desc)); //zynq∆ΩÃ® zynq_gpio_request
 		spin_lock_irqsave(&gpio_lock, flags);
 
 		if (status < 0) {
@@ -1399,7 +1399,7 @@ static void _gpiod_set_raw_value(struct gpio_desc *desc, bool value)
 
 	chip = desc->chip;
 	trace_gpio_value(desc_to_gpio(desc), 0, value);
-	if (test_bit(FLAG_OPEN_DRAIN, &desc->flags))
+	if (test_bit(FLAG_OPEN_DRAIN, &desc->flags)) //ø™¬©
 		_gpio_set_open_drain_value(desc, value);
 	else if (test_bit(FLAG_OPEN_SOURCE, &desc->flags))
 		_gpio_set_open_source_value(desc, value);

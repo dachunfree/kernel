@@ -929,7 +929,7 @@ static int spi_transfer_one_message(struct spi_master *master,
 
 	SPI_STATISTICS_INCREMENT_FIELD(statm, messages);
 	SPI_STATISTICS_INCREMENT_FIELD(stats, messages);
-
+	/*spi_read 函数中,将spi_transfer加入到spi_message链表中*/
 	list_for_each_entry(xfer, &msg->transfers, transfer_list) {
 		trace_spi_transfer_start(msg, xfer);
 
@@ -938,7 +938,7 @@ static int spi_transfer_one_message(struct spi_master *master,
 
 		if (xfer->tx_buf || xfer->rx_buf) {
 			reinit_completion(&master->xfer_completion);
-
+			//调用这个进行发送 cdns_transfer_one
 			ret = master->transfer_one(master, msg->spi, xfer);
 			if (ret < 0) {
 				SPI_STATISTICS_INCREMENT_FIELD(statm,
@@ -949,16 +949,16 @@ static int spi_transfer_one_message(struct spi_master *master,
 					"SPI transfer failed: %d\n", ret);
 				goto out;
 			}
-
+			//设置完成后，等待中断处理函数完成发送，唤醒。
 			if (ret > 0) {
 				ret = 0;
 				ms = xfer->len * 8 * 1000 / xfer->speed_hz;
 				ms += ms + 100; /* some tolerance */
-
+				//中断唤醒 cdns_spi_irq。
 				ms = wait_for_completion_timeout(&master->xfer_completion,
 								 msecs_to_jiffies(ms));
 			}
-
+			//超时处理
 			if (ms == 0) {
 				SPI_STATISTICS_INCREMENT_FIELD(statm,
 							       timedout);
@@ -998,6 +998,7 @@ static int spi_transfer_one_message(struct spi_master *master,
 	}
 
 out:
+	//传输完成，设置片选信号
 	if (ret != 0 || !keep_cs)
 		spi_set_cs(msg->spi, false);
 
@@ -1006,7 +1007,7 @@ out:
 
 	if (msg->status && master->handle_err)
 		master->handle_err(master, msg);
-
+	//spi_complete 函数
 	spi_finalize_current_message(master);
 
 	return ret;
@@ -1155,7 +1156,7 @@ static void __spi_pump_messages(struct spi_master *master, bool in_kthread)
 		spi_finalize_current_message(master);
 		return;
 	}
-
+	//真正的发数据函数。spi_transfer_one_message
 	ret = master->transfer_one_message(master, master->cur_msg);
 	if (ret) {
 		dev_err(&master->dev,
@@ -1178,11 +1179,11 @@ static void spi_pump_messages(struct kthread_work *work)
 
 static int spi_init_queue(struct spi_master *master)
 {
-	struct sched_param param = { .sched_priority = MAX_RT_PRIO - 1 };
+	struct sched_param param = { .sched_priority = MAX_RT_PRIO - 1 }; /*实时优先级*/
 
 	master->running = false;
 	master->busy = false;
-
+	//初始化worker
 	init_kthread_worker(&master->kworker);
 	master->kworker_task = kthread_run(kthread_worker_fn,
 					   &master->kworker, "%s",
@@ -1191,6 +1192,7 @@ static int spi_init_queue(struct spi_master *master)
 		dev_err(&master->dev, "failed to create message pump task\n");
 		return PTR_ERR(master->kworker_task);
 	}
+	//kthread_work->func = spi_pump_messages。在上面kthread_worker_fn 线程中会调用。
 	init_kthread_work(&master->pump_messages, spi_pump_messages);
 
 	/*
@@ -1271,7 +1273,7 @@ void spi_finalize_current_message(struct spi_master *master)
 
 	mesg->state = NULL;
 	if (mesg->complete)
-		mesg->complete(mesg->context);
+		mesg->complete(mesg->context); //spi_read 中 spi_complete
 }
 EXPORT_SYMBOL_GPL(spi_finalize_current_message);
 
@@ -1371,6 +1373,7 @@ static int __spi_queued_transfer(struct spi_device *spi,
 
 	list_add_tail(&msg->queue, &master->queue);
 	if (!master->busy && need_pump)
+		//将worker 加入 work中。
 		queue_kthread_work(&master->kworker, &master->pump_messages);
 
 	spin_unlock_irqrestore(&master->queue_lock, flags);
@@ -1713,6 +1716,32 @@ struct spi_master *spi_alloc_master(struct device *dev, unsigned size)
 EXPORT_SYMBOL_GPL(spi_alloc_master);
 
 #ifdef CONFIG_OF
+/*
+用GPIO模拟spi的
+spi_gpio: spi-gpio {
+	compatible = "spi-gpio";
+	#address-cells = <1>;
+	#size-cells = <0>;
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_gpiospi0>;
+	status = "okay";
+
+	gpio-sck = <&gpio4 15 GPIO_ACTIVE_HIGH>;
+	gpio-mosi = <&gpio4 12 GPIO_ACTIVE_HIGH>;
+	gpio-miso = <&gpio4 11 GPIO_ACTIVE_HIGH>;
+	num-chipselects = <1>;
+	cs-gpios = <&gpio4 14 GPIO_ACTIVE_HIGH>;
+
+	eeprom@0 {
+		compatible = "eeprom-93xx46";
+		reg = <0>;
+		spi-max-frequency = <1000000>;
+		spi-cs-high;
+		data-size = <8>;
+	};
+};
+*/
+
 static int of_spi_register_master(struct spi_master *master)
 {
 	int nb, i, *cs;
@@ -1785,7 +1814,7 @@ int spi_register_master(struct spi_master *master)
 
 	if (!dev)
 		return -ENODEV;
-
+	//从dts中获取CS片选信号。放到master->cs_gpios
 	status = of_spi_register_master(master);
 	if (status)
 		return status;
@@ -1847,6 +1876,7 @@ int spi_register_master(struct spi_master *master)
 	mutex_unlock(&board_lock);
 
 	/* Register devices from the device tree and ACPI */
+	//从dts中解析出来数据放到spi device中。
 	of_register_spi_devices(master);
 	acpi_register_spi_devices(master);
 done:
@@ -2219,7 +2249,7 @@ static int __spi_async(struct spi_device *spi, struct spi_message *message)
 
 	trace_spi_message_submit(message);
 
-	return master->transfer(spi, message);
+	return master->transfer(spi, message); // spi_queued_transfer
 }
 
 /**
@@ -2319,7 +2349,7 @@ int spi_async_locked(struct spi_device *spi, struct spi_message *message)
 
 	spin_lock_irqsave(&master->bus_lock_spinlock, flags);
 
-	ret = __spi_async(spi, message);
+	ret = __spi_async(spi, message); //异步方式
 
 	spin_unlock_irqrestore(&master->bus_lock_spinlock, flags);
 
@@ -2344,7 +2374,7 @@ static void spi_complete(void *arg)
 static int __spi_sync(struct spi_device *spi, struct spi_message *message,
 		      int bus_locked)
 {
-	DECLARE_COMPLETION_ONSTACK(done);
+	DECLARE_COMPLETION_ONSTACK(done); //创建工作队列
 	int status;
 	struct spi_master *master = spi->master;
 	unsigned long flags;
@@ -2368,6 +2398,7 @@ static int __spi_sync(struct spi_device *spi, struct spi_message *message,
 	 * This code would be less tricky if we could remove the
 	 * support for driver implemented message queues.
 	 */
+	 /*spi_master_initialize_queue(master) 函数中*/
 	if (master->transfer == spi_queued_transfer) {
 		spin_lock_irqsave(&master->bus_lock_spinlock, flags);
 
@@ -2377,12 +2408,12 @@ static int __spi_sync(struct spi_device *spi, struct spi_message *message,
 
 		spin_unlock_irqrestore(&master->bus_lock_spinlock, flags);
 	} else {
-		status = spi_async_locked(spi, message);
+		status = spi_async_locked(spi, message); //异步方式，不进行阻塞
 	}
 
 	if (!bus_locked)
 		mutex_unlock(&master->bus_lock_mutex);
-
+	//status = 0，表示上面函数加入队列成功，同步模式要开启等待传输完成。
 	if (status == 0) {
 		/* Push out the messages in the calling context if we
 		 * can.
@@ -2392,9 +2423,9 @@ static int __spi_sync(struct spi_device *spi, struct spi_message *message,
 						       spi_sync_immediate);
 			SPI_STATISTICS_INCREMENT_FIELD(&spi->statistics,
 						       spi_sync_immediate);
-			__spi_pump_messages(master, false);
+			__spi_pump_messages(master, false); //里面发送内容
 		}
-
+		//同步方式，等待传输完成
 		wait_for_completion(&done);
 		status = message->status;
 	}

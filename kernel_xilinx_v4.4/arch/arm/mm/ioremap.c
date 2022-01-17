@@ -374,6 +374,7 @@ void __iomem * (*arch_ioremap_caller)(phys_addr_t, size_t,
 void __iomem *ioremap(resource_size_t res_cookie, size_t size)
 {
 	//get_mem_type(MT_DEVICE);
+	// __arm_ioremap_caller
 	return arch_ioremap_caller(res_cookie, size, MT_DEVICE,
 				   __builtin_return_address(0));
 }

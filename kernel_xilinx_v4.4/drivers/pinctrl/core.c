@@ -801,6 +801,7 @@ static struct pinctrl *create_pinctrl(struct device *dev)
 	 * mapping, this is what consumers will get when requesting
 	 * a pin control handle with pinctrl_get()
 	 */
+	 /*分配pin control state holder占用的内存并初始化*/
 	p = kzalloc(sizeof(*p), GFP_KERNEL);
 	if (p == NULL) {
 		dev_err(dev, "failed to alloc struct pinctrl\n");
@@ -809,7 +810,8 @@ static struct pinctrl *create_pinctrl(struct device *dev)
 	p->dev = dev;
 	INIT_LIST_HEAD(&p->states);
 	INIT_LIST_HEAD(&p->dt_maps);
-
+	/*mapping table这个database的建立也是动态的，当第一次调用pin control state holder的get函数的时候，
+	就会通过调用pinctrl_dt_to_map来建立该device需要的mapping entry*/
 	ret = pinctrl_dt_to_map(p);
 	if (ret < 0) {
 		kfree(p);
@@ -824,7 +826,7 @@ static struct pinctrl *create_pinctrl(struct device *dev)
 		/* Map must be for this device */
 		if (strcmp(map->dev_name, devname))
 			continue;
-
+		/*－分析一个mapping entry，把这个setting的代码加入到holder中*/
 		ret = add_setting(p, map);
 		/*
 		 * At this point the adding of a setting may:
@@ -856,6 +858,7 @@ static struct pinctrl *create_pinctrl(struct device *dev)
 	kref_init(&p->users);
 
 	/* Add the pinctrl handle to the global list */
+	/* 把这个新增加的pin control state holder加入到全局链表中 */
 	mutex_lock(&pinctrl_list_mutex);
 	list_add_tail(&p->node, &pinctrl_list);
 	mutex_unlock(&pinctrl_list_mutex);
@@ -1072,7 +1075,6 @@ static void devm_pinctrl_release(struct device *dev, void *res)
 struct pinctrl *devm_pinctrl_get(struct device *dev)
 {
 	struct pinctrl **ptr, *p;
-
 	ptr = devres_alloc(devm_pinctrl_release, sizeof(*ptr), GFP_KERNEL);
 	if (!ptr)
 		return ERR_PTR(-ENOMEM);

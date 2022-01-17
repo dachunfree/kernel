@@ -367,7 +367,7 @@ struct cfs_rq {
 	struct load_weight load;  /*就绪队列权重，就绪队列管理的所有调度实体权重之和*/
 	unsigned int nr_running, h_nr_running;  //nr_running:就绪队列上调度实体的个数.h_nr_running:包含组调度下面的调度实体个数
 
-	u64 exec_clock;
+	u64 exec_clock; //cfs队列中 所有进程运行时间。
 	u64 min_vruntime; //跟踪就绪队列上所有调度实体的最小虚拟时间.用于在睡眠进程被唤醒后以及新进程被创建好时，进行虚拟时间补偿或者惩罚
 #ifndef CONFIG_64BIT
 	u64 min_vruntime_copy;
@@ -1204,13 +1204,14 @@ static const u32 prio_to_wmult[40] = {
 #define RETRY_TASK		((void *)-1UL)
 
 struct sched_class {
-	const struct sched_class *next;
+	const struct sched_class *next; //next成员指向下一个调度类（比自己低一个优先级）
 
-	void (*enqueue_task) (struct rq *rq, struct task_struct *p, int flags);
-	void (*dequeue_task) (struct rq *rq, struct task_struct *p, int flags);
+	void (*enqueue_task) (struct rq *rq, struct task_struct *p, int flags); //向该调度器管理的runqueue中添加一个进程
+	void (*dequeue_task) (struct rq *rq, struct task_struct *p, int flags);//向该调度器管理的runqueue中删除一个进程
 	void (*yield_task) (struct rq *rq);
 	bool (*yield_to_task) (struct rq *rq, struct task_struct *p, bool preempt);
-
+	/*当一个进程被唤醒或者创建的时候，需要检查当前进程是否可以抢占当前cpu上正在运行的进程，
+	如果可以抢占需要标记TIF_NEED_RESCHED flag*/
 	void (*check_preempt_curr) (struct rq *rq, struct task_struct *p, int flags);
 
 	/*
@@ -1221,6 +1222,7 @@ struct sched_class {
 	 * May return RETRY_TASK when it finds a higher prio class has runnable
 	 * tasks.
 	 */
+	 /*从runqueue中选择一个最适合运行的task。这也算是调度器比较核心的一个操作*/
 	struct task_struct * (*pick_next_task) (struct rq *rq,
 						struct task_struct *prev);
 	void (*put_prev_task) (struct rq *rq, struct task_struct *p);

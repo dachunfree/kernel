@@ -127,7 +127,7 @@ struct bus_type {
 
 	const struct iommu_ops *iommu_ops;
 
-	struct subsys_private *p;
+	struct subsys_private *p; //里面klist链表挂载驱动信息
 	struct lock_class_key lock_key;
 };
 

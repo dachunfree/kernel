@@ -341,9 +341,9 @@ int clockevents_program_event(struct clock_event_device *dev, ktime_t expires,
 	//在5秒后触发event。同样的，max_delta_ns也是在注册clock event device的时候设定了这个参数。
 	delta = min(delta, (int64_t) dev->max_delta_ns);
 	delta = max(delta, (int64_t) dev->min_delta_ns);
-
+	//clc计算的超时时间的count
 	clc = ((unsigned long long) delta * dev->mult) >> dev->shift;
-	rc = dev->set_next_event((unsigned long) clc, dev);//调用底层driver callback函数进行设定下一次触发时间
+	rc = dev->set_next_event((unsigned long) clc, dev);//调用底层driver callback函数进行设定下一次触发时间.gt_clockevent_set_next_event
 
 	return (rc && force) ? clockevents_program_min_delta(dev) : rc;
 }
@@ -493,7 +493,7 @@ void clockevents_config(struct clock_event_device *dev, u32 freq)
 		sec = 1;
 	else if (sec > 600 && dev->max_delta_ticks > UINT_MAX)
 		sec = 600;
-
+	/*设置mult和shift，方便计算*/
 	clockevents_calc_mult_shift(dev, freq, sec);
 	dev->min_delta_ns = cev_delta2ns(dev->min_delta_ticks, dev, false);
 	dev->max_delta_ns = cev_delta2ns(dev->max_delta_ticks, dev, true);
@@ -579,13 +579,18 @@ void clockevents_exchange_device(struct clock_event_device *old,
 	 * Caller releases a clock event device. We queue it into the
 	 * released list and do a notify add later.
 	 */
+	 /*旧的clock event device要被替换掉，因此将其模式设定为CLOCK_EVT_MODE_UNUSED，
+	 并且从全局clock event device链表中摘下来，挂入clockevents_released链表*/
 	if (old) {
 		module_put(old->owner);
 		clockevents_switch_state(old, CLOCK_EVT_STATE_DETACHED);
 		list_del(&old->list);
 		list_add(&old->list, &clockevents_released);
 	}
-
+	/*我们要确保新的clock event设备没有被使用，如果新的clock event设备不是CLOCK_EVT_MODE_UNUSED状态，
+	说明其目前被其他的上层软件使用，因此要kernel panic，并且shutdown该clock event device。
+	这是该设备状态是CLOCK_EVT_MODE_SHUTDOWN状态。这里没有插入clockevent_devices全局链表的动作，
+	主要是因为在调用该函数之前，新的clock event device已经挂入队列了*/
 	if (new) {
 		BUG_ON(!clockevent_state_detached(new));
 		clockevents_shutdown(new);

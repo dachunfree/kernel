@@ -64,12 +64,12 @@ struct pinctrl_dev {
  * @users: reference count
  */
 struct pinctrl {
-	struct list_head node;
-	struct device *dev;
-	struct list_head states;
-	struct pinctrl_state *state;
-	struct list_head dt_maps;
-	struct kref users;
+	struct list_head node; //系统中的所有device的pin control state holder被挂入到了一个全局链表中
+	struct device *dev; //该pin control state holder对应的device
+	struct list_head states; //该设备的所有的状态被挂入到这个链表中
+	struct pinctrl_state *state; //当前的pin control state
+	struct list_head dt_maps; //mapping table
+	struct kref users; //reference count
 };
 
 /**
@@ -79,9 +79,9 @@ struct pinctrl {
  * @settings: a list of settings for this state
  */
 struct pinctrl_state {
-	struct list_head node;
-	const char *name;
-	struct list_head settings;
+	struct list_head node; //挂入链表头的节点
+	const char *name; //该state的名字
+	struct list_head settings; //属于该状态的所有的settings.内容 struct pinctrl_setting
 };
 
 /**

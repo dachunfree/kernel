@@ -699,7 +699,7 @@ int bus_add_driver(struct device_driver *drv)
 				     "%s", drv->name);
 	if (error)
 		goto out_unregister;
-
+	//将 device_driver添加到 bus的 klist_drivers
 	klist_add_tail(&priv->knode_bus, &bus->p->klist_drivers);
 	if (drv->bus->p->drivers_autoprobe) {
 		if (driver_allows_async_probing(drv)) {
@@ -707,6 +707,7 @@ int bus_add_driver(struct device_driver *drv)
 				drv->bus->name, drv->name);
 			async_schedule(driver_attach_async, drv);
 		} else {
+			//driver和device的match
 			error = driver_attach(drv);
 			if (error)
 				goto out_unregister;

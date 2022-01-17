@@ -345,6 +345,7 @@ static struct kmem_cache *create_cache(const char *name,
 		goto out_free_cache;
 
 	s->refcount = 1;
+	//加入到 slab_caches 中，方便后续判断是否已经有同样的了
 	list_add(&s->list, &slab_caches);
 out:
 	if (err)
@@ -430,7 +431,7 @@ kmem_cache_create(const char *name, size_t size, size_t align,
 		err = -ENOMEM;
 		goto out_unlock;
 	}
-
+	//里面有检测object 越界相关的内容
 	s = create_cache(cache_name, size, size,
 			 calculate_alignment(flags, align, size),
 			 flags, ctor, NULL, NULL);

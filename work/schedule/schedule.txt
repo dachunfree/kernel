@@ -91,3 +91,58 @@ https://www.ibm.com/developerworks/cn/linux/l-cn-schldom/
  power 一般是被数关系。比如两个物理 CPU 是 power*2，而不像 core, 或逻辑 CPU，只是 power*1.1 这样的关系。
 *在 numa_domain 级：这一级的开销最大，一般很少进行 balance 。		
 	
+
+
+
+了解下结构体				
+				
+每个进程描述符都有一个task_struct,里面包含调度实体信息。rb_node最终挂载在cfs rb tree下。
+																				 
+struct task_struct {														 
+			int prio, static_prio, normal_prio; 			 
+			/*cfs调度器调度实体*/											 
+			struct sched_entity se;---------------->struct sched_entity {                                挂载到此rb tree根节点
+			/*RT调度器调度实体*/												struct load_weight	load; //记录权重信息------------------->------|
+			struct sched_rt_entity rt; 									struct rb_node		run_node; //红黑树挂载点												|
+			/*Deadline调度器调度实体*/									unsigned int		on_rq;//调度实体se加入就绪队列后，on_rq置1				|
+			struct sched_dl_entity dl; 									u64			exec_start;//进程最近一次时间执行点												|
+}																									u64			sum_exec_runtime; /*调度实体已经运行实际时间总合*/				|
+																									u64			vruntime;/*已经运行的虚拟时间总合，按照这个插入tree*/			|
+																							}	 																																		|
+									 																																																	|
+									 																																																	|
+																																																										|
+																																																										|
+																						   |->struct rb_root tasks_timeline; <--------------------<-------------|																		|
+                                               |
+																							 |				  										    |---->weight
+																							 |->load_weight load:所有权重信息-->|
+                                               |														      |---->inv_weight( 2^32/weight)
+											  |------->cfs_rq cfs--->|
+											  |											 |
+											  |											 |->
+											  |
+                        |
+											  |
+											  |------->struct load_weight;所有权重
+											  |
+											  |
+											  |
+per-cpu变量 struct rq-> |-------->rt_rq rt
+                        |
+                        |
+                        |
+                        |
+                        |
+                        |
+                        |
+                        |
+                        |-------->dl_rq dl
+                        
+                        
+                        
+static void update_curr(struct cfs_rq *cfs_rq)
+ delta_exec计算本次更新虚拟时间距离上次更新虚拟时间的差值。                       
+                        
+                        
+          

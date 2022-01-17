@@ -183,8 +183,9 @@ static int zynq_gpio_get_value(struct gpio_chip *chip, unsigned int pin)
 {
 	u32 data;
 	unsigned int bank_num, bank_pin_num;
+	//通过gpio_chip找到 zynq_gpio gpio;
 	struct zynq_gpio *gpio = to_zynq_gpio(chip);
-
+	//通过pin号，找到对应的banknum
 	zynq_gpio_get_bank_pin(pin, &bank_num, &bank_pin_num, gpio);
 
 	data = readl_relaxed(gpio->base_addr +
@@ -663,6 +664,20 @@ MODULE_DEVICE_TABLE(of, zynq_gpio_of_match);
  *
  * Return: 0 on success, negative error otherwise.
  */
+ /*
+ gpio: gpio@ff0a0000 {
+	compatible = "xlnx,zynqmp-gpio-1.0";
+	status = "disabled";
+	#gpio-cells = <0x2>;
+	gpio-controller;
+	interrupt-parent = <&gic>;
+	interrupts = <0 16 4>;
+	interrupt-controller;
+	#interrupt-cells = <2>;
+	reg = <0x0 0xff0a0000 0x0 0x1000>;
+	power-domains = <&zynqmp_firmware PD_GPIO>;
+};
+*/
 static int zynq_gpio_probe(struct platform_device *pdev)
 {
 	int ret, bank_num;

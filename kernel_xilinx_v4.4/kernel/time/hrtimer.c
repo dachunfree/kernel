@@ -906,7 +906,7 @@ static void __remove_hrtimer(struct hrtimer *timer,
 	timer->state = newstate;
 	if (!(state & HRTIMER_STATE_ENQUEUED))
 		return;
-
+	//从head中删除掉此节点
 	if (!timerqueue_del(&base->active, &timer->node))
 		cpu_base->active_bases &= ~(1 << base->index);
 
@@ -973,8 +973,9 @@ void hrtimer_start_range_ns(struct hrtimer *timer, ktime_t tim,
 	base = lock_hrtimer_base(timer, &flags);
 
 	/* Remove an active timer from the queue: */
+	//如果已经入队，那么清除掉
 	remove_hrtimer(timer, base, true);
-
+	//相对时间转换成绝对时间tim
 	if (mode & HRTIMER_MODE_REL) {
 		tim = ktime_add_safe(tim, base->get_time());
 		/*
@@ -988,7 +989,7 @@ void hrtimer_start_range_ns(struct hrtimer *timer, ktime_t tim,
 		tim = ktime_add_safe(tim, ktime_set(0, hrtimer_resolution));
 #endif
 	}
-
+	//设置绝对时间到_softexpires
 	hrtimer_set_expires_range_ns(timer, tim, delta_ns);
 
 	/* Switch the timer base, if necessary: */
@@ -996,6 +997,7 @@ void hrtimer_start_range_ns(struct hrtimer *timer, ktime_t tim,
 
 	timer_stats_hrtimer_set_start_info(timer);
 
+	//将timer加入到rb tree中
 	leftmost = enqueue_hrtimer(timer, new_base);
 	if (!leftmost)
 		goto unlock;
@@ -1120,7 +1122,7 @@ static void __hrtimer_init(struct hrtimer *timer, clockid_t clock_id,
 
 	memset(timer, 0, sizeof(struct hrtimer));
 
-	cpu_base = raw_cpu_ptr(&hrtimer_bases);
+	cpu_base = raw_cpu_ptr(&hrtimer_bases); //每cpu变量。struct hrtimer_cpu_base
 
 	if (clock_id == CLOCK_REALTIME && mode != HRTIMER_MODE_ABS)
 		clock_id = CLOCK_MONOTONIC;

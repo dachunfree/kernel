@@ -157,7 +157,7 @@ struct spi_device {
 	void			*controller_state;
 	void			*controller_data;
 	char			modalias[SPI_NAME_SIZE];
-	int			cs_gpio;	/* chip select gpio */
+	int			cs_gpio;	/* 设置哪个gpio当片选信号呢?chip select gpio */
 
 	/* the statistics */
 	struct spi_statistics	statistics;
@@ -523,7 +523,7 @@ struct spi_master {
 			   struct spi_message *message);
 
 	/* gpio chip select */
-	int			*cs_gpios;
+	int			*cs_gpios; //用gpio实现cs片选信号
 
 	/* statistics */
 	struct spi_statistics	statistics;
@@ -734,7 +734,7 @@ struct spi_transfer {
  * and its transfers, ignore them until its completion callback.
  */
 struct spi_message {
-	struct list_head	transfers;
+	struct list_head	transfers; //spi_transfer 链表头
 
 	struct spi_device	*spi;
 
@@ -762,7 +762,7 @@ struct spi_message {
 	 * spi_message ...  between calls to spi_async and then later
 	 * complete(), that's the spi_master controller driver.
 	 */
-	struct list_head	queue;
+	struct list_head	queue; //node节点。将spi_message 加入到spi_master queue中
 	void			*state;
 };
 
@@ -895,8 +895,10 @@ spi_read(struct spi_device *spi, void *buf, size_t len)
 		};
 	struct spi_message	m;
 
-	spi_message_init(&m);
+	spi_message_init(&m); /*message 的list_head初始化 */
+	/*将spi_transfer加入到spi_message链表中.spi_transfer_one_message会遍历这个链表进行发送*/
 	spi_message_add_tail(&t, &m);
+	//还是通过spi_message进行传输
 	return spi_sync(spi, &m);
 }
 

@@ -639,6 +639,7 @@ static int __driver_attach(struct device *dev, void *data)
 		device_lock(dev->parent);
 	device_lock(dev);
 	if (!dev->driver)
+		//里面进行真正的probe函数调用
 		driver_probe_device(drv, dev);
 	device_unlock(dev);
 	if (dev->parent)

@@ -504,6 +504,20 @@ do {									\
 #define this_cpu_xchg(pcp, nval)	__pcpu_size_call_return2(this_cpu_xchg_, pcp, nval)
 #define this_cpu_cmpxchg(pcp, oval, nval) \
 	__pcpu_size_call_return2(this_cpu_cmpxchg_, pcp, oval, nval)
+
+/*
+类似于如下的原子操作:
+ cmpxchg_double(p1, p2, o1, o2, n1, n2) 类似于下面的C语言
+ if(p1==o1 && p2==o2) {
+    p1 = n1 ;
+    p2 = n2 ;
+    return 1 ;
+ }else
+   return 0;
+   由于是原子操作，避免了使用锁.
+
+
+*/
 #define this_cpu_cmpxchg_double(pcp1, pcp2, oval1, oval2, nval1, nval2) \
 	__pcpu_double_call_return_bool(this_cpu_cmpxchg_double_, pcp1, pcp2, oval1, oval2, nval1, nval2)
 

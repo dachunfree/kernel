@@ -582,17 +582,19 @@ repeat:
 
 	work = NULL;
 	spin_lock_irq(&worker->lock);
+	//从工人的所有工作中，取出来一个工作，并从链表中删除此项工作
 	if (!list_empty(&worker->work_list)) {
 		work = list_first_entry(&worker->work_list,
 					struct kthread_work, node);
 		list_del_init(&work->node);
 	}
+	//记录下目前工人正在做的工作
 	worker->current_work = work;
 	spin_unlock_irq(&worker->lock);
 
 	if (work) {
 		__set_current_state(TASK_RUNNING);
-		work->func(work);
+		work->func(work); //开始工作
 	} else if (!freezing(current))
 		schedule();
 
@@ -623,6 +625,7 @@ static void insert_kthread_work(struct kthread_worker *worker,
  * must have been created with kthread_worker_create().  Returns %true
  * if @work was successfully queued, %false if it was already pending.
  */
+/**/
 bool queue_kthread_work(struct kthread_worker *worker,
 			struct kthread_work *work)
 {
