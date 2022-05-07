@@ -65,9 +65,9 @@ struct pcpu_group_info {
 };
 
 struct pcpu_alloc_info {
-	size_t			static_size;
+	size_t			static_size; //¾²Ì¬Çø
 	size_t			reserved_size;
-	size_t			dyn_size;
+	size_t			dyn_size; //¶¯Ì¬Çø
 	size_t			unit_size;
 	size_t			atom_size;
 	size_t			alloc_size;

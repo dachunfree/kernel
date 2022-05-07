@@ -1,10 +1,13 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * Copyright 2014 Broadcom Corporation.
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
+#include <cpu_func.h>
+#include <init.h>
+#include <net.h>
+#include <asm/cache.h>
 #include <asm/io.h>
 #include <config.h>
 #include <netdev.h>
@@ -37,10 +40,12 @@ int dram_init(void)
 	return 0;
 }
 
-void dram_init_banksize(void)
+int dram_init_banksize(void)
 {
 	gd->bd->bi_dram[0].start = CONFIG_SYS_SDRAM_BASE;
 	gd->bd->bi_dram[0].size = gd->ram_size;
+
+	return 0;
 }
 
 int board_early_init_f(void)
@@ -70,7 +75,7 @@ void smp_waitloop(unsigned previous_address)
 #endif
 
 #ifdef CONFIG_BCM_SF2_ETH
-int board_eth_init(bd_t *bis)
+int board_eth_init(struct bd_info *bis)
 {
 	int rc = -1;
 	printf("Registering BCM sf2 eth\n");

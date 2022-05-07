@@ -9,6 +9,8 @@ config SYS_VENDOR
 config SYS_CONFIG_NAME
 	default "P3041DS"
 
+source "board/freescale/common/Kconfig"
+
 endif
 
 if TARGET_P4080DS
@@ -22,18 +24,7 @@ config SYS_VENDOR
 config SYS_CONFIG_NAME
 	default "P4080DS"
 
-endif
-
-if TARGET_P5020DS
-
-config SYS_BOARD
-	default "corenet_ds"
-
-config SYS_VENDOR
-	default "freescale"
-
-config SYS_CONFIG_NAME
-	default "P5020DS"
+source "board/freescale/common/Kconfig"
 
 endif
 
@@ -47,5 +38,7 @@ config SYS_VENDOR
 
 config SYS_CONFIG_NAME
 	default "P5040DS"
+
+source "board/freescale/common/Kconfig"
 
 endif

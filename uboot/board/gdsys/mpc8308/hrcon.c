@@ -1,15 +1,19 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * (C) Copyright 2014
- * Dirk Eibach,  Guntermann & Drunck GmbH, eibach@gdsys.de
- *
- * SPDX-License-Identifier:	GPL-2.0+
+ * Dirk Eibach,  Guntermann & Drunck GmbH, dirk.eibach@gdsys.cc
  */
 
 #include <common.h>
+#include <env.h>
+#include <flash.h>
 #include <hwconfig.h>
 #include <i2c.h>
+#include <init.h>
 #include <spi.h>
-#include <libfdt.h>
+#include <linux/bitops.h>
+#include <linux/delay.h>
+#include <linux/libfdt.h>
 #include <fdt_support.h>
 #include <pci.h>
 #include <mpc83xx.h>
@@ -33,16 +37,14 @@
 
 #include <miiphy.h>
 
-DECLARE_GLOBAL_DATA_PTR;
-
 #define MAX_MUX_CHANNELS 2
 
 enum {
-	MCFPGA_DONE = 1 << 0,
-	MCFPGA_INIT_N = 1 << 1,
-	MCFPGA_PROGRAM_N = 1 << 2,
-	MCFPGA_UPDATE_ENABLE_N = 1 << 3,
-	MCFPGA_RESET_N = 1 << 4,
+	MCFPGA_DONE = BIT(0),
+	MCFPGA_INIT_N = BIT(1),
+	MCFPGA_PROGRAM_N = BIT(2),
+	MCFPGA_UPDATE_ENABLE_N = BIT(3),
+	MCFPGA_RESET_N = BIT(4),
 };
 
 enum {
@@ -50,7 +52,7 @@ enum {
 	GPIO_MDIO = 1 << 15,
 };
 
-unsigned int mclink_fpgacount;
+uint mclink_fpgacount;
 struct ihs_fpga *fpga_ptr[] = CONFIG_SYS_FPGA_PTR;
 
 struct {
@@ -103,14 +105,14 @@ int fpga_get_reg(u32 fpga, u16 *reg, off_t regoff, u16 *data)
 
 int checkboard(void)
 {
-	char *s = getenv("serial#");
+	char *s = env_get("serial#");
 	bool hw_type_cat = pca9698_get_value(0x20, 20);
 
 	puts("Board: ");
 
 	printf("HRCon %s", hw_type_cat ? "CAT" : "Fiber");
 
-	if (s != NULL) {
+	if (s) {
 		puts(", serial# ");
 		puts(s);
 	}
@@ -123,12 +125,11 @@ int checkboard(void)
 int last_stage_init(void)
 {
 	int slaves;
-	unsigned int k;
-	unsigned int mux_ch;
-	unsigned char mclink_controllers[] = { 0x3c, 0x3d, 0x3e };
+	uint k;
+	uchar mclink_controllers[] = { 0x3c, 0x3d, 0x3e };
 	u16 fpga_features;
 	bool hw_type_cat = pca9698_get_value(0x20, 20);
-	bool ch0_rgmii2_present = false;
+	bool ch0_rgmii2_present;
 
 	FPGA_GET_REG(0, fpga_features, &fpga_features);
 
@@ -140,16 +141,16 @@ int last_stage_init(void)
 
 	/* wait for FPGA done, then reset FPGA */
 	for (k = 0; k < ARRAY_SIZE(mclink_controllers); ++k) {
-		unsigned int ctr = 0;
+		uint ctr = 0;
 
 		if (i2c_probe(mclink_controllers[k]))
 			continue;
 
 		while (!(pca953x_get_val(mclink_controllers[k])
 		       & MCFPGA_DONE)) {
-			udelay(100000);
+			mdelay(100);
 			if (ctr++ > 5) {
-				printf("no done for mclink_controller %d\n", k);
+				printf("no done for mclink_controller %u\n", k);
 				break;
 			}
 		}
@@ -162,8 +163,19 @@ int last_stage_init(void)
 	}
 
 	if (hw_type_cat) {
-		miiphy_register(bb_miiphy_buses[0].name, bb_miiphy_read,
-				bb_miiphy_write);
+		uint mux_ch;
+		int retval;
+		struct mii_dev *mdiodev = mdio_alloc();
+
+		if (!mdiodev)
+			return -ENOMEM;
+		strncpy(mdiodev->name, bb_miiphy_buses[0].name, MDIO_NAME_LEN);
+		mdiodev->read = bb_miiphy_read;
+		mdiodev->write = bb_miiphy_write;
+
+		retval = mdio_register(mdiodev);
+		if (retval < 0)
+			return retval;
 		for (mux_ch = 0; mux_ch < MAX_MUX_CHANNELS; ++mux_ch) {
 			if ((mux_ch == 1) && !ch0_rgmii2_present)
 				continue;
@@ -173,7 +185,7 @@ int last_stage_init(void)
 	}
 
 	/* give slave-PLLs and Parade DP501 some time to be up and running */
-	udelay(500000);
+	mdelay(500);
 
 	mclink_fpgacount = CONFIG_SYS_MCLINK_MAX;
 	slaves = mclink_probe();
@@ -199,8 +211,19 @@ int last_stage_init(void)
 		osd_probe(k + 4);
 #endif
 		if (hw_type_cat) {
-			miiphy_register(bb_miiphy_buses[k].name,
-					bb_miiphy_read, bb_miiphy_write);
+			int retval;
+			struct mii_dev *mdiodev = mdio_alloc();
+
+			if (!mdiodev)
+				return -ENOMEM;
+			strncpy(mdiodev->name, bb_miiphy_buses[k].name,
+				MDIO_NAME_LEN);
+			mdiodev->read = bb_miiphy_read;
+			mdiodev->write = bb_miiphy_write;
+
+			retval = mdio_register(mdiodev);
+			if (retval < 0)
+				return retval;
 			setup_88e1514(bb_miiphy_buses[k].name, 0);
 		}
 	}
@@ -217,17 +240,17 @@ int last_stage_init(void)
  * provide access to fpga gpios and controls (for I2C bitbang)
  * (these may look all too simple but make iocon.h much more readable)
  */
-void fpga_gpio_set(unsigned int bus, int pin)
+void fpga_gpio_set(uint bus, int pin)
 {
 	FPGA_SET_REG(bus >= 4 ? (bus - 4) : bus, gpio.set, pin);
 }
 
-void fpga_gpio_clear(unsigned int bus, int pin)
+void fpga_gpio_clear(uint bus, int pin)
 {
 	FPGA_SET_REG(bus >= 4 ? (bus - 4) : bus, gpio.clear, pin);
 }
 
-int fpga_gpio_get(unsigned int bus, int pin)
+int fpga_gpio_get(uint bus, int pin)
 {
 	u16 val;
 
@@ -236,7 +259,7 @@ int fpga_gpio_get(unsigned int bus, int pin)
 	return val & pin;
 }
 
-void fpga_control_set(unsigned int bus, int pin)
+void fpga_control_set(uint bus, int pin)
 {
 	u16 val;
 
@@ -244,7 +267,7 @@ void fpga_control_set(unsigned int bus, int pin)
 	FPGA_SET_REG(bus >= 4 ? (bus - 4) : bus, control, val | pin);
 }
 
-void fpga_control_clear(unsigned int bus, int pin)
+void fpga_control_clear(uint bus, int pin)
 {
 	u16 val;
 
@@ -257,7 +280,7 @@ void mpc8308_init(void)
 	pca9698_direction_output(0x20, 4, 1);
 }
 
-void mpc8308_set_fpga_reset(unsigned state)
+void mpc8308_set_fpga_reset(uint state)
 {
 	pca9698_set_value(0x20, 4, state ? 0 : 1);
 }
@@ -269,17 +292,17 @@ void mpc8308_setup_hw(void)
 	/*
 	 * set "startup-finished"-gpios
 	 */
-	setbits_be32(&immr->gpio[0].dir, (1 << (31-11)) | (1 << (31-12)));
-	setbits_be32(&immr->gpio[0].dat, 1 << (31-12));
+	setbits_be32(&immr->gpio[0].dir, BIT(31 - 11) | BIT(31 - 12));
+	setbits_gpio0_out(BIT(31 - 12));
 }
 
-int mpc8308_get_fpga_done(unsigned fpga)
+int mpc8308_get_fpga_done(uint fpga)
 {
 	return pca9698_get_value(0x20, 19);
 }
 
 #ifdef CONFIG_FSL_ESDHC
-int board_mmc_init(bd_t *bd)
+int board_mmc_init(struct bd_info *bd)
 {
 	immap_t *immr = (immap_t *)CONFIG_SYS_IMMR;
 	sysconf83xx_t *sysconf = &immr->sysconf;
@@ -336,10 +359,10 @@ ulong board_flash_get_legacy(ulong base, int banknum, flash_info_t *info)
 }
 
 #if defined(CONFIG_OF_BOARD_SETUP)
-int ft_board_setup(void *blob, bd_t *bd)
+int ft_board_setup(void *blob, struct bd_info *bd)
 {
 	ft_cpu_setup(blob, bd);
-	fdt_fixup_dr_usb(blob, bd);
+	fsl_fdt_fixup_dr_usb(blob, bd);
 	fdt_fixup_esdhc(blob, bd);
 
 	return 0;
@@ -351,7 +374,7 @@ int ft_board_setup(void *blob, bd_t *bd)
  */
 
 struct fpga_mii {
-	unsigned fpga;
+	uint fpga;
 	int mdio;
 } fpga_mii[] = {
 	{ 0, 1},
@@ -478,5 +501,4 @@ struct bb_miiphy_bus bb_miiphy_buses[] = {
 	},
 };
 
-int bb_miiphy_buses_num = sizeof(bb_miiphy_buses) /
-			  sizeof(bb_miiphy_buses[0]);
+int bb_miiphy_buses_num = ARRAY_SIZE(bb_miiphy_buses);

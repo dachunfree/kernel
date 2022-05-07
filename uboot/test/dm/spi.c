@@ -1,7 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * Copyright (C) 2013 Google, Inc
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
@@ -14,6 +13,7 @@
 #include <dm/test.h>
 #include <dm/uclass-internal.h>
 #include <dm/util.h>
+#include <test/test.h>
 #include <test/ut.h>
 
 /* Test that we can find buses and chip-selects */
@@ -24,19 +24,19 @@ static int dm_test_spi_find(struct unit_test_state *uts)
 	struct udevice *bus, *dev;
 	const int busnum = 0, cs = 0, mode = 0, speed = 1000000, cs_b = 1;
 	struct spi_cs_info info;
-	int of_offset;
+	ofnode node;
 
 	ut_asserteq(-ENODEV, uclass_find_device_by_seq(UCLASS_SPI, busnum,
 						       false, &bus));
 
 	/*
-	 * spi_post_bind() will bind devices to chip selects. Check this then
-	 * remove the emulation and the slave device.
+	 * The post_bind() method will bind devices to chip selects. Check
+	 * this then remove the emulation and the slave device.
 	 */
 	ut_asserteq(0, uclass_get_device_by_seq(UCLASS_SPI, busnum, &bus));
 	ut_assertok(spi_cs_info(bus, cs, &info));
-	of_offset = info.dev->of_offset;
-	device_remove(info.dev);
+	node = dev_ofnode(info.dev);
+	device_remove(info.dev, DM_REMOVE_NORMAL);
 	device_unbind(info.dev);
 
 	/*
@@ -59,29 +59,29 @@ static int dm_test_spi_find(struct unit_test_state *uts)
 	 */
 	ut_asserteq(-ENODEV, spi_find_bus_and_cs(busnum, cs, &bus, &dev));
 	ut_asserteq(-ENOENT, spi_get_bus_and_cs(busnum, cs, speed, mode,
-						"spi_flash_std", "name", &bus,
+						"jedec_spi_nor", "name", &bus,
 						&slave));
 	sandbox_sf_unbind_emul(state_get_current(), busnum, cs);
 	ut_assertok(spi_cs_info(bus, cs, &info));
 	ut_asserteq_ptr(NULL, info.dev);
 
 	/* Add the emulation and try again */
-	ut_assertok(sandbox_sf_bind_emul(state, busnum, cs, bus, of_offset,
+	ut_assertok(sandbox_sf_bind_emul(state, busnum, cs, bus, node,
 					 "name"));
 	ut_assertok(spi_find_bus_and_cs(busnum, cs, &bus, &dev));
 	ut_assertok(spi_get_bus_and_cs(busnum, cs, speed, mode,
-				       "spi_flash_std", "name", &bus, &slave));
+				       "jedec_spi_nor", "name", &bus, &slave));
 
 	ut_assertok(spi_cs_info(bus, cs, &info));
 	ut_asserteq_ptr(info.dev, slave->dev);
 
 	/* We should be able to add something to another chip select */
-	ut_assertok(sandbox_sf_bind_emul(state, busnum, cs_b, bus, of_offset,
+	ut_assertok(sandbox_sf_bind_emul(state, busnum, cs_b, bus, node,
 					 "name"));
-	ut_assertok(spi_get_bus_and_cs(busnum, cs_b, speed, mode,
-				       "spi_flash_std", "name", &bus, &slave));
-	ut_assertok(spi_cs_info(bus, cs_b, &info));
-	ut_asserteq_ptr(info.dev, slave->dev);
+	ut_asserteq(-EINVAL, spi_get_bus_and_cs(busnum, cs_b, speed, mode,
+				       "jedec_spi_nor", "name", &bus, &slave));
+	ut_asserteq(-EINVAL, spi_cs_info(bus, cs_b, &info));
+	ut_asserteq_ptr(NULL, info.dev);
 
 	/*
 	 * Since we are about to destroy all devices, we must tell sandbox
@@ -92,7 +92,7 @@ static int dm_test_spi_find(struct unit_test_state *uts)
 
 	return 0;
 }
-DM_TEST(dm_test_spi_find, DM_TESTF_SCAN_PDATA | DM_TESTF_SCAN_FDT);
+DM_TEST(dm_test_spi_find, UT_TESTF_SCAN_PDATA | UT_TESTF_SCAN_FDT);
 
 /* Test that sandbox SPI works correctly */
 static int dm_test_spi_xfer(struct unit_test_state *uts)
@@ -118,10 +118,10 @@ static int dm_test_spi_xfer(struct unit_test_state *uts)
 	 * Since we are about to destroy all devices, we must tell sandbox
 	 * to forget the emulation device
 	 */
-#ifdef CONFIG_DM_SPI_FLASH
+#if CONFIG_IS_ENABLED(DM_SPI_FLASH)
 	sandbox_sf_unbind_emul(state_get_current(), busnum, cs);
 #endif
 
 	return 0;
 }
-DM_TEST(dm_test_spi_xfer, DM_TESTF_SCAN_PDATA | DM_TESTF_SCAN_FDT);
+DM_TEST(dm_test_spi_xfer, UT_TESTF_SCAN_PDATA | UT_TESTF_SCAN_FDT);

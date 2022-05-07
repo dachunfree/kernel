@@ -1,7 +1,6 @@
+/* SPDX-License-Identifier: GPL-2.0+ */
 /*
  * Copyright 2014 Freescale Semiconductor, Inc.
- *
- * SPDX-License-Identifier: GPL-2.0+
  */
 
 #ifndef __T4RDB_H__
@@ -13,6 +12,6 @@
 #define CONFIG_SYS_NUM_FM2_DTSEC	4
 
 void fdt_fixup_board_enet(void *blob);
-void pci_of_setup(void *blob, bd_t *bd);
+void pci_of_setup(void *blob, struct bd_info *bd);
 
 #endif

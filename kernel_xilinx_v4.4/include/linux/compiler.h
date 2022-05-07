@@ -16,7 +16,7 @@
 # define __acquire(x)	__context__(x,1)
 # define __release(x)	__context__(x,-1)
 # define __cond_lock(x,c)	((c) ? ({ __acquire(x); 1; }) : 0)
-# define __percpu	__attribute__((noderef, address_space(3))) // address_space(0)内核地址空间;1表示用户地址空间；2表示设备地址空间
+# define __percpu	__attribute__((noderef, address_space(3))) // address_space(0)
 # define __pmem		__attribute__((noderef, address_space(5)))
 #ifdef CONFIG_SPARSE_RCU_POINTER
 # define __rcu		__attribute__((noderef, address_space(4)))

@@ -1,18 +1,23 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * (C) Copyright 2003, Psyent Corporation <www.psyent.com>
  * Scott McNutt <smcnutt@psyent.com>
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
+#include <cpu_func.h>
+#include <env.h>
+#include <image.h>
+#include <irq_func.h>
+#include <log.h>
 
 #define NIOS_MAGIC 0x534f494e /* enable command line and initrd passing */
 
-int do_bootm_linux(int flag, int argc, char * const argv[], bootm_headers_t *images)
+int do_bootm_linux(int flag, int argc, char *const argv[],
+		   bootm_headers_t *images)
 {
 	void (*kernel)(int, int, int, char *) = (void *)images->ep;
-	char *commandline = getenv("bootargs");
+	char *commandline = env_get("bootargs");
 	ulong initrd_start = images->rd_start;
 	ulong initrd_end = images->rd_end;
 	char *of_flat_tree = NULL;

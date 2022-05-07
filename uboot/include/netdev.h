@@ -1,8 +1,7 @@
+/* SPDX-License-Identifier: GPL-2.0+ */
 /*
  * (C) Copyright 2008
  * Benjamin Warren, biggerbadderben@gmail.com
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 /*
@@ -11,6 +10,7 @@
 
 #ifndef _NETDEV_H_
 #define _NETDEV_H_
+#include <phy_interface.h>
 
 /*
  * Board and CPU-specific initialization functions
@@ -21,82 +21,65 @@
  *     -1: failure
  */
 
-int board_eth_init(bd_t *bis);
-int cpu_eth_init(bd_t *bis);
+int board_eth_init(struct bd_info *bis);
+int board_interface_eth_init(struct udevice *dev,
+			     phy_interface_t interface_type);
+int cpu_eth_init(struct bd_info *bis);
 
 /* Driver initialization prototypes */
-int at91emac_register(bd_t *bis, unsigned long iobase);
-int au1x00_enet_initialize(bd_t*);
-int ax88180_initialize(bd_t *bis);
-int bcm_sf2_eth_register(bd_t *bis, u8 dev_num);
-int bfin_EMAC_initialize(bd_t *bis);
+int at91emac_register(struct bd_info *bis, unsigned long iobase);
+int ax88180_initialize(struct bd_info *bis);
+int bcm_sf2_eth_register(struct bd_info *bis, u8 dev_num);
+int bfin_EMAC_initialize(struct bd_info *bis);
 int calxedaxgmac_initialize(u32 id, ulong base_addr);
 int cs8900_initialize(u8 dev_num, int base_addr);
-int davinci_emac_initialize(void);
-int dc21x4x_initialize(bd_t *bis);
+int dc21x4x_initialize(struct bd_info *bis);
 int designware_initialize(ulong base_addr, u32 interface);
-int dm9000_initialize(bd_t *bis);
+int dm9000_initialize(struct bd_info *bis);
 int dnet_eth_initialize(int id, void *regs, unsigned int phy_addr);
-int e1000_initialize(bd_t *bis);
-int eepro100_initialize(bd_t *bis);
-int enc28j60_initialize(unsigned int bus, unsigned int cs,
-	unsigned int max_hz, unsigned int mode);
+int e1000_initialize(struct bd_info *bis);
+int eepro100_initialize(struct bd_info *bis);
 int ep93xx_eth_initialize(u8 dev_num, int base_addr);
-int eth_3com_initialize (bd_t * bis);
+int eth_3com_initialize (struct bd_info * bis);
 int ethoc_initialize(u8 dev_num, int base_addr);
-int fec_initialize (bd_t *bis);
-int fecmxc_initialize(bd_t *bis);
-int fecmxc_initialize_multi(bd_t *bis, int dev_id, int phy_id, uint32_t addr);
-int ftgmac100_initialize(bd_t *bits);
-int ftmac100_initialize(bd_t *bits);
-int ftmac110_initialize(bd_t *bits);
-int greth_initialize(bd_t *bis);
-void gt6426x_eth_initialize(bd_t *bis);
+int fec_initialize (struct bd_info *bis);
+int fecmxc_initialize(struct bd_info *bis);
+int fecmxc_initialize_multi(struct bd_info *bis, int dev_id, int phy_id,
+			    uint32_t addr);
+int ftmac100_initialize(struct bd_info *bits);
+int ftmac110_initialize(struct bd_info *bits);
+void gt6426x_eth_initialize(struct bd_info *bis);
 int ks8851_mll_initialize(u8 dev_num, int base_addr);
 int lan91c96_initialize(u8 dev_num, int base_addr);
-int lpc32xx_eth_initialize(bd_t *bis);
+int lpc32xx_eth_initialize(struct bd_info *bis);
 int macb_eth_initialize(int id, void *regs, unsigned int phy_addr);
-int mcdmafec_initialize(bd_t *bis);
-int mcffec_initialize(bd_t *bis);
-int mpc512x_fec_initialize(bd_t *bis);
-int mpc5xxx_fec_initialize(bd_t *bis);
-int mpc82xx_scc_enet_initialize(bd_t *bis);
-int mvgbe_initialize(bd_t *bis);
-int mvneta_initialize(bd_t *bis, int base_addr, int devnum, int phy_addr);
-int natsemi_initialize(bd_t *bis);
+int mcdmafec_initialize(struct bd_info *bis);
+int mcffec_initialize(struct bd_info *bis);
+int mvgbe_initialize(struct bd_info *bis);
+int mvneta_initialize(struct bd_info *bis, int base_addr, int devnum,
+		      int phy_addr);
+int natsemi_initialize(struct bd_info *bis);
 int ne2k_register(void);
-int npe_initialize(bd_t *bis);
-int ns8382x_initialize(bd_t *bis);
-int pcnet_initialize(bd_t *bis);
-int ppc_4xx_eth_initialize (bd_t *bis);
-int rtl8139_initialize(bd_t *bis);
-int rtl8169_initialize(bd_t *bis);
-int scc_initialize(bd_t *bis);
-int sh_eth_initialize(bd_t *bis);
-int skge_initialize(bd_t *bis);
+int npe_initialize(struct bd_info *bis);
+int ns8382x_initialize(struct bd_info *bis);
+int pcnet_initialize(struct bd_info *bis);
+int ppc_4xx_eth_initialize (struct bd_info *bis);
+int rtl8139_initialize(struct bd_info *bis);
+int rtl8169_initialize(struct bd_info *bis);
+int scc_initialize(struct bd_info *bis);
+int sh_eth_initialize(struct bd_info *bis);
+int skge_initialize(struct bd_info *bis);
 int smc91111_initialize(u8 dev_num, int base_addr);
 int smc911x_initialize(u8 dev_num, int base_addr);
-int tsi108_eth_initialize(bd_t *bis);
-int uec_standard_init(bd_t *bis);
-int uli526x_initialize(bd_t *bis);
+int uec_standard_init(struct bd_info *bis);
+int uli526x_initialize(struct bd_info *bis);
 int armada100_fec_register(unsigned long base_addr);
-int xilinx_ll_temac_eth_init(bd_t *bis, unsigned long base_addr, int flags,
-						unsigned long ctrl_addr);
-/*
- * As long as the Xilinx xps_ll_temac ethernet driver has not its own interface
- * exported by a public hader file, we need a global definition at this point.
- */
-#if defined(CONFIG_XILINX_LL_TEMAC)
-#define XILINX_LL_TEMAC_M_FIFO		0	/* use FIFO Ctrl */
-#define XILINX_LL_TEMAC_M_SDMA_PLB	(1 << 0)/* use SDMA Ctrl via PLB */
-#define XILINX_LL_TEMAC_M_SDMA_DCR	(1 << 1)/* use SDMA Ctrl via DCR */
-#endif
 
 /* Boards with PCI network controllers can call this from their board_eth_init()
  * function to initialize whatever's on board.
  * Return value is total # of devices found */
 
-static inline int pci_eth_init(bd_t *bis)
+static inline int pci_eth_init(struct bd_info *bis)
 {
 	int num = 0;
 
@@ -134,76 +117,18 @@ static inline int pci_eth_init(bd_t *bis)
 	return num;
 }
 
-/*
- * Boards with mv88e61xx switch can use this by defining
- * CONFIG_MV88E61XX_SWITCH in respective board configheader file
- * the stuct and enums here are used to specify switch configuration params
- */
-#if defined(CONFIG_MV88E61XX_SWITCH)
+struct mii_dev *fec_get_miibus(ulong base_addr, int dev_id);
 
-/* constants for any 88E61xx switch */
-#define MV88E61XX_MAX_PORTS_NUM	6
-
-enum mv88e61xx_cfg_mdip {
-	MV88E61XX_MDIP_NOCHANGE,
-	MV88E61XX_MDIP_REVERSE
-};
-
-enum mv88e61xx_cfg_ledinit {
-	MV88E61XX_LED_INIT_DIS,
-	MV88E61XX_LED_INIT_EN
-};
-
-enum mv88e61xx_cfg_rgmiid {
-	MV88E61XX_RGMII_DELAY_DIS,
-	MV88E61XX_RGMII_DELAY_EN
-};
-
-enum mv88e61xx_cfg_prtstt {
-	MV88E61XX_PORTSTT_DISABLED,
-	MV88E61XX_PORTSTT_BLOCKING,
-	MV88E61XX_PORTSTT_LEARNING,
-	MV88E61XX_PORTSTT_FORWARDING
-};
-
-struct mv88e61xx_config {
-	char *name;
-	u8 vlancfg[MV88E61XX_MAX_PORTS_NUM];
-	enum mv88e61xx_cfg_rgmiid rgmii_delay;
-	enum mv88e61xx_cfg_prtstt portstate;
-	enum mv88e61xx_cfg_ledinit led_init;
-	enum mv88e61xx_cfg_mdip mdip;
-	u32 ports_enabled;
-	u8 cpuport;
-};
-
-/*
- * Common mappings for Internal VLANs
- * These mappings consider that all ports are useable; the driver
- * will mask inexistent/unused ports.
- */
-
-/* Switch mode : routes any port to any port */
-#define MV88E61XX_VLANCFG_SWITCH { 0x3F, 0x3F, 0x3F, 0x3F, 0x3F, 0x3F }
-
-/* Router mode: routes only CPU port 5 to/from non-CPU ports 0-4 */
-#define MV88E61XX_VLANCFG_ROUTER { 0x20, 0x20, 0x20, 0x20, 0x20, 0x1F }
-
-int mv88e61xx_switch_initialize(struct mv88e61xx_config *swconfig);
-#endif /* CONFIG_MV88E61XX_SWITCH */
-
-#ifdef CONFIG_FEC_MXC
-struct mii_dev *fec_get_miibus(uint32_t base_addr, int dev_id);
 #ifdef CONFIG_PHYLIB
 struct phy_device;
-int fec_probe(bd_t *bd, int dev_id, uint32_t base_addr,
+int fec_probe(struct bd_info *bd, int dev_id, uint32_t base_addr,
 		struct mii_dev *bus, struct phy_device *phydev);
 #else
 /*
  * Allow FEC to fine-tune MII configuration on boards which require this.
  */
+struct eth_device;
 int fecmxc_register_mii_postcall(struct eth_device *dev, int (*cb)(int));
-#endif
 #endif
 
 #endif /* _NETDEV_H_ */

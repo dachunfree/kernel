@@ -745,7 +745,7 @@ static void update_curr(struct cfs_rq *cfs_rq)
 	schedstat_set(curr->statistics.exec_max,
 		      max(delta_exec, curr->statistics.exec_max));
 
-	curr->sum_exec_runtime += delta_exec; ///*调度实体已经运行实际时间总合*/
+	curr->sum_exec_runtime += delta_exec; /*调度实体已经运行实际时间总合*/
 	schedstat_add(cfs_rq, exec_clock, delta_exec); //cfs_rq->exec_clock += delta_exec;
 	/*更新当前调度实体虚拟时间，calc_delta_fair()函数根据上面说的虚拟时间的计算公式计算虚拟时间（也就是调用__calc_delta()函数）*/
 	curr->vruntime += calc_delta_fair(delta_exec, curr);
@@ -2477,6 +2477,8 @@ static inline void update_cfs_shares(struct cfs_rq *cfs_rq)
 
 #ifdef CONFIG_SMP
 /* Precomputed fixed inverse multiplies for multiplication by y^n */
+
+// 2^32 * y^n
 static const u32 runnable_avg_yN_inv[] = {
 	0xffffffff, 0xfa83b2da, 0xf5257d14, 0xefe4b99a, 0xeac0c6e6, 0xe5b906e6,
 	0xe0ccdeeb, 0xdbfbb796, 0xd744fcc9, 0xd2a81d91, 0xce248c14, 0xc9b9bd85,
@@ -2490,6 +2492,7 @@ static const u32 runnable_avg_yN_inv[] = {
  * Precomputed \Sum y^k { 1<=k<=n }.  These are floor(true_value) to prevent
  * over-estimates when re-combining.
  */
+ //求和公式: 例如: 1024 y^2 (980)+ 1024 y(1002) = 1982;
 static const u32 runnable_avg_yN_sum[] = {
 	    0, 1002, 1982, 2941, 3880, 4798, 5697, 6576, 7437, 8279, 9103,
 	 9909,10698,11470,12226,12966,13690,14398,15091,15769,16433,17082,
@@ -2522,10 +2525,10 @@ static __always_inline u64 decay_load(u64 val, u64 n)
 	 /*当n大于等于32的时候，就需要根据y32=0.5条件计算yn的值。
 	 yn*2^32 = 1/2n/32 * yn%32*232=1/2n/32 * runnable_avg_yN_inv[n%32]。*/
 	if (unlikely(local_n >= LOAD_AVG_PERIOD)) {
-		val >>= local_n / LOAD_AVG_PERIOD;
+		val >>= local_n / LOAD_AVG_PERIOD; //左移相当于*0.5哈
 		local_n %= LOAD_AVG_PERIOD;
 	}
-
+	// (val * runnable_avg_yN_inv[local_n]) >>32
 	val = mul_u64_u32_shr(val, runnable_avg_yN_inv[local_n], 32);
 	return val;
 }
@@ -2705,7 +2708,10 @@ __update_load_avg(u64 now, int cpu, struct sched_avg *sa,
 		//如果进程当前状态是running，那么也累计到sa->util_sum中
 		sa->util_sum = decay_load((u64)(sa->util_sum), periods + 1);
 
-		/* Efficiently calculate \sum (1..n_period) 1024*y^i */
+
+		/**********************求Σweight*cpu因子*频率因子 (y+y^2+y^3+.....+y^n)***************************/
+
+		/* Efficiently calculate \sum (1..n_period) 1024*y^i 等比数列求和*/
 		contrib = __compute_runnable_contrib(periods);//计算n个period的load
 		contrib = cap_scale(contrib, scale_freq); //(delta_w * scale_freq) >> 10， 计算该部分的load * freq
 		if (weight) {
@@ -2716,6 +2722,9 @@ __update_load_avg(u64 now, int cpu, struct sched_avg *sa,
 		if (running)
 			sa->util_sum += contrib * scale_cpu; //如果进程当前状态是running，那么也累计到sa->util_sum中
 	}
+
+
+
 
 	/* Remainder of delta accrued against u_0` */
 	scaled_delta = cap_scale(delta, scale_freq); //计算T0-T1的load，并考虑cpu freq影响
@@ -2783,7 +2792,7 @@ static inline int update_cfs_rq_load_avg(u64 now, struct cfs_rq *cfs_rq)
 		sa->util_avg = max_t(long, sa->util_avg - r, 0);
 		sa->util_sum = max_t(s32, sa->util_sum - r * LOAD_AVG_MAX, 0);
 	}
-
+	//计算 cfs_rq中的整个负载
 	decayed = __update_load_avg(now, cpu_of(rq_of(cfs_rq)), sa,
 		scale_load_down(cfs_rq->load.weight), cfs_rq->curr != NULL, cfs_rq);
 
@@ -3216,6 +3225,10 @@ dequeue_entity(struct cfs_rq *cfs_rq, struct sched_entity *se, int flags)
 /*
  * Preempt the current task with a newly woken task if needed:
  */
+ /*
+ 1.检测当前进程的运行时间是否超过了理想计算出来的时间。
+ 2.检测当前进程-rb_tree中运行的最小的时间进程大于理想时间，进行重新调度
+*/
 static void
 check_preempt_tick(struct cfs_rq *cfs_rq, struct sched_entity *curr)
 {
@@ -4417,7 +4430,8 @@ static void __update_cpu_load(struct rq *this_rq, unsigned long this_load,
 		 */
 		if (new_load > old_load)
 			new_load += scale - 1;
-
+		//计算公式如下:
+		//cpu_load[i] = (1 - 1/2^i)*cpu_load[i] + 1/2^i *load_avg
 		this_rq->cpu_load[i] = (old_load * (scale - 1) + new_load) >> i;
 	}
 
@@ -4497,7 +4511,7 @@ void update_cpu_load_nohz(void)
  */
 void update_cpu_load_active(struct rq *this_rq)
 {
-	//获取平局负载
+	//获取平jun负载
 	unsigned long load = weighted_cpuload(cpu_of(this_rq));
 	/*
 	 * See the mess around update_idle_cpu_load() / update_cpu_load_nohz().
@@ -7673,7 +7687,7 @@ static void rebalance_domains(struct rq *rq, enum cpu_idle_type idle)
 	unsigned long interval;
 	struct sched_domain *sd;
 	/* Earliest time when we have to do rebalance again */
-	unsigned long next_balance = jiffies + 60*HZ;
+	unsigned long next_balance = jiffies + 60*HZ; //  1分钟后进行第二次负载均衡
 	int update_next_balance = 0;
 	int need_serialize, need_decay = 0;
 	u64 max_cost = 0;
@@ -7941,7 +7955,7 @@ void trigger_load_balance(struct rq *rq)
 		return;
 
 	if (time_after_eq(jiffies, rq->next_balance))
-		raise_softirq(SCHED_SOFTIRQ);
+		raise_softirq(SCHED_SOFTIRQ); // run_rebalance_domains
 #ifdef CONFIG_NO_HZ_COMMON
 	if (nohz_kick_needed(rq))
 		nohz_balancer_kick();

@@ -114,3 +114,23 @@ https://blog.csdn.net/feelabclihu/article/details/106435849?utm_medium=distribut
 （2）进程通过sched_exec开始执行；
 
 （3）阻塞的进程被唤醒。
+
+
+
+
+
+trigger_load_balance中，1分钟触发一次软终端做一次负载均衡。
+
+负载均衡 不同domain的创建：
+rest_init
+	kernel_init
+		kernel_init_freeable();
+			sched_init_smp();
+				init_sched_domains(cpu_active_mask);
+					build_sched_domains(doms_cur[0], NULL);
+						for_each_sd_topology(tl) 
+							build_sched_domain(tl, cpu_map, attr, sd, i);
+								*sd = sd_init(tl, cpu)
+负载均衡函数：
+run_rebalance_domains
+	

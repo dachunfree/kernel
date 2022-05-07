@@ -1,11 +1,12 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * (C) Copyright 2014  Angelo Dureghello <angelo@sysam.it>
- *
- * SPDX-License-Identifier:	GPL-2.0+
  *
  */
 
 #include <common.h>
+#include <cpu_func.h>
+#include <init.h>
 #include <watchdog.h>
 #include <asm/immap.h>
 #include <asm/io.h>
@@ -142,7 +143,7 @@ int cpu_init_r(void)
 	return 0;
 }
 
-void uart_port_conf(void)
+void uart_port_conf(int port)
 {
 }
 

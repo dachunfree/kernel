@@ -24,6 +24,8 @@ typedef __kernel_gid32_t	gid_t;
 typedef __kernel_uid16_t        uid16_t;
 typedef __kernel_gid16_t        gid16_t;
 
+typedef unsigned long		uintptr_t;
+
 #ifdef CONFIG_UID16
 /* This is defined by include/asm-{arch}/posix_types.h */
 typedef __kernel_old_uid_t	old_uid_t;
@@ -83,7 +85,7 @@ typedef unsigned int		u_int;
 typedef unsigned long		u_long;
 
 /* sysv */
-typedef unsigned char		unchar;
+typedef unsigned char		uchar;
 typedef unsigned short		ushort;
 typedef unsigned int		uint;
 typedef unsigned long		ulong;
@@ -104,8 +106,7 @@ typedef		__u8		uint8_t;
 typedef		__u16		uint16_t;
 typedef		__u32		uint32_t;
 
-#if defined(__GNUC__) && !defined(__STRICT_ANSI__) && \
-	(!defined(CONFIG_USE_STDINT) || !defined(__INT64_TYPE__))
+#if defined(__GNUC__) && !defined(__STRICT_ANSI__)
 typedef		__u64		uint64_t;
 typedef		__u64		u_int64_t;
 typedef		__s64		int64_t;
@@ -118,10 +119,8 @@ typedef		__s64		int64_t;
 #define aligned_be64 __be64 __aligned(8)
 #define aligned_le64 __le64 __aligned(8)
 
-#if defined(CONFIG_USE_STDINT) && defined(__INT64_TYPE__)
-typedef		__UINT64_TYPE__	uint64_t;
-typedef		__UINT64_TYPE__	u_int64_t;
-typedef		__INT64_TYPE__		int64_t;
+#ifdef __KERNEL__
+typedef phys_addr_t resource_size_t;
 #endif
 
 /*
@@ -152,11 +151,20 @@ typedef __u32 __bitwise __wsum;
 
 typedef unsigned __bitwise__	gfp_t;
 
+#ifdef __linux__
 struct ustat {
 	__kernel_daddr_t	f_tfree;
 	__kernel_ino_t		f_tinode;
 	char			f_fname[6];
 	char			f_fpack[6];
 };
+#endif
+
+#define DECLARE_BITMAP(name, bits) \
+	unsigned long name[BITS_TO_LONGS(bits)]
+
+typedef volatile unsigned long	vu_long;
+typedef volatile unsigned short vu_short;
+typedef volatile unsigned char	vu_char;
 
 #endif /* _LINUX_TYPES_H */

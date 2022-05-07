@@ -1,18 +1,16 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * Copyright (C) 2007,2008
  * Nobuhiro Iwamatsu <iwamatsu@nigauri.org>
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
 #include <ide.h>
+#include <init.h>
+#include <net.h>
 #include <netdev.h>
 #include <asm/processor.h>
 #include <asm/io.h>
-#include <asm/pci.h>
-
-DECLARE_GLOBAL_DATA_PTR;
 
 int checkboard(void)
 {
@@ -22,14 +20,6 @@ int checkboard(void)
 
 int board_init(void)
 {
-	return 0;
-}
-
-int dram_init(void)
-{
-	gd->bd->bi_memstart = CONFIG_SYS_SDRAM_BASE;
-	gd->bd->bi_memsize = CONFIG_SYS_SDRAM_SIZE;
-	printf("DRAM:  %dMB\n", CONFIG_SYS_SDRAM_SIZE / (1024 * 1024));
 	return 0;
 }
 
@@ -56,13 +46,9 @@ void ide_set_reset(int idereset)
 	}
 }
 
-static struct pci_controller hose;
-void pci_init_board(void)
-{
-	pci_sh7751_init(&hose);
-}
-
-int board_eth_init(bd_t *bis)
+#ifndef CONFIG_DM_ETH
+int board_eth_init(struct bd_info *bis)
 {
 	return pci_eth_init(bis);
 }
+#endif

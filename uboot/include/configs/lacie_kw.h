@@ -1,7 +1,6 @@
+/* SPDX-License-Identifier: GPL-2.0+ */
 /*
  * Copyright (C) 2011 Simon Guinot <sguinot@lacie.com>
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #ifndef _CONFIG_LACIE_KW_H
@@ -12,27 +11,18 @@
  */
 #if defined(CONFIG_INETSPACE_V2)
 #define CONFIG_MACH_TYPE		MACH_TYPE_INETSPACE_V2
-#define CONFIG_IDENT_STRING		" IS v2"
 #elif defined(CONFIG_NETSPACE_V2)
 #define CONFIG_MACH_TYPE		MACH_TYPE_NETSPACE_V2
-#define CONFIG_IDENT_STRING		" NS v2"
 #elif defined(CONFIG_NETSPACE_LITE_V2)
-#define MACH_TYPE_NETSPACE_LITE_V2	2983 /* missing in mach-types.h */
 #define CONFIG_MACH_TYPE		MACH_TYPE_NETSPACE_LITE_V2
-#define CONFIG_IDENT_STRING		" NS v2 Lite"
 #elif defined(CONFIG_NETSPACE_MINI_V2)
-#define MACH_TYPE_NETSPACE_MINI_V2	2831 /* missing in mach-types.h */
 #define CONFIG_MACH_TYPE		MACH_TYPE_NETSPACE_MINI_V2
-#define CONFIG_IDENT_STRING		" NS v2 Mini"
 #elif defined(CONFIG_NETSPACE_MAX_V2)
 #define CONFIG_MACH_TYPE		MACH_TYPE_NETSPACE_MAX_V2
-#define CONFIG_IDENT_STRING		" NS Max v2"
 #elif defined(CONFIG_D2NET_V2)
 #define CONFIG_MACH_TYPE		MACH_TYPE_D2NET_V2
-#define CONFIG_IDENT_STRING		" D2 v2"
 #elif defined(CONFIG_NET2BIG_V2)
 #define CONFIG_MACH_TYPE		MACH_TYPE_NET2BIG_V2
-#define CONFIG_IDENT_STRING		" 2Big v2"
 #else
 #error "Unknown board"
 #endif
@@ -50,20 +40,6 @@
 #define CONFIG_SKIP_LOWLEVEL_INIT	/* disable board lowlevel_init */
 
 /*
- * Commands configuration
- */
-#define CONFIG_SYS_NO_FLASH		/* Declare no flash (NOR/SPI) */
-#define CONFIG_CMD_ENV
-#define CONFIG_CMD_DHCP
-#define CONFIG_CMD_PING
-#define CONFIG_CMD_SF
-#define CONFIG_CMD_I2C
-#define CONFIG_CMD_IDE
-#ifndef CONFIG_NETSPACE_MINI_V2 /* No USB ports on Network Space v2 Mini */
-#define CONFIG_CMD_USB
-#endif
-
-/*
  * Core clock definition
  */
 #define CONFIG_SYS_TCLK			166000000 /* 166MHz */
@@ -71,7 +47,6 @@
 /*
  * SDRAM configuration
  */
-#define CONFIG_NR_DRAM_BANKS		1
 
 /*
  * Different SDRAM configuration and size for some of the boards derived
@@ -90,48 +65,34 @@
 #include "mv-common.h"
 
 /* Remove or override few declarations from mv-common.h */
-#undef CONFIG_RBTREE
-#undef CONFIG_ENV_SPI_MAX_HZ
 #undef CONFIG_SYS_IDE_MAXBUS
 #undef CONFIG_SYS_IDE_MAXDEVICE
-#undef CONFIG_SYS_PROMPT
-#define CONFIG_ENV_SPI_MAX_HZ           20000000 /* 20Mhz */
-#if defined(CONFIG_D2NET_V2)
-#define CONFIG_SYS_PROMPT		"d2v2> "
-#elif defined(CONFIG_NET2BIG_V2)
-#define CONFIG_SYS_PROMPT		"2big2> "
-#else
-#define CONFIG_SYS_PROMPT		"ns2> "
-#endif
 
 /*
  * Enable platform initialisation via misc_init_r() function
  */
-#define CONFIG_MISC_INIT_R
 
 /*
  * Ethernet Driver configuration
  */
 #ifdef CONFIG_CMD_NET
 #define CONFIG_MVGBE_PORTS		{1, 0} /* enable port 0 only */
-#define CONFIG_NETCONSOLE
 #endif
 
 /*
  * SATA Driver configuration
  */
-#ifdef CONFIG_MVSATA_IDE
-#define CONFIG_SYS_ATA_IDE0_OFFSET      MV_SATA_PORT0_OFFSET
+
+#ifdef CONFIG_SATA
+#define CONFIG_SYS_64BIT_LBA
+#define CONFIG_LBA48
 #if defined(CONFIG_NETSPACE_MAX_V2) || defined(CONFIG_D2NET_V2) || \
 	defined(CONFIG_NET2BIG_V2)
-#define CONFIG_SYS_ATA_IDE1_OFFSET      MV_SATA_PORT1_OFFSET
-#define CONFIG_SYS_IDE_MAXBUS           2
-#define CONFIG_SYS_IDE_MAXDEVICE        2
+#define CONFIG_SYS_SATA_MAX_DEVICE	2
 #else
-#define CONFIG_SYS_IDE_MAXBUS           1
-#define CONFIG_SYS_IDE_MAXDEVICE        1
+#define CONFIG_SYS_SATA_MAX_DEVICE	1
 #endif
-#endif /* CONFIG_MVSATA_IDE */
+#endif /* CONFIG_SATA */
 
 /*
  * Enable GPI0 support
@@ -143,7 +104,6 @@
  */
 #ifdef CONFIG_CMD_I2C
 /* I2C EEPROM HT24LC04 (512B - 32 pages of 16 Bytes) */
-#define CONFIG_CMD_EEPROM
 #define CONFIG_SYS_I2C_EEPROM_ADDR		0x50
 #define CONFIG_SYS_EEPROM_PAGE_WRITE_BITS	4 /* 16-byte page size */
 #define CONFIG_SYS_I2C_EEPROM_ADDR_LEN		1 /* 8-bit device address */
@@ -155,45 +115,18 @@
 /*
  * Partition support
  */
-#define CONFIG_DOS_PARTITION
-#define CONFIG_EFI_PARTITION
 
 /*
  * File systems support
  */
-#define CONFIG_CMD_EXT2
-#define CONFIG_CMD_FAT
-
-/*
- * Use the HUSH parser
- */
-#define CONFIG_SYS_HUSH_PARSER
-
-/*
- * Console configuration
- */
-#define CONFIG_CONSOLE_MUX
-#define CONFIG_SYS_CONSOLE_IS_IN_ENV
-
-/*
- * Enable device tree support
- */
-#define CONFIG_OF_LIBFDT
 
 /*
  * Environment variables configurations
  */
-#define CONFIG_ENV_IS_IN_SPI_FLASH
-#define CONFIG_ENV_SECT_SIZE		0x10000	/* 64KB */
-#define CONFIG_ENV_SIZE			0x1000	/* 4KB */
-#define CONFIG_ENV_ADDR			0x70000
-#define CONFIG_ENV_OFFSET		0x70000	/* env starts here */
 
 /*
  * Default environment variables
  */
-#define CONFIG_BOOTARGS "console=ttyS0,115200"
-
 #define CONFIG_BOOTCOMMAND					\
 	"dhcp && run netconsole; "				\
 	"if run usbload || run diskload; then bootm; fi"
@@ -209,8 +142,8 @@
 		"set stdin $stdin,nc; "				\
 		"set stdout $stdout,nc; "			\
 		"set stderr $stderr,nc;\0"			\
-	"diskload=ide reset && "				\
-		"ext2load ide 0:1 $loadaddr /boot/$bootfile\0"	\
+	"diskload=sata init && "				\
+		"ext2load sata 0:1 $loadaddr /boot/$bootfile\0"	\
 	"usbload=usb start && "					\
 		"fatload usb 0:1 $loadaddr /boot/$bootfile\0"
 

@@ -1,13 +1,14 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * Copyright 2014 Freescale Semiconductor, Inc.
  *
  * Chunhe Lan <Chunhe.Lan@freescale.com>
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
 #include <command.h>
+#include <fdt_support.h>
+#include <net.h>
 #include <netdev.h>
 #include <asm/mmu.h>
 #include <asm/processor.h>
@@ -35,7 +36,7 @@ void fdt_fixup_board_enet(void *fdt)
 	return;
 }
 
-int board_eth_init(bd_t *bis)
+int board_eth_init(struct bd_info *bis)
 {
 #if defined(CONFIG_FMAN_ENET)
 	int i, interface;
@@ -77,6 +78,9 @@ int board_eth_init(bd_t *bis)
 		puts("Invalid SerDes1 protocol for T4240RDB\n");
 	}
 
+	fm_disable_port(FM1_DTSEC5);
+	fm_disable_port(FM1_DTSEC6);
+
 	for (i = FM1_DTSEC1; i < FM1_DTSEC1 + CONFIG_SYS_NUM_FM1_DTSEC; i++) {
 		interface = fm_info_get_enet_if(i);
 		switch (interface) {
@@ -115,6 +119,8 @@ int board_eth_init(bd_t *bis)
 		puts("Invalid SerDes2 protocol for T4240RDB\n");
 	}
 
+	fm_disable_port(FM2_DTSEC5);
+	fm_disable_port(FM2_DTSEC6);
 	for (i = FM2_DTSEC1; i < FM2_DTSEC1 + CONFIG_SYS_NUM_FM2_DTSEC; i++) {
 		interface = fm_info_get_enet_if(i);
 		switch (interface) {

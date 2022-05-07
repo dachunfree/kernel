@@ -1,12 +1,12 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * Copyright (c) 2012 Samsung Electronics.
  * Abhilash Kesavan <a.kesavan@samsung.com>
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
 #include <fdtdec.h>
+#include <log.h>
 #include <asm/gpio.h>
 #include <asm/arch/pinmux.h>
 #include <asm/arch/sromc.h>
@@ -379,6 +379,20 @@ static void exynos5_i2s_config(int peripheral)
 	}
 }
 
+static void exynos5420_i2s_config(int peripheral)
+{
+	int i;
+
+	switch (peripheral) {
+	case PERIPH_ID_I2S0:
+		for (i = 0; i < 5; i++)
+			gpio_cfg_pin(EXYNOS5420_GPIO_Z0 + i,
+				     S5P_GPIO_FUNC(0x02));
+		break;
+	}
+}
+
+
 void exynos5_spi_config(int peripheral)
 {
 	int cfg = 0, pin = 0, i;
@@ -506,6 +520,9 @@ static int exynos5_pinmux_config(int peripheral, int flags)
 		 */
 		gpio_set_pull(EXYNOS5_GPIO_X07, S5P_GPIO_PULL_NONE);
 		break;
+	case PERIPH_ID_PWM0:
+		gpio_cfg_pin(EXYNOS5_GPIO_B20, S5P_GPIO_FUNC(2));
+		break;
 	default:
 		debug("%s: invalid peripheral %d", __func__, peripheral);
 		return -1;
@@ -547,6 +564,12 @@ static int exynos5420_pinmux_config(int peripheral, int flags)
 	case PERIPH_ID_I2C9:
 	case PERIPH_ID_I2C10:
 		exynos5420_i2c_config(peripheral);
+		break;
+	case PERIPH_ID_I2S0:
+		exynos5420_i2s_config(peripheral);
+		break;
+	case PERIPH_ID_PWM0:
+		gpio_cfg_pin(EXYNOS5420_GPIO_B20, S5P_GPIO_FUNC(2));
 		break;
 	default:
 		debug("%s: invalid peripheral %d", __func__, peripheral);
@@ -858,7 +881,7 @@ static int exynos4x12_pinmux_config(int peripheral, int flags)
 int exynos_pinmux_config(int peripheral, int flags)
 {
 	if (cpu_is_exynos5()) {
-		if (proid_is_exynos5420() || proid_is_exynos5422())
+		if (proid_is_exynos542x())
 			return exynos5420_pinmux_config(peripheral, flags);
 		else if (proid_is_exynos5250())
 			return exynos5_pinmux_config(peripheral, flags);

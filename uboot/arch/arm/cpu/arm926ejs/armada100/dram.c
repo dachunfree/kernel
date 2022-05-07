@@ -1,13 +1,13 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * (C) Copyright 2010
  * Marvell Semiconductor <www.marvell.com>
  * Written-by: Prafulla Wadaskar <prafulla@marvell.com>,
  * Contributor: Mahavir Jain <mjain@marvell.com>
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
+#include <init.h>
 #include <asm/io.h>
 #include <asm/arch/armada100.h>
 
@@ -108,7 +108,9 @@ int dram_init(void)
  * If this function is not defined here,
  * board.c alters dram bank zero configuration defined above.
  */
-void dram_init_banksize(void)
+int dram_init_banksize(void)
 {
 	dram_init();
+
+	return 0;
 }

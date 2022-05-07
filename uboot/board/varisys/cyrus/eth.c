@@ -1,11 +1,11 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * Author Adrian Cox
  * Based somewhat on board/freescale/corenet_ds/eth_hydra.c
- *
- * SPDX-License-Identifier:    GPL-2.0+
  */
 
 #include <common.h>
+#include <net.h>
 #include <netdev.h>
 #include <asm/fsl_serdes.h>
 #include <fm_eth.h>
@@ -19,7 +19,7 @@
 #define FIRST_PORT_ADDR 3
 #define SECOND_PORT_ADDR 7
 
-#ifdef CONFIG_PPC_P5040
+#ifdef CONFIG_ARCH_P5040
 #define FIRST_PORT FM1_DTSEC5
 #define SECOND_PORT FM2_DTSEC5
 #else
@@ -53,7 +53,7 @@ static void cyrus_phy_tuning(int phy)
 }
 #endif
 
-int board_eth_init(bd_t *bis)
+int board_eth_init(struct bd_info *bis)
 {
 #ifdef CONFIG_FMAN_ENET
 	struct fsl_pq_mdio_info dtsec_mdio_info;
@@ -83,7 +83,7 @@ int board_eth_init(bd_t *bis)
 			fm_disable_port(i);
 	}
 
-#ifdef CONFIG_PPC_P5040
+#ifdef CONFIG_ARCH_P5040
 	for (i = FM2_DTSEC2; i < FM2_DTSEC1 + CONFIG_SYS_NUM_FM2_DTSEC; i++) {
 		if (!IS_VALID_PORT(i))
 			fm_disable_port(i);

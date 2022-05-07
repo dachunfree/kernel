@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * (C) Copyright 2004-2011
  * Texas Instruments, <www.ti.com>
@@ -10,17 +11,20 @@
  *	Richard Woodruff <r-woodruff2@ti.com>
  *	Syed Mohammed Khasim <khasim@ti.com>
  *
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 #include <common.h>
+#include <bootstage.h>
 #include <dm.h>
+#include <env.h>
+#include <init.h>
+#include <net.h>
 #include <ns16550.h>
-#ifdef CONFIG_STATUS_LED
+#include <serial.h>
+#ifdef CONFIG_LED_STATUS
 #include <status_led.h>
 #endif
 #include <twl4030.h>
-#include <linux/mtd/nand.h>
+#include <linux/mtd/rawnand.h>
 #include <asm/io.h>
 #include <asm/arch/mmc_host_def.h>
 #include <asm/arch/mux.h>
@@ -29,17 +33,12 @@
 #include <asm/gpio.h>
 #include <asm/mach-types.h>
 #include <asm/omap_musb.h>
-#include <asm/errno.h>
+#include <linux/errno.h>
 #include <linux/usb/ch9.h>
 #include <linux/usb/gadget.h>
 #include <linux/usb/musb.h>
 #include "beagle.h"
 #include <command.h>
-
-#ifdef CONFIG_USB_EHCI
-#include <usb.h>
-#include <asm/ehci-omap.h>
-#endif
 
 #define TWL4030_I2C_BUS			0
 #define EXPANSION_EEPROM_I2C_BUS	1
@@ -72,17 +71,6 @@ static struct {
 	char env_setting[64];
 } expansion_config;
 
-static const struct ns16550_platdata beagle_serial = {
-	OMAP34XX_UART3,
-	2,
-	V_NS16550_CLK
-};
-
-U_BOOT_DEVICE(beagle_uart) = {
-	"ns16550_serial",
-	&beagle_serial
-};
-
 /*
  * Routine: board_init
  * Description: Early hardware init.
@@ -95,12 +83,23 @@ int board_init(void)
 	/* boot param addr */
 	gd->bd->bi_boot_params = (OMAP34XX_SDRC_CS0 + 0x100);
 
-#if defined(CONFIG_STATUS_LED) && defined(STATUS_LED_BOOT)
-	status_led_set (STATUS_LED_BOOT, STATUS_LED_ON);
+#if defined(CONFIG_LED_STATUS) && defined(CONFIG_LED_STATUS_BOOT_ENABLE)
+	status_led_set(CONFIG_LED_STATUS_BOOT, CONFIG_LED_STATUS_ON);
 #endif
 
 	return 0;
 }
+
+#if defined(CONFIG_SPL_OS_BOOT)
+int spl_start_uboot(void)
+{
+	/* break into full u-boot on 'c' */
+	if (serial_tstc() && serial_getc() == 'c')
+		return 1;
+
+	return 0;
+}
+#endif /* CONFIG_SPL_OS_BOOT */
 
 /*
  * Routine: get_board_revision
@@ -293,33 +292,6 @@ static void beagle_dvi_pup(void)
 }
 #endif
 
-#ifdef CONFIG_USB_MUSB_OMAP2PLUS
-static struct musb_hdrc_config musb_config = {
-	.multipoint     = 1,
-	.dyn_fifo       = 1,
-	.num_eps        = 16,
-	.ram_bits       = 12,
-};
-
-static struct omap_musb_board_data musb_board_data = {
-	.interface_type	= MUSB_INTERFACE_ULPI,
-};
-
-static struct musb_hdrc_platform_data musb_plat = {
-#if defined(CONFIG_USB_MUSB_HOST)
-	.mode           = MUSB_HOST,
-#elif defined(CONFIG_USB_MUSB_GADGET)
-	.mode		= MUSB_PERIPHERAL,
-#else
-#error "Please define either CONFIG_USB_MUSB_HOST or CONFIG_USB_MUSB_GADGET"
-#endif
-	.config         = &musb_config,
-	.power          = 100,
-	.platform_ops	= &omap2430_ops,
-	.board_data	= &musb_board_data,
-};
-#endif
-
 /*
  * Routine: misc_init_r
  * Description: Configure board specific parts
@@ -340,16 +312,16 @@ int misc_init_r(void)
 	switch (get_board_revision()) {
 	case REVISION_AXBX:
 		printf("Beagle Rev Ax/Bx\n");
-		setenv("beaglerev", "AxBx");
+		env_set("beaglerev", "AxBx");
 		break;
 	case REVISION_CX:
 		printf("Beagle Rev C1/C2/C3\n");
-		setenv("beaglerev", "Cx");
+		env_set("beaglerev", "Cx");
 		MUX_BEAGLE_C();
 		break;
 	case REVISION_C4:
 		printf("Beagle Rev C4\n");
-		setenv("beaglerev", "C4");
+		env_set("beaglerev", "C4");
 		MUX_BEAGLE_C();
 		/* Set VAUX2 to 1.8V for EHCI PHY */
 		twl4030_pmrecv_vsel_cfg(TWL4030_PM_RECEIVER_VAUX2_DEDICATED,
@@ -359,7 +331,7 @@ int misc_init_r(void)
 		break;
 	case REVISION_XM_AB:
 		printf("Beagle xM Rev A/B\n");
-		setenv("beaglerev", "xMAB");
+		env_set("beaglerev", "xMAB");
 		MUX_BEAGLE_XM();
 		/* Set VAUX2 to 1.8V for EHCI PHY */
 		twl4030_pmrecv_vsel_cfg(TWL4030_PM_RECEIVER_VAUX2_DEDICATED,
@@ -370,7 +342,7 @@ int misc_init_r(void)
 		break;
 	case REVISION_XM_C:
 		printf("Beagle xM Rev C\n");
-		setenv("beaglerev", "xMC");
+		env_set("beaglerev", "xMC");
 		MUX_BEAGLE_XM();
 		/* Set VAUX2 to 1.8V for EHCI PHY */
 		twl4030_pmrecv_vsel_cfg(TWL4030_PM_RECEIVER_VAUX2_DEDICATED,
@@ -396,14 +368,14 @@ int misc_init_r(void)
 			expansion_config.revision,
 			expansion_config.fab_revision);
 		MUX_TINCANTOOLS_ZIPPY();
-		setenv("buddy", "zippy");
+		env_set("buddy", "zippy");
 		break;
 	case TINCANTOOLS_ZIPPY2:
 		printf("Recognized Tincantools Zippy2 board (rev %d %s)\n",
 			expansion_config.revision,
 			expansion_config.fab_revision);
 		MUX_TINCANTOOLS_ZIPPY();
-		setenv("buddy", "zippy2");
+		env_set("buddy", "zippy2");
 		break;
 	case TINCANTOOLS_TRAINER:
 		printf("Recognized Tincantools Trainer board (rev %d %s)\n",
@@ -411,44 +383,44 @@ int misc_init_r(void)
 			expansion_config.fab_revision);
 		MUX_TINCANTOOLS_ZIPPY();
 		MUX_TINCANTOOLS_TRAINER();
-		setenv("buddy", "trainer");
+		env_set("buddy", "trainer");
 		break;
 	case TINCANTOOLS_SHOWDOG:
 		printf("Recognized Tincantools Showdow board (rev %d %s)\n",
 			expansion_config.revision,
 			expansion_config.fab_revision);
 		/* Place holder for DSS2 definition for showdog lcd */
-		setenv("defaultdisplay", "showdoglcd");
-		setenv("buddy", "showdog");
+		env_set("defaultdisplay", "showdoglcd");
+		env_set("buddy", "showdog");
 		break;
 	case KBADC_BEAGLEFPGA:
 		printf("Recognized KBADC Beagle FPGA board\n");
 		MUX_KBADC_BEAGLEFPGA();
-		setenv("buddy", "beaglefpga");
+		env_set("buddy", "beaglefpga");
 		break;
 	case LW_BEAGLETOUCH:
 		printf("Recognized Liquidware BeagleTouch board\n");
-		setenv("buddy", "beagletouch");
+		env_set("buddy", "beagletouch");
 		break;
 	case BRAINMUX_LCDOG:
 		printf("Recognized Brainmux LCDog board\n");
-		setenv("buddy", "lcdog");
+		env_set("buddy", "lcdog");
 		break;
 	case BRAINMUX_LCDOGTOUCH:
 		printf("Recognized Brainmux LCDog Touch board\n");
-		setenv("buddy", "lcdogtouch");
+		env_set("buddy", "lcdogtouch");
 		break;
 	case BBTOYS_WIFI:
 		printf("Recognized BeagleBoardToys WiFi board\n");
 		MUX_BBTOYS_WIFI()
-		setenv("buddy", "bbtoys-wifi");
-		break;;
+		env_set("buddy", "bbtoys-wifi");
+		break;
 	case BBTOYS_VGA:
 		printf("Recognized BeagleBoardToys VGA board\n");
-		break;;
+		break;
 	case BBTOYS_LCD:
 		printf("Recognized BeagleBoardToys LCD board\n");
-		break;;
+		break;
 	case BCT_BRETTL3:
 		printf("Recognized bct electronic GmbH brettl3 board\n");
 		break;
@@ -458,20 +430,20 @@ int misc_init_r(void)
 	case LSR_COM6L_ADPT:
 		printf("Recognized LSR COM6L Adapter Board\n");
 		MUX_BBTOYS_WIFI()
-		setenv("buddy", "lsr-com6l-adpt");
+		env_set("buddy", "lsr-com6l-adpt");
 		break;
 	case BEAGLE_NO_EEPROM:
 		printf("No EEPROM on expansion board\n");
-		setenv("buddy", "none");
+		env_set("buddy", "none");
 		break;
 	default:
 		printf("Unrecognized expansion board: %x\n",
 			expansion_config.device_vendor);
-		setenv("buddy", "unknown");
+		env_set("buddy", "unknown");
 	}
 
 	if (expansion_config.content == 1)
-		setenv(expansion_config.env_var, expansion_config.env_setting);
+		env_set(expansion_config.env_var, expansion_config.env_setting);
 
 	twl4030_power_init();
 	switch (get_board_revision()) {
@@ -502,12 +474,16 @@ int misc_init_r(void)
 	omap3_dss_enable();
 #endif
 
-#ifdef CONFIG_USB_MUSB_OMAP2PLUS
-	musb_register(&musb_plat, &musb_board_data, (void *)MUSB_BASE);
-#endif
-
 	if (generate_fake_mac)
 		omap_die_id_usbethaddr();
+
+#if defined(CONFIG_MTDIDS_DEFAULT) && defined(CONFIG_MTDPARTS_DEFAULT)
+	if (strlen(CONFIG_MTDIDS_DEFAULT))
+		env_set("mtdids", CONFIG_MTDIDS_DEFAULT);
+
+	if (strlen(CONFIG_MTDPARTS_DEFAULT))
+		env_set("mtdparts", CONFIG_MTDPARTS_DEFAULT);
+#endif
 
 	return 0;
 }
@@ -523,50 +499,16 @@ void set_muxconf_regs(void)
 	MUX_BEAGLE();
 }
 
-#if defined(CONFIG_GENERIC_MMC) && !defined(CONFIG_SPL_BUILD)
-int board_mmc_init(bd_t *bis)
+#if defined(CONFIG_MMC)
+int board_mmc_init(struct bd_info *bis)
 {
 	return omap_mmc_init(0, 0, 0, -1, -1);
 }
 #endif
 
-#if defined(CONFIG_GENERIC_MMC)
+#if defined(CONFIG_MMC)
 void board_mmc_power_init(void)
 {
 	twl4030_power_mmc_init(0);
-}
-#endif
-
-#if defined(CONFIG_USB_EHCI) && !defined(CONFIG_SPL_BUILD)
-/* Call usb_stop() before starting the kernel */
-void show_boot_progress(int val)
-{
-	if (val == BOOTSTAGE_ID_RUN_OS)
-		usb_stop();
-}
-
-static struct omap_usbhs_board_data usbhs_bdata = {
-	.port_mode[0] = OMAP_EHCI_PORT_MODE_PHY,
-	.port_mode[1] = OMAP_EHCI_PORT_MODE_PHY,
-	.port_mode[2] = OMAP_USBHS_PORT_MODE_UNUSED
-};
-
-int ehci_hcd_init(int index, enum usb_init_type init,
-		struct ehci_hccr **hccr, struct ehci_hcor **hcor)
-{
-	return omap_ehci_hcd_init(index, &usbhs_bdata, hccr, hcor);
-}
-
-int ehci_hcd_stop(int index)
-{
-	return omap_ehci_hcd_stop();
-}
-
-#endif /* CONFIG_USB_EHCI */
-
-#if defined(CONFIG_USB_ETHER) && defined(CONFIG_USB_MUSB_GADGET)
-int board_eth_init(bd_t *bis)
-{
-	return usb_eth_initialize(bis);
 }
 #endif

@@ -1,7 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * Copyright 2014 Broadcom Corporation
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 /*
@@ -14,6 +13,8 @@
  */
 #include <common.h>
 #include <command.h>
+#include <env.h>
+#include <log.h>
 
 #define SYSOPEN		0x01
 #define SYSCLOSE	0x02
@@ -181,12 +182,13 @@ static int smh_load_file(const char * const name, ulong load_addr,
 	return 0;
 }
 
-static int do_smhload(cmd_tbl_t *cmdtp, int flag, int argc, char * const argv[])
+static int do_smhload(struct cmd_tbl *cmdtp, int flag, int argc,
+		      char *const argv[])
 {
 	if (argc == 3 || argc == 4) {
 		ulong load_addr;
 		ulong end_addr = 0;
-		ulong ret;
+		int ret;
 		char end_str[64];
 
 		load_addr = simple_strtoul(argv[2], NULL, 16);
@@ -195,12 +197,12 @@ static int do_smhload(cmd_tbl_t *cmdtp, int flag, int argc, char * const argv[])
 
 		ret = smh_load_file(argv[1], load_addr, &end_addr);
 		if (ret < 0)
-			return 1;
+			return CMD_RET_FAILURE;
 
 		/* Optionally save returned end to the environment */
 		if (argc == 4) {
 			sprintf(end_str, "0x%08lx", end_addr);
-			setenv(argv[3], end_str);
+			env_set(argv[3], end_str);
 		}
 	} else {
 		return CMD_RET_USAGE;

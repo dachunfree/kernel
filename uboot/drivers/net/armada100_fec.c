@@ -1,22 +1,23 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * (C) Copyright 2011
  * eInfochips Ltd. <www.einfochips.com>
- * Written-by: Ajay Bhargav <ajay.bhargav@einfochips.com>
+ * Written-by: Ajay Bhargav <contact@8051projects.net>
  *
  * (C) Copyright 2010
  * Marvell Semiconductor <www.marvell.com>
  * Contributor: Mahavir Jain <mjain@marvell.com>
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
+#include <log.h>
 #include <net.h>
 #include <malloc.h>
 #include <miiphy.h>
 #include <netdev.h>
 #include <asm/types.h>
 #include <asm/byteorder.h>
+#include <linux/delay.h>
 #include <linux/err.h>
 #include <linux/mii.h>
 #include <asm/io.h>
@@ -57,18 +58,19 @@ static int armdfec_phy_timeout(u32 *reg, u32 flag, int cond)
 	return !timeout;
 }
 
-static int smi_reg_read(const char *devname, u8 phy_addr, u8 phy_reg,
-			u16 *value)
+static int smi_reg_read(struct mii_dev *bus, int phy_addr, int devad,
+			int phy_reg)
 {
-	struct eth_device *dev = eth_get_dev_by_name(devname);
+	u16 value = 0;
+	struct eth_device *dev = eth_get_dev_by_name(bus->name);
 	struct armdfec_device *darmdfec = to_darmdfec(dev);
 	struct armdfec_reg *regs = darmdfec->regs;
 	u32 val;
 
 	if (phy_addr == PHY_ADR_REQ && phy_reg == PHY_ADR_REQ) {
 		val = readl(&regs->phyadr);
-		*value = val & 0x1f;
-		return 0;
+		value = val & 0x1f;
+		return value;
 	}
 
 	/* check parameters */
@@ -99,15 +101,15 @@ static int smi_reg_read(const char *devname, u8 phy_addr, u8 phy_reg,
 		return -1;
 	}
 	val = readl(&regs->smi);
-	*value = val & 0xffff;
+	value = val & 0xffff;
 
-	return 0;
+	return value;
 }
 
-static int smi_reg_write(const char *devname,
-	 u8 phy_addr, u8 phy_reg, u16 value)
+static int smi_reg_write(struct mii_dev *bus, int phy_addr, int devad,
+			 int phy_reg, u16 value)
 {
-	struct eth_device *dev = eth_get_dev_by_name(devname);
+	struct eth_device *dev = eth_get_dev_by_name(bus->name);
 	struct armdfec_device *darmdfec = to_darmdfec(dev);
 	struct armdfec_reg *regs = darmdfec->regs;
 
@@ -419,7 +421,7 @@ static void armdfec_init_rx_desc_ring(struct armdfec_device *darmdfec)
 	darmdfec->p_rxdesc_curr = darmdfec->p_rxdesc;
 }
 
-static int armdfec_init(struct eth_device *dev, bd_t *bd)
+static int armdfec_init(struct eth_device *dev, struct bd_info *bd)
 {
 	struct armdfec_device *darmdfec = to_darmdfec(dev);
 	struct armdfec_reg *regs = darmdfec->regs;
@@ -711,7 +713,17 @@ int armada100_fec_register(unsigned long base_addr)
 	eth_register(dev);
 
 #if defined(CONFIG_MII) || defined(CONFIG_CMD_MII)
-	miiphy_register(dev->name, smi_reg_read, smi_reg_write);
+	int retval;
+	struct mii_dev *mdiodev = mdio_alloc();
+	if (!mdiodev)
+		return -ENOMEM;
+	strncpy(mdiodev->name, dev->name, MDIO_NAME_LEN);
+	mdiodev->read = smi_reg_read;
+	mdiodev->write = smi_reg_write;
+
+	retval = mdio_register(mdiodev);
+	if (retval < 0)
+		return retval;
 #endif
 	return 0;
 

@@ -79,7 +79,7 @@ static inline int atomic_##op##_return_relaxed(int i, atomic_t *v)	\
 	prefetchw(&v->counter);						\
 									\
 	__asm__ __volatile__("@ atomic_" #op "_return\n"		\
-"1:	ldrex	%0, [%3]\n"						\
+"1:	ldrex	%0, [%3]\n"		//result = v->counter;				\
 "	" #asm_op "	%0, %0, %4\n"					\
 "	strex	%1, %0, [%3]\n"						\
 "	teq	%1, #0\n"	//≈–∂œ «∑Ò∂¡–¥≥…π¶°£					\

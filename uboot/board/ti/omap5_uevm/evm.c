@@ -1,18 +1,21 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * (C) Copyright 2010
  * Texas Instruments Incorporated, <www.ti.com>
  * Aneesh V       <aneesh@ti.com>
  * Steve Sakoman  <steve@sakoman.com>
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 #include <common.h>
+#include <init.h>
+#include <net.h>
 #include <palmas.h>
 #include <asm/arch/omap.h>
 #include <asm/arch/sys_proto.h>
 #include <asm/arch/mmc_host_def.h>
+#include <serial.h>
 #include <tca642x.h>
 #include <usb.h>
+#include <linux/delay.h>
 #include <linux/usb/gadget.h>
 #include <dwc3-uboot.h>
 #include <dwc3-omap-uboot.h>
@@ -20,10 +23,11 @@
 
 #include "mux_data.h"
 
-#if defined(CONFIG_USB_EHCI) || defined(CONFIG_USB_XHCI_OMAP)
+#if defined(CONFIG_USB_EHCI_HCD) || defined(CONFIG_USB_XHCI_OMAP)
 #include <sata.h>
 #include <usb.h>
 #include <asm/gpio.h>
+#include <asm/mach-types.h>
 #include <asm/arch/clock.h>
 #include <asm/arch/ehci.h>
 #include <asm/ehci-omap.h>
@@ -146,39 +150,21 @@ int board_init(void)
 	return 0;
 }
 
-int board_eth_init(bd_t *bis)
+#if defined(CONFIG_SPL_OS_BOOT)
+int spl_start_uboot(void)
+{
+	/* break into full u-boot on 'c' */
+	if (serial_tstc() && serial_getc() == 'c')
+		return 1;
+
+	return 0;
+}
+#endif /* CONFIG_SPL_OS_BOOT */
+
+int board_eth_init(struct bd_info *bis)
 {
 	return 0;
 }
-
-#if defined(CONFIG_USB_EHCI) || defined(CONFIG_USB_XHCI_OMAP)
-static void enable_host_clocks(void)
-{
-	int auxclk;
-	int hs_clk_ctrl_val = (OPTFCLKEN_HSIC60M_P3_CLK |
-				OPTFCLKEN_HSIC480M_P3_CLK |
-				OPTFCLKEN_HSIC60M_P2_CLK |
-				OPTFCLKEN_HSIC480M_P2_CLK |
-				OPTFCLKEN_UTMI_P3_CLK | OPTFCLKEN_UTMI_P2_CLK);
-
-	/* Enable port 2 and 3 clocks*/
-	setbits_le32((*prcm)->cm_l3init_hsusbhost_clkctrl, hs_clk_ctrl_val);
-
-	/* Enable port 2 and 3 usb host ports tll clocks*/
-	setbits_le32((*prcm)->cm_l3init_hsusbtll_clkctrl,
-			(OPTFCLKEN_USB_CH1_CLK_ENABLE | OPTFCLKEN_USB_CH2_CLK_ENABLE));
-#ifdef CONFIG_USB_XHCI_OMAP
-	/* Enable the USB OTG Super speed clocks */
-	setbits_le32((*prcm)->cm_l3init_usb_otg_ss_clkctrl,
-			(OPTFCLKEN_REFCLK960M | OTG_SS_CLKCTRL_MODULEMODE_HW));
-#endif
-
-	auxclk = readl((*prcm)->scrm_auxclk1);
-	/* Request auxilary clock */
-	auxclk |= AUXCLK_ENABLE_MASK;
-	writel(auxclk, (*prcm)->scrm_auxclk1);
-}
-#endif
 
 /**
  * @brief misc_init_r - Configure EVM board specific configurations
@@ -198,7 +184,7 @@ int misc_init_r(void)
 	return 0;
 }
 
-void set_muxconf_regs_essential(void)
+void set_muxconf_regs(void)
 {
 	do_set_mux((*ctrl)->control_padconf_core_base,
 		   core_padconf_array_essential,
@@ -211,54 +197,12 @@ void set_muxconf_regs_essential(void)
 		   sizeof(struct pad_conf_entry));
 }
 
-#if !defined(CONFIG_SPL_BUILD) && defined(CONFIG_GENERIC_MMC)
-int board_mmc_init(bd_t *bis)
+#if defined(CONFIG_MMC)
+int board_mmc_init(struct bd_info *bis)
 {
 	omap_mmc_init(0, 0, 0, -1, -1);
 	omap_mmc_init(1, 0, 0, -1, -1);
 	return 0;
-}
-#endif
-
-#ifdef CONFIG_USB_EHCI
-static struct omap_usbhs_board_data usbhs_bdata = {
-	.port_mode[0] = OMAP_USBHS_PORT_MODE_UNUSED,
-	.port_mode[1] = OMAP_EHCI_PORT_MODE_HSIC,
-	.port_mode[2] = OMAP_EHCI_PORT_MODE_HSIC,
-};
-
-int ehci_hcd_init(int index, enum usb_init_type init,
-		struct ehci_hccr **hccr, struct ehci_hcor **hcor)
-{
-	int ret;
-
-	enable_host_clocks();
-
-	ret = omap_ehci_hcd_init(index, &usbhs_bdata, hccr, hcor);
-	if (ret < 0) {
-		puts("Failed to initialize ehci\n");
-		return ret;
-	}
-
-	return 0;
-}
-
-int ehci_hcd_stop(void)
-{
-	int ret;
-
-	ret = omap_ehci_hcd_stop();
-	return ret;
-}
-
-void usb_hub_reset_devices(int port)
-{
-	/* The LAN9730 needs to be reset after the port power has been set. */
-	if (port == 3) {
-		gpio_direction_output(CONFIG_OMAP_EHCI_PHY3_RESET_GPIO, 0);
-		udelay(10);
-		gpio_direction_output(CONFIG_OMAP_EHCI_PHY3_RESET_GPIO, 1);
-	}
 }
 #endif
 
@@ -275,8 +219,6 @@ int board_usb_init(int index, enum usb_init_type init)
 #ifdef CONFIG_PALMAS_USB_SS_PWR
 	ret = palmas_enable_ss_ldo();
 #endif
-
-	enable_host_clocks();
 
 	return 0;
 }

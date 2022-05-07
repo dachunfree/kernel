@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * Copyright (C) 2011 Simon Guinot <sguinot@lacie.com>
  *
@@ -5,12 +6,14 @@
  * (C) Copyright 2009
  * Marvell Semiconductor <www.marvell.com>
  * Written-by: Prafulla Wadaskar <prafulla@marvell.com>
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
 #include <command.h>
+#include <env.h>
+#include <init.h>
+#include <net.h>
+#include <asm/mach-types.h>
 #include <asm/arch/cpu.h>
 #include <asm/arch/soc.h>
 #include <asm/arch/mpp.h>
@@ -82,10 +85,10 @@ int board_init(void)
 int misc_init_r(void)
 {
 #if defined(CONFIG_CMD_I2C) && defined(CONFIG_SYS_I2C_EEPROM_ADDR)
-	if (!getenv("ethaddr")) {
+	if (!env_get("ethaddr")) {
 		uchar mac[6];
 		if (lacie_read_mac_address(mac) == 0)
-			eth_setenv_enetaddr("ethaddr", mac);
+			eth_env_set_enetaddr("ethaddr", mac);
 	}
 #endif
 	return 0;
@@ -97,9 +100,9 @@ int misc_init_r(void)
 void reset_phy(void)
 {
 #if defined(CONFIG_NETSPACE_LITE_V2) || defined(CONFIG_NETSPACE_MINI_V2)
-	mv_phy_88e1318_init("egiga0", 0);
+	mv_phy_88e1318_init("ethernet-controller@72000", 0);
 #else
-	mv_phy_88e1116_init("egiga0", 8);
+	mv_phy_88e1116_init("ethernet-controller@72000", 8);
 #endif
 }
 #endif
@@ -107,7 +110,7 @@ void reset_phy(void)
 #if defined(CONFIG_KIRKWOOD_GPIO)
 /* Return GPIO button status */
 static int
-do_read_button(cmd_tbl_t *cmdtp, int flag, int argc, char * const argv[])
+do_read_button(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[])
 {
 	return kw_gpio_get_value(NETSPACE_V2_GPIO_BUTTON);
 }

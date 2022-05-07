@@ -33,8 +33,9 @@ enum splash_storage {
 };
 
 enum splash_flags {
-	SPLASH_STORAGE_RAW,
-	SPLASH_STORAGE_FS,
+	SPLASH_STORAGE_RAW, /* Stored in raw memory */
+	SPLASH_STORAGE_FS,  /* Stored within a file system */
+	SPLASH_STORAGE_FIT, /* Stored inside a FIT image */
 };
 
 struct splash_location {
@@ -43,9 +44,20 @@ struct splash_location {
 	enum splash_flags flags;
 	u32 offset;	/* offset from start of storage */
 	char *devpart;  /* Use the load command dev:part conventions */
+	char *mtdpart;	/* MTD partition for ubi part */
+	char *ubivol;	/* UBI volume-name for ubifsmount */
 };
 
+#ifdef CONFIG_SPLASH_SOURCE
 int splash_source_load(struct splash_location *locations, uint size);
+#else
+static inline int splash_source_load(struct splash_location *locations,
+				     uint size)
+{
+	return 0;
+}
+#endif
+
 int splash_screen_prepare(void);
 
 #ifdef CONFIG_SPLASH_SCREEN_ALIGN
@@ -54,10 +66,10 @@ void splash_get_pos(int *x, int *y);
 static inline void splash_get_pos(int *x, int *y) { }
 #endif
 
-#if defined(CONFIG_SPLASH_SCREEN) && defined(CONFIG_LCD)
-int lcd_splash(ulong addr);
+#if defined(CONFIG_SPLASH_SCREEN) && defined(CONFIG_CMD_BMP)
+int splash_display(void);
 #else
-static inline int lcd_splash(ulong addr)
+static inline int splash_display(void)
 {
 	return -ENOSYS;
 }

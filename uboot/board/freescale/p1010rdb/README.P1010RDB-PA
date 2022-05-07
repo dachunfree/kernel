@@ -88,17 +88,16 @@ Note: 1 stands for 'on', 0 stands for 'off'
 Setting of hwconfig
 ===================
 If FlexCAN or TDM is needed, please set "fsl_p1010mux:tdm_can=can" or
-"fsl_p1010mux:tdm_can=tdm" explicitly in u-booot prompt as below for example:
+"fsl_p1010mux:tdm_can=tdm" explicitly in u-boot prompt as below for example:
 setenv hwconfig "fsl_p1010mux:tdm_can=tdm;usb1:dr_mode=host,phy_type=utmi"
 By default, don't set fsl_p1010mux:tdm_can, in this case, spi chip selection
 is set to spi-flash instead of to SLIC/TDM/DAC and tdm_can_sel is set to TDM
 instead of to CAN/UART1.
 
 
-Build and burn u-boot to NOR flash
+Build and burn U-Boot to NOR flash
 ==================================
 1. Build u-boot.bin image
-	export ARCH=powerpc
 	export CROSS_COMPILE=/your_path/powerpc-linux-gnu-
 	make P1010RDB_NOR
 
@@ -131,7 +130,7 @@ CPLD NOR bank selection register address 0xFFB00009 Bit[0]:
 1 - boot from lower 4 sectors
 
 
-Build and burn u-boot to NAND flash
+Build and burn U-Boot to NAND flash
 ===================================
 1. Build u-boot.bin image
 	export ARCH=powerpc
@@ -146,7 +145,7 @@ Build and burn u-boot to NAND flash
 3. Check SW4[1:4]= 1000 and SW6[4]=1, then power on.
 
 
-Build and burn u-boot to SPI flash
+Build and burn U-Boot to SPI flash
 ==================================
 1. Build u-boot-spi.bin image
 	make P1010RDB_SPIFLASH_config; make

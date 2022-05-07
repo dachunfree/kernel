@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * Copyright (C) 2010  Eric C. Cooper <ecc@cmu.edu>
  *
@@ -5,16 +6,18 @@
  * Prafulla Wadaskar <prafulla@marvell.com>
  * (C) Copyright 2009
  * Marvell Semiconductor <www.marvell.com>
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
+#include <bootstage.h>
+#include <init.h>
 #include <miiphy.h>
+#include <net.h>
 #include <asm/arch/soc.h>
 #include <asm/arch/mpp.h>
 #include <asm/arch/cpu.h>
 #include <asm/io.h>
+#include <asm/mach-types.h>
 #include "dockstar.h"
 
 DECLARE_GLOBAL_DATA_PTR;

@@ -1,19 +1,14 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * (C) Copyright 2000
  * Rob Taylor, Flying Pig Systems. robt@flyingpig.com.
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
-#include <linux/compiler.h>
-
+#include <clock_legacy.h>
 #include <ns16550.h>
-#ifdef CONFIG_NS87308
-#include <ns87308.h>
-#endif
-
 #include <serial.h>
+#include <linux/compiler.h>
 
 #ifndef CONFIG_NS16550_MIN_FUNCTIONS
 
@@ -127,11 +122,6 @@ static void _serial_putc(const char c, const int port)
 	NS16550_putc(PORT, c);
 }
 
-static void _serial_putc_raw(const char c, const int port)
-{
-	NS16550_putc(PORT, c);
-}
-
 static void _serial_puts(const char *s, const int port)
 {
 	while (*s) {
@@ -162,12 +152,6 @@ static inline void
 serial_putc_dev(unsigned int dev_index,const char c)
 {
 	_serial_putc(c,dev_index);
-}
-
-static inline void
-serial_putc_raw_dev(unsigned int dev_index,const char c)
-{
-	_serial_putc_raw(c,dev_index);
 }
 
 static inline void

@@ -1,13 +1,14 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * (C) Copyright 2013-2015
  * NVIDIA Corporation <www.nvidia.com>
- *
- * SPDX-License-Identifier:     GPL-2.0+
  */
 
 /* Tegra124 Clock control functions */
 
 #include <common.h>
+#include <init.h>
+#include <log.h>
 #include <asm/io.h>
 #include <asm/arch/clock.h>
 #include <asm/arch/sysctr.h>
@@ -16,6 +17,7 @@
 #include <asm/arch-tegra/timer.h>
 #include <div64.h>
 #include <fdtdec.h>
+#include <linux/delay.h>
 
 /*
  * Clock types that we can use as a source. The Tegra124 has muxes for the
@@ -72,7 +74,7 @@ enum {
  */
 #define CLK(x) CLOCK_ID_ ## x
 static enum clock_id clock_source[CLOCK_TYPE_COUNT][CLOCK_MAX_MUX+1] = {
-	{ CLK(AUDIO),	CLK(XCPU),	CLK(PERIPH),	CLK(OSC),
+	{ CLK(AUDIO),	CLK(XCPU),	CLK(PERIPH),	CLK(CLK_M),
 		CLK(NONE),	CLK(NONE),	CLK(NONE),	CLK(NONE),
 		MASK_BITS_31_30},
 	{ CLK(MEMORY),	CLK(CGENERAL),	CLK(PERIPH),	CLK(AUDIO),
@@ -642,6 +644,51 @@ u32 *get_periph_source_reg(enum periph_id periph_id)
 	}
 }
 
+int get_periph_clock_info(enum periph_id periph_id, int *mux_bits,
+			  int *divider_bits, int *type)
+{
+	enum periphc_internal_id internal_id;
+
+	if (!clock_periph_id_isvalid(periph_id))
+		return -1;
+
+	internal_id = periph_id_to_internal_id[periph_id];
+	if (!periphc_internal_id_isvalid(internal_id))
+		return -1;
+
+	*type = clock_periph_type[internal_id];
+	if (!clock_type_id_isvalid(*type))
+		return -1;
+
+	*mux_bits = clock_source[*type][CLOCK_MAX_MUX];
+
+	if (*type == CLOCK_TYPE_PC2CC3M_T16)
+		*divider_bits = 16;
+	else
+		*divider_bits = 8;
+
+	return 0;
+}
+
+enum clock_id get_periph_clock_id(enum periph_id periph_id, int source)
+{
+	enum periphc_internal_id internal_id;
+	int type;
+
+	if (!clock_periph_id_isvalid(periph_id))
+		return CLOCK_ID_NONE;
+
+	internal_id = periph_id_to_internal_id[periph_id];
+	if (!periphc_internal_id_isvalid(internal_id))
+		return CLOCK_ID_NONE;
+
+	type = clock_periph_type[internal_id];
+	if (!clock_type_id_isvalid(type))
+		return CLOCK_ID_NONE;
+
+	return clock_source[type][source];
+}
+
 /**
  * Given a peripheral ID and the required source clock, this returns which
  * value should be programmed into the source mux for that peripheral.
@@ -658,23 +705,10 @@ int get_periph_clock_source(enum periph_id periph_id,
 	enum clock_id parent, int *mux_bits, int *divider_bits)
 {
 	enum clock_type_id type;
-	enum periphc_internal_id internal_id;
-	int mux;
+	int mux, err;
 
-	assert(clock_periph_id_isvalid(periph_id));
-
-	internal_id = periph_id_to_internal_id[periph_id];
-	assert(periphc_internal_id_isvalid(internal_id));
-
-	type = clock_periph_type[internal_id];
-	assert(clock_type_id_isvalid(type));
-
-	*mux_bits = clock_source[type][CLOCK_MAX_MUX];
-
-	if (type == CLOCK_TYPE_PC2CC3M_T16)
-		*divider_bits = 16;
-	else
-		*divider_bits = 8;
+	err = get_periph_clock_info(periph_id, mux_bits, divider_bits, &type);
+	assert(!err);
 
 	for (mux = 0; mux < CLOCK_MAX_MUX; mux++)
 		if (clock_source[type][mux] == parent)
@@ -857,6 +891,24 @@ void clock_early_init(void)
 	data |= (1 << PLLD_CLKENABLE) | (1 << pllinfo->lock_ena);
 	writel(data, &clkrst->crc_pll[CLOCK_ID_DISPLAY].pll_misc);
 	udelay(2);
+}
+
+/*
+ * clock_early_init_done - Check if clock_early_init() has been called
+ *
+ * Check a register that we set up to see if clock_early_init() has already
+ * been called.
+ *
+ * @return true if clock_early_init() was called, false if not
+ */
+bool clock_early_init_done(void)
+{
+	struct clk_rst_ctlr *clkrst = (struct clk_rst_ctlr *)NV_PA_CLK_RST_BASE;
+	u32 val;
+
+	val = readl(&clkrst->crc_sclk_brst_pol);
+
+	return val == 0x20002222;
 }
 
 void arch_timer_init(void)
@@ -1107,3 +1159,26 @@ struct clk_pll_simple *clock_get_simple_pll(enum clock_id clkid)
 
 	return NULL;
 }
+
+struct periph_clk_init periph_clk_init_table[] = {
+	{ PERIPH_ID_SBC1, CLOCK_ID_PERIPH },
+	{ PERIPH_ID_SBC2, CLOCK_ID_PERIPH },
+	{ PERIPH_ID_SBC3, CLOCK_ID_PERIPH },
+	{ PERIPH_ID_SBC4, CLOCK_ID_PERIPH },
+	{ PERIPH_ID_SBC5, CLOCK_ID_PERIPH },
+	{ PERIPH_ID_SBC6, CLOCK_ID_PERIPH },
+	{ PERIPH_ID_HOST1X, CLOCK_ID_PERIPH },
+	{ PERIPH_ID_DISP1, CLOCK_ID_CGENERAL },
+	{ PERIPH_ID_SDMMC1, CLOCK_ID_PERIPH },
+	{ PERIPH_ID_SDMMC2, CLOCK_ID_PERIPH },
+	{ PERIPH_ID_SDMMC3, CLOCK_ID_PERIPH },
+	{ PERIPH_ID_SDMMC4, CLOCK_ID_PERIPH },
+	{ PERIPH_ID_PWM, CLOCK_ID_SFROM32KHZ },
+	{ PERIPH_ID_I2C1, CLOCK_ID_PERIPH },
+	{ PERIPH_ID_I2C2, CLOCK_ID_PERIPH },
+	{ PERIPH_ID_I2C3, CLOCK_ID_PERIPH },
+	{ PERIPH_ID_I2C4, CLOCK_ID_PERIPH },
+	{ PERIPH_ID_I2C5, CLOCK_ID_PERIPH },
+	{ PERIPH_ID_I2C6, CLOCK_ID_PERIPH },
+	{ -1, },
+};

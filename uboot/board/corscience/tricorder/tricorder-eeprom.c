@@ -1,12 +1,14 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * (C) Copyright 2013
  * Corscience GmbH & Co. KG, <www.corscience.de>
  * Andreas Bießmann <andreas.biessmann@corscience.de>
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 #include <common.h>
+#include <command.h>
+#include <eeprom.h>
 #include <i2c.h>
+#include <u-boot/crc.h>
 
 #include "tricorder-eeprom.h"
 
@@ -185,18 +187,13 @@ int tricorder_eeprom_write(unsigned devaddr, const char *name,
 	return ret;
 }
 
-int do_tricorder_eeprom(cmd_tbl_t *cmdtp, int flag, int argc, char *argv[])
+int do_tricorder_eeprom(struct cmd_tbl *cmdtp, int flag, int argc, char *argv[])
 {
 	if (argc == 3) {
 		ulong dev_addr = simple_strtoul(argv[2], NULL, 16);
 
-		if (strcmp(argv[1], "read") == 0) {
-			int rcode;
-
-			rcode = tricorder_eeprom_read(dev_addr);
-
-			return rcode;
-		}
+		if (strcmp(argv[1], "read") == 0)
+			return tricorder_eeprom_read(dev_addr);
 	} else if (argc == 6 || argc == 7) {
 		ulong dev_addr = simple_strtoul(argv[2], NULL, 16);
 		char *name = argv[3];
@@ -207,14 +204,9 @@ int do_tricorder_eeprom(cmd_tbl_t *cmdtp, int flag, int argc, char *argv[])
 		if (argc == 7)
 			interface = argv[6];
 
-		if (strcmp(argv[1], "write") == 0) {
-			int rcode;
-
-			rcode = tricorder_eeprom_write(dev_addr, name, version,
-					serial, interface);
-
-			return rcode;
-		}
+		if (strcmp(argv[1], "write") == 0)
+			return tricorder_eeprom_write(dev_addr, name, version,
+						      serial, interface);
 	}
 
 	return CMD_RET_USAGE;

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * Board functions for Siemens TAURUS (AT91SAM9G20) based boards
  * (C) Copyright Siemens AG
@@ -8,30 +9,42 @@
  * (C) Copyright 2007-2008
  * Stelian Pop <stelian@popies.net>
  * Lead Tech Design <www.leadtechdesign.com>
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <command.h>
 #include <common.h>
+#include <dm.h>
+#include <env.h>
+#include <flash.h>
+#include <init.h>
 #include <asm/io.h>
 #include <asm/arch/at91sam9260_matrix.h>
 #include <asm/arch/at91sam9_smc.h>
 #include <asm/arch/at91_common.h>
-#include <asm/arch/at91_pmc.h>
 #include <asm/arch/at91_rstc.h>
 #include <asm/arch/gpio.h>
 #include <asm/arch/at91sam9_sdramc.h>
+#include <asm/arch/atmel_serial.h>
 #include <asm/arch/clk.h>
-#include <linux/mtd/nand.h>
+#include <asm/gpio.h>
+#include <linux/mtd/rawnand.h>
 #include <atmel_mci.h>
 #include <asm/arch/at91_spi.h>
 #include <spi.h>
 
 #include <net.h>
+#ifndef CONFIG_DM_ETH
 #include <netdev.h>
+#endif
 
 DECLARE_GLOBAL_DATA_PTR;
+
+static void taurus_request_gpio(void)
+{
+	gpio_request(CONFIG_SYS_NAND_ENABLE_PIN, "nand ena");
+	gpio_request(CONFIG_SYS_NAND_READY_PIN, "nand rdy");
+	gpio_request(AT91_PIN_PA25, "ena PHY");
+}
 
 static void taurus_nand_hw_init(void)
 {
@@ -186,11 +199,11 @@ void mem_init(void)
 
 	/* Mirrors at A15 on ATMEL G20 SDRAM Controller with 64MB*/
 	if (ram_size == 0x800) {
-		printf("\n\r 64MB");
+		printf("\n\r 64MB\n");
 		sdramc_configure(AT91_SDRAMC_NC_9);
 	} else {
 		/* Size already initialized */
-		printf("\n\r 128MB");
+		printf("\n\r 128MB\n");
 	}
 }
 #endif
@@ -250,7 +263,7 @@ static void taurus_macb_hw_init(void)
 #endif
 
 #ifdef CONFIG_GENERIC_ATMEL_MCI
-int board_mmc_init(bd_t *bd)
+int board_mmc_init(struct bd_info *bd)
 {
 	at91_mci_hw_init();
 
@@ -266,23 +279,9 @@ int board_early_init_f(void)
 	at91_periph_clk_enable(ATMEL_ID_PIOC);
 
 	at91_seriald_hw_init();
+	taurus_request_gpio();
 
 	return 0;
-}
-
-int spi_cs_is_valid(unsigned int bus, unsigned int cs)
-{
-	return bus == 0 && cs == 0;
-}
-
-void spi_cs_activate(struct spi_slave *slave)
-{
-	at91_set_gpio_value(TAURUS_SPI_CS_PIN, 0);
-}
-
-void spi_cs_deactivate(struct spi_slave *slave)
-{
-	at91_set_gpio_value(TAURUS_SPI_CS_PIN, 1);
 }
 
 #ifdef CONFIG_USB_GADGET_AT91
@@ -290,17 +289,13 @@ void spi_cs_deactivate(struct spi_slave *slave)
 
 void at91_udp_hw_init(void)
 {
-	at91_pmc_t *pmc = (at91_pmc_t *)ATMEL_BASE_PMC;
-
 	/* Enable PLLB */
-	writel(get_pllb_init(), &pmc->pllbr);
-	while ((readl(&pmc->sr) & AT91_PMC_LOCKB) != AT91_PMC_LOCKB)
-		;
+	at91_pllb_clk_enable(get_pllb_init());
 
 	/* Enable UDPCK clock, MCK is enabled in at91_clock_init() */
 	at91_periph_clk_enable(ATMEL_ID_UDP);
 
-	writel(AT91SAM926x_PMC_UDP, &pmc->scer);
+	at91_system_clk_enable(AT91SAM926x_PMC_UDP);
 }
 
 struct at91_udc_data board_udc_data  = {
@@ -313,6 +308,7 @@ int board_init(void)
 	/* adress of boot parameters */
 	gd->bd->bi_boot_params = CONFIG_SYS_SDRAM_BASE + 0x100;
 
+	taurus_request_gpio();
 #ifdef CONFIG_CMD_NAND
 	taurus_nand_hw_init();
 #endif
@@ -333,15 +329,6 @@ int dram_init(void)
 	gd->ram_size = get_ram_size((void *)CONFIG_SYS_SDRAM_BASE,
 				    CONFIG_SYS_SDRAM_SIZE);
 	return 0;
-}
-
-int board_eth_init(bd_t *bis)
-{
-	int rc = 0;
-#ifdef CONFIG_MACB
-	rc = macb_eth_initialize(0, (void *)ATMEL_BASE_EMAC0, 0x00);
-#endif
-	return rc;
 }
 
 #if !defined(CONFIG_SPL_BUILD)
@@ -365,55 +352,55 @@ static int upgrade_failure_fallback(void)
 	char *kern_size;
 	char *kern_size_fb;
 
-	partitionset_active = getenv("partitionset_active");
+	partitionset_active = env_get("partitionset_active");
 	if (partitionset_active) {
 		if (partitionset_active[0] == 'A')
-			setenv("partitionset_active", "B");
+			env_set("partitionset_active", "B");
 		else
-			setenv("partitionset_active", "A");
+			env_set("partitionset_active", "A");
 	} else {
 		printf("partitionset_active missing.\n");
 		return -ENOENT;
 	}
 
-	rootfs = getenv("rootfs");
-	rootfs_fallback = getenv("rootfs_fallback");
-	setenv("rootfs", rootfs_fallback);
-	setenv("rootfs_fallback", rootfs);
+	rootfs = env_get("rootfs");
+	rootfs_fallback = env_get("rootfs_fallback");
+	env_set("rootfs", rootfs_fallback);
+	env_set("rootfs_fallback", rootfs);
 
-	kern_size = getenv("kernel_size");
-	kern_size_fb = getenv("kernel_size_fallback");
-	setenv("kernel_size", kern_size_fb);
-	setenv("kernel_size_fallback", kern_size);
+	kern_size = env_get("kernel_size");
+	kern_size_fb = env_get("kernel_size_fallback");
+	env_set("kernel_size", kern_size_fb);
+	env_set("kernel_size_fallback", kern_size);
 
-	kern_off = getenv("kernel_Off");
-	kern_off_fb = getenv("kernel_Off_fallback");
-	setenv("kernel_Off", kern_off_fb);
-	setenv("kernel_Off_fallback", kern_off);
+	kern_off = env_get("kernel_Off");
+	kern_off_fb = env_get("kernel_Off_fallback");
+	env_set("kernel_Off", kern_off_fb);
+	env_set("kernel_Off_fallback", kern_off);
 
-	setenv("bootargs", '\0');
-	setenv("upgrade_available", '\0');
-	setenv("boot_retries", '\0');
-	saveenv();
+	env_set("bootargs", '\0');
+	env_set("upgrade_available", '\0');
+	env_set("boot_retries", '\0');
+	env_save();
 
 	return 0;
 }
 
-static int do_upgrade_available(cmd_tbl_t *cmdtp, int flag, int argc,
-			char * const argv[])
+static int do_upgrade_available(struct cmd_tbl *cmdtp, int flag, int argc,
+				char *const argv[])
 {
 	unsigned long upgrade_available = 0;
 	unsigned long boot_retry = 0;
 	char boot_buf[10];
 
-	upgrade_available = simple_strtoul(getenv("upgrade_available"), NULL,
+	upgrade_available = simple_strtoul(env_get("upgrade_available"), NULL,
 					   10);
 	if (upgrade_available) {
-		boot_retry = simple_strtoul(getenv("boot_retries"), NULL, 10);
+		boot_retry = simple_strtoul(env_get("boot_retries"), NULL, 10);
 		boot_retry++;
 		sprintf(boot_buf, "%lx", boot_retry);
-		setenv("boot_retries", boot_buf);
-		saveenv();
+		env_set("boot_retries", boot_buf);
+		env_save();
 
 		/*
 		 * Here the boot_retries count is checked, and if the

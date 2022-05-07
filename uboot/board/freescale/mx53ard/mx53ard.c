@@ -1,20 +1,21 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * (C) Copyright 2011 Freescale Semiconductor, Inc.
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
+#include <init.h>
+#include <net.h>
 #include <asm/io.h>
 #include <asm/arch/imx-regs.h>
 #include <asm/arch/sys_proto.h>
 #include <asm/arch/crm_regs.h>
 #include <asm/arch/clock.h>
 #include <asm/arch/iomux-mx53.h>
-#include <asm/errno.h>
+#include <linux/errno.h>
 #include <netdev.h>
 #include <mmc.h>
-#include <fsl_esdhc.h>
+#include <fsl_esdhc_imx.h>
 #include <asm/gpio.h>
 
 #define ETHERNET_INT		IMX_GPIO_NR(2, 31)
@@ -32,13 +33,15 @@ int dram_init(void)
 
 	return 0;
 }
-void dram_init_banksize(void)
+int dram_init_banksize(void)
 {
 	gd->bd->bi_dram[0].start = PHYS_SDRAM_1;
 	gd->bd->bi_dram[0].size = PHYS_SDRAM_1_SIZE;
 
 	gd->bd->bi_dram[1].start = PHYS_SDRAM_2;
 	gd->bd->bi_dram[1].size = PHYS_SDRAM_2_SIZE;
+
+	return 0;
 }
 
 #ifdef CONFIG_NAND_MXC
@@ -111,7 +114,7 @@ static void setup_iomux_uart(void)
 	imx_iomux_v3_setup_multiple_pads(uart_pads, ARRAY_SIZE(uart_pads));
 }
 
-#ifdef CONFIG_FSL_ESDHC
+#ifdef CONFIG_FSL_ESDHC_IMX
 struct fsl_esdhc_cfg esdhc_cfg[2] = {
 	{MMC_SDHC1_BASE_ADDR},
 	{MMC_SDHC2_BASE_ADDR},
@@ -141,7 +144,7 @@ int board_mmc_getcd(struct mmc *mmc)
 #define SD_PAD_CTRL		(PAD_CTL_HYS | PAD_CTL_PUS_47K_UP | \
 				 PAD_CTL_DSE_HIGH)
 
-int board_mmc_init(bd_t *bis)
+int board_mmc_init(struct bd_info *bis)
 {
 	static const iomux_v3_cfg_t sd1_pads[] = {
 		NEW_PAD_CTRL(MX53_PAD_SD1_CMD__ESDHC1_CMD, SD_CMD_PAD_CTRL),
@@ -294,7 +297,7 @@ int board_init(void)
 	return 0;
 }
 
-int board_eth_init(bd_t *bis)
+int board_eth_init(struct bd_info *bis)
 {
 	int rc = -ENODEV;
 

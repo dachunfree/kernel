@@ -1,18 +1,20 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * Copyright (C) 2006-2009 Freescale Semiconductor, Inc.
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
+#include <init.h>
 #include <asm/mmu.h>
 #include <asm/io.h>
 #include <common.h>
+#include <env.h>
 #include <mpc83xx.h>
 #include <pci.h>
 #include <i2c.h>
 #include <fdt_support.h>
 #include <asm/fsl_i2c.h>
 #include <asm/fsl_mpc83xx_serdes.h>
+#include <linux/delay.h>
 
 static struct pci_region pci_regions[] = {
 	{
@@ -67,7 +69,7 @@ static struct pci_region pcie_regions_1[] = {
 
 static int is_pex_x2(void)
 {
-	const char *pex_x2 = getenv("pex_x2");
+	const char *pex_x2 = env_get("pex_x2");
 
 	if (pex_x2 && !strcmp(pex_x2, "yes"))
 		return 1;
@@ -135,7 +137,7 @@ skip_pci:
 	mpc83xx_pcie_init(pex2 ? 1 : 2, pcie_reg);
 }
 
-void ft_pcie_fixup(void *blob, bd_t *bd)
+void ft_pcie_fixup(void *blob, struct bd_info *bd)
 {
 	const char *status = "disabled (PCIE1 is x2)";
 

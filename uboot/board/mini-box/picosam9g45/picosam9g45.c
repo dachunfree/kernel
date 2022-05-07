@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * Board functions for mini-box PICOSAM9G45 (AT91SAM9G45) based board
  * (C) Copyright 2015 Inter Act B.V.
@@ -7,27 +8,27 @@
  * (C) Copyright 2007-2008
  * Stelian Pop <stelian@popies.net>
  * Lead Tech Design <www.leadtechdesign.com>
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
+#include <init.h>
+#include <vsprintf.h>
 #include <asm/io.h>
 #include <asm/arch/clk.h>
 #include <asm/arch/at91sam9g45_matrix.h>
 #include <asm/arch/at91sam9_smc.h>
 #include <asm/arch/at91_common.h>
-#include <asm/arch/at91_pmc.h>
 #include <asm/arch/gpio.h>
 #include <asm/arch/clk.h>
 #include <lcd.h>
-#include <linux/mtd/nand.h>
+#include <linux/mtd/rawnand.h>
 #include <atmel_lcdc.h>
 #include <atmel_mci.h>
 #if defined(CONFIG_RESET_PHY_R) && defined(CONFIG_MACB)
 #include <net.h>
 #endif
 #include <netdev.h>
+#include <asm/mach-types.h>
 
 DECLARE_GLOBAL_DATA_PTR;
 
@@ -47,7 +48,7 @@ void at91_spl_board_init(void)
 }
 
 #include <asm/arch/atmel_mpddrc.h>
-static void ddr2_conf(struct atmel_mpddr *ddr2)
+static void ddr2_conf(struct atmel_mpddrc_config *ddr2)
 {
 	ddr2->md = (ATMEL_MPDDRC_MD_DBW_16_BITS | ATMEL_MPDDRC_MD_DDR2_SDRAM);
 
@@ -80,15 +81,13 @@ static void ddr2_conf(struct atmel_mpddr *ddr2)
 
 void mem_init(void)
 {
-	struct at91_pmc *pmc = (struct at91_pmc *)ATMEL_BASE_PMC;
 	struct at91_matrix *mat = (struct at91_matrix *)ATMEL_BASE_MATRIX;
-	struct atmel_mpddr ddr2;
+	struct atmel_mpddrc_config ddr2;
 	unsigned long csa;
 
 	ddr2_conf(&ddr2);
 
-	/* enable DDR2 clock */
-	writel(AT91_PMC_DDR, &pmc->scer);
+	at91_system_clk_enable(AT91_PMC_DDR);
 
 	/* Chip select 1 is for DDR2/SDRAM */
 	csa = readl(&mat->ebicsa);
@@ -105,9 +104,7 @@ void mem_init(void)
 #ifdef CONFIG_CMD_USB
 static void picosam9g45_usb_hw_init(void)
 {
-	struct at91_pmc *pmc = (struct at91_pmc *)ATMEL_BASE_PMC;
-
-	writel(1 << ATMEL_ID_PIODE, &pmc->pcer);
+	at91_periph_clk_enable(ATMEL_ID_PIODE);
 
 	at91_set_gpio_output(AT91_PIN_PD1, 0);
 	at91_set_gpio_output(AT91_PIN_PD3, 0);
@@ -117,11 +114,9 @@ static void picosam9g45_usb_hw_init(void)
 #ifdef CONFIG_MACB
 static void picosam9g45_macb_hw_init(void)
 {
-	struct at91_pmc *pmc = (struct at91_pmc *)ATMEL_BASE_PMC;
 	struct at91_port *pioa = (struct at91_port *)ATMEL_BASE_PIOA;
 
-	/* Enable clock */
-	writel(1 << ATMEL_ID_EMAC, &pmc->pcer);
+	at91_periph_clk_enable(ATMEL_ID_EMAC);
 
 	/*
 	 * Disable pull-up on:
@@ -181,8 +176,6 @@ void lcd_disable(void)
 
 static void picosam9g45_lcd_hw_init(void)
 {
-	struct at91_pmc *pmc = (struct at91_pmc *)ATMEL_BASE_PMC;
-
 	at91_set_A_periph(AT91_PIN_PE0, 0);	/* LCDDPWR */
 	at91_set_A_periph(AT91_PIN_PE2, 0);	/* LCDCC */
 	at91_set_A_periph(AT91_PIN_PE3, 0);	/* LCDVSYNC */
@@ -214,7 +207,7 @@ static void picosam9g45_lcd_hw_init(void)
 	at91_set_A_periph(AT91_PIN_PE29, 0);	/* LCDD22 */
 	at91_set_A_periph(AT91_PIN_PE30, 0);	/* LCDD23 */
 
-	writel(1 << ATMEL_ID_LCDC, &pmc->pcer);
+	at91_periph_clk_enable(ATMEL_ID_LCDC);
 
 	gd->fb_base = CONFIG_AT91SAM9G45_LCD_BASE;
 }
@@ -245,7 +238,7 @@ void lcd_show_board_info(void)
 #endif
 
 #ifdef CONFIG_GENERIC_ATMEL_MCI
-int board_mmc_init(bd_t *bis)
+int board_mmc_init(struct bd_info *bis)
 {
 	at91_mci_hw_init();
 
@@ -269,9 +262,6 @@ int board_init(void)
 #ifdef CONFIG_CMD_USB
 	picosam9g45_usb_hw_init();
 #endif
-#ifdef CONFIG_HAS_DATAFLASH
-	at91_spi0_hw_init(1 << 0);
-#endif
 #ifdef CONFIG_ATMEL_SPI
 	at91_spi0_hw_init(1 << 4);
 #endif
@@ -292,7 +282,7 @@ int dram_init(void)
 	return 0;
 }
 
-void dram_init_banksize(void)
+int dram_init_banksize(void)
 {
 	gd->bd->bi_dram[0].start = PHYS_SDRAM_1;
 	gd->bd->bi_dram[0].size = get_ram_size((long *)PHYS_SDRAM_1,
@@ -300,6 +290,8 @@ void dram_init_banksize(void)
 	gd->bd->bi_dram[1].start = PHYS_SDRAM_2;
 	gd->bd->bi_dram[1].size = get_ram_size((long *)PHYS_SDRAM_2,
 							PHYS_SDRAM_2_SIZE);
+
+	return 0;
 }
 
 #ifdef CONFIG_RESET_PHY_R
@@ -308,7 +300,7 @@ void reset_phy(void)
 }
 #endif
 
-int board_eth_init(bd_t *bis)
+int board_eth_init(struct bd_info *bis)
 {
 	int rc = 0;
 #ifdef CONFIG_MACB

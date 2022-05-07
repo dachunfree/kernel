@@ -1,17 +1,20 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * Board functions for Compulab CM-T335 board
  *
  * Copyright (C) 2013, Compulab Ltd - http://compulab.co.il/
  *
  * Author: Ilya Ledvich <ilya@compulab.co.il>
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
+#include <env.h>
 #include <errno.h>
 #include <miiphy.h>
+#include <net.h>
+#include <status_led.h>
 #include <cpsw.h>
+#include <linux/delay.h>
 
 #include <asm/arch/sys_proto.h>
 #include <asm/arch/hardware_am33xx.h>
@@ -31,8 +34,8 @@ int board_init(void)
 
 	gpmc_init();
 
-#if defined(CONFIG_STATUS_LED) && defined(STATUS_LED_BOOT)
-	status_led_set(STATUS_LED_BOOT, STATUS_LED_OFF);
+#if defined(CONFIG_LED_STATUS) && defined(CONFIG_LED_STATUS_BOOT_ENABLE)
+	status_led_set(CONFIG_LED_STATUS_BOOT, CONFIG_LED_STATUS_OFF);
 #endif
 	return 0;
 }
@@ -106,7 +109,7 @@ static int handle_mac_address(void)
 	uchar enetaddr[6];
 	int rv;
 
-	rv = eth_getenv_enetaddr("ethaddr", enetaddr);
+	rv = eth_env_get_enetaddr("ethaddr", enetaddr);
 	if (rv)
 		return 0;
 
@@ -117,7 +120,7 @@ static int handle_mac_address(void)
 	if (!is_valid_ethaddr(enetaddr))
 		return -1;
 
-	return eth_setenv_enetaddr("ethaddr", enetaddr);
+	return eth_env_set_enetaddr("ethaddr", enetaddr);
 }
 
 #define AR8051_PHY_DEBUG_ADDR_REG	0x1d
@@ -125,7 +128,7 @@ static int handle_mac_address(void)
 #define AR8051_DEBUG_RGMII_CLK_DLY_REG	0x5
 #define AR8051_RGMII_TX_CLK_DLY		0x100
 
-int board_eth_init(bd_t *bis)
+int board_eth_init(struct bd_info *bis)
 {
 	int rv, n = 0;
 	const char *devname;

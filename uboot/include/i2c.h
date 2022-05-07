@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: GPL-2.0+ */
 /*
  * Copyright (C) 2009 Sergey Kubushyn <ksi@koi8.net>
  * Copyright (C) 2009 - 2013 Heiko Schocher <hs@denx.de>
@@ -5,8 +6,6 @@
  *
  * (C) Copyright 2001
  * Gerald Van Baren, Custom IDEAS, vanbaren@cideas.com.
- *
- * SPDX-License-Identifier:	GPL-2.0+
  *
  * The original I2C interface was
  *   (C) 2000 by Paolo Scaffardi (arsenio@tin.it)
@@ -16,6 +15,8 @@
 
 #ifndef _I2C_H_
 #define _I2C_H_
+
+#include <linker_lists.h>
 
 /*
  * For now there are essentially two parts to this file - driver model
@@ -29,6 +30,38 @@ enum dm_i2c_chip_flags {
 	DM_I2C_CHIP_10BIT	= 1 << 0, /* Use 10-bit addressing */
 	DM_I2C_CHIP_RD_ADDRESS	= 1 << 1, /* Send address for each read byte */
 	DM_I2C_CHIP_WR_ADDRESS	= 1 << 2, /* Send address for each write byte */
+};
+
+/** enum i2c_speed_mode - standard I2C speed modes */
+enum i2c_speed_mode {
+	IC_SPEED_MODE_STANDARD,
+	IC_SPEED_MODE_FAST,
+	IC_SPEED_MODE_FAST_PLUS,
+	IC_SPEED_MODE_HIGH,
+	IC_SPEED_MODE_FAST_ULTRA,
+
+	IC_SPEED_MODE_COUNT,
+};
+
+/** enum i2c_speed_rate - standard I2C speeds in Hz */
+enum i2c_speed_rate {
+	I2C_SPEED_STANDARD_RATE		= 100000,
+	I2C_SPEED_FAST_RATE		= 400000,
+	I2C_SPEED_FAST_PLUS_RATE	= 1000000,
+	I2C_SPEED_HIGH_RATE		= 3400000,
+	I2C_SPEED_FAST_ULTRA_RATE	= 5000000,
+};
+
+/** enum i2c_address_mode - available address modes */
+enum i2c_address_mode {
+	I2C_MODE_7_BIT,
+	I2C_MODE_10_BIT
+};
+
+/** enum i2c_device_t - Types of I2C devices, used for compatible strings */
+enum i2c_device_t {
+	I2C_DEVICE_GENERIC,
+	I2C_DEVICE_HID_OVER_I2C,
 };
 
 struct udevice;
@@ -46,12 +79,26 @@ struct udevice;
  *		represent up to 256 bytes. A value larger than 1 may be
  *		needed for larger devices.
  * @flags:	Flags for this chip (dm_i2c_chip_flags)
+ * @chip_addr_offset_mask: Mask of offset bits within chip_addr. Used for
+ *			   devices which steal addresses as part of offset.
+ *			   If offset_len is zero, then the offset is encoded
+ *			   completely within the chip address itself.
+ *			   e.g. a devce with chip address of 0x2c with 512
+ *			   registers might use the bottom bit of the address
+ *			   to indicate which half of the address space is being
+ *			   accessed while still only using 1 byte offset.
+ *			   This means it will respond to  chip address 0x2c and
+ *			   0x2d.
+ *			   A real world example is the Atmel AT24C04. It's
+ *			   datasheet explains it's usage of this addressing
+ *			   mode.
  * @emul: Emulator for this chip address (only used for emulation)
  */
 struct dm_i2c_chip {
 	uint chip_addr;
 	uint offset_len;
 	uint flags;
+	uint chip_addr_offset_mask;
 #ifdef CONFIG_SANDBOX
 	struct udevice *emul;
 	bool test_mode;
@@ -69,9 +116,11 @@ struct dm_i2c_chip {
  * I2C bus udevice.
  *
  * @speed_hz: Bus speed in hertz (typically 100000)
+ * @max_transaction_bytes: Maximal size of single I2C transfer
  */
 struct dm_i2c_bus {
 	int speed_hz;
+	int max_transaction_bytes;
 };
 
 /*
@@ -261,6 +310,25 @@ int i2c_set_chip_offset_len(struct udevice *dev, uint offset_len);
 int i2c_get_chip_offset_len(struct udevice *dev);
 
 /**
+ * i2c_set_chip_addr_offset_mask() - set mask of address bits usable by offset
+ *
+ * Some devices listen on multiple chip addresses to achieve larger offsets
+ * than their single or multiple byte offsets would allow for. You can use this
+ * function to set the bits that are valid to be used for offset overflow.
+ *
+ * @mask: The mask to be used for high offset bits within address
+ * @return 0 if OK, other -ve value on error
+ */
+int i2c_set_chip_addr_offset_mask(struct udevice *dev, uint mask);
+
+/*
+ * i2c_get_chip_addr_offset_mask() - get mask of address bits usable by offset
+ *
+ * @return current chip addr offset mask
+ */
+uint i2c_get_chip_addr_offset_mask(struct udevice *dev);
+
+/**
  * i2c_deblock() - recover a bus that is in an unknown state
  *
  * See the deblock() method in 'struct dm_i2c_ops' for full information
@@ -270,85 +338,23 @@ int i2c_get_chip_offset_len(struct udevice *dev);
  */
 int i2c_deblock(struct udevice *bus);
 
-#ifdef CONFIG_DM_I2C_COMPAT
 /**
- * i2c_probe() - Compatibility function for driver model
+ * i2c_deblock_gpio_loop() - recover a bus from an unknown state by toggling SDA/SCL
  *
- * Calls dm_i2c_probe() on the current bus
- */
-int i2c_probe(uint8_t chip_addr);
-
-/**
- * i2c_read() - Compatibility function for driver model
+ * This is the inner logic used for toggling I2C SDA/SCL lines as GPIOs
+ * for deblocking the I2C bus.
  *
- * Calls dm_i2c_read() with the device corresponding to @chip_addr, and offset
- * set to @addr. @alen must match the current setting for the device.
+ * @sda_pin:	SDA GPIO
+ * @scl_pin:	SCL GPIO
+ * @scl_count:	Number of SCL clock cycles generated to deblock SDA
+ * @start_count:Number of I2C start conditions sent after deblocking SDA
+ * @delay:	Delay between SCL clock line changes
+ * @return 0 if OK, -ve on error
  */
-int i2c_read(uint8_t chip_addr, unsigned int addr, int alen, uint8_t *buffer,
-	     int len);
-
-/**
- * i2c_write() - Compatibility function for driver model
- *
- * Calls dm_i2c_write() with the device corresponding to @chip_addr, and offset
- * set to @addr. @alen must match the current setting for the device.
- */
-int i2c_write(uint8_t chip_addr, unsigned int addr, int alen, uint8_t *buffer,
-	      int len);
-
-/**
- * i2c_get_bus_num_fdt() - Compatibility function for driver model
- *
- * @return the bus number associated with the given device tree node
- */
-int i2c_get_bus_num_fdt(int node);
-
-/**
- * i2c_get_bus_num() - Compatibility function for driver model
- *
- * @return the 'current' bus number
- */
-unsigned int i2c_get_bus_num(void);
-
-/**
- * i2c_set_bus_num() - Compatibility function for driver model
- *
- * Sets the 'current' bus
- */
-int i2c_set_bus_num(unsigned int bus);
-
-static inline void I2C_SET_BUS(unsigned int bus)
-{
-	i2c_set_bus_num(bus);
-}
-
-static inline unsigned int I2C_GET_BUS(void)
-{
-	return i2c_get_bus_num();
-}
-
-/**
- * i2c_init() - Compatibility function for driver model
- *
- * This function does nothing.
- */
-void i2c_init(int speed, int slaveaddr);
-
-/**
- * board_i2c_init() - Compatibility function for driver model
- *
- * @param blob  Device tree blbo
- * @return the number of I2C bus
- */
-void board_i2c_init(const void *blob);
-
-/*
- * Compatibility functions for driver model.
- */
-uint8_t i2c_reg_read(uint8_t addr, uint8_t reg);
-void i2c_reg_write(uint8_t addr, uint8_t reg, uint8_t val);
-
-#endif
+struct gpio_desc;
+int i2c_deblock_gpio_loop(struct gpio_desc *sda_pin, struct gpio_desc *scl_pin,
+			  unsigned int scl_count, unsigned int start_count,
+			  unsigned int delay);
 
 /**
  * struct dm_i2c_ops - driver operations for I2C uclass
@@ -525,8 +531,7 @@ int i2c_get_chip_for_busnum(int busnum, int chip_addr, uint offset_len,
  * @node:	Node offset to read from
  * @spi:	Place to put the decoded information
  */
-int i2c_chip_ofdata_to_platdata(const void *blob, int node,
-				struct dm_i2c_chip *chip);
+int i2c_chip_ofdata_to_platdata(struct udevice *dev, struct dm_i2c_chip *chip);
 
 /**
  * i2c_dump_msgs() - Dump a list of I2C messages
@@ -537,6 +542,44 @@ int i2c_chip_ofdata_to_platdata(const void *blob, int node,
  * @nmsgs:	Number of messages
  */
 void i2c_dump_msgs(struct i2c_msg *msg, int nmsgs);
+
+/**
+ * i2c_emul_find() - Find an emulator for an i2c sandbox device
+ *
+ * This looks at the device's 'emul' phandle
+ *
+ * @dev: Device to find an emulator for
+ * @emulp: Returns the associated emulator, if found *
+ * @return 0 if OK, -ENOENT or -ENODEV if not found
+ */
+int i2c_emul_find(struct udevice *dev, struct udevice **emulp);
+
+/**
+ * i2c_emul_get_device() - Find the device being emulated
+ *
+ * Given an emulator this returns the associated device
+ *
+ * @emul: Emulator for the device
+ * @return device that @emul is emulating
+ */
+struct udevice *i2c_emul_get_device(struct udevice *emul);
+
+/* ACPI operations for generic I2C devices */
+extern struct acpi_ops i2c_acpi_ops;
+
+/**
+ * acpi_i2c_ofdata_to_platdata() - Read properties intended for ACPI
+ *
+ * This reads the generic I2C properties from the device tree, so that these
+ * can be used to create ACPI information for the device.
+ *
+ * See the i2c/generic-acpi.txt binding file for information about the
+ * properties.
+ *
+ * @dev: I2C device to process
+ * @return 0 if OK, -EINVAL if acpi,hid is not present
+ */
+int acpi_i2c_ofdata_to_platdata(struct udevice *dev);
 
 #ifndef CONFIG_DM_I2C
 
@@ -570,9 +613,6 @@ void i2c_dump_msgs(struct i2c_msg *msg, int nmsgs);
 /* define the I2C bus number for RTC and DTT if not already done */
 #if !defined(CONFIG_SYS_RTC_BUS_NUM)
 #define CONFIG_SYS_RTC_BUS_NUM		0
-#endif
-#if !defined(CONFIG_SYS_DTT_BUS_NUM)
-#define CONFIG_SYS_DTT_BUS_NUM		0
 #endif
 #if !defined(CONFIG_SYS_SPD_BUS_NUM)
 #define CONFIG_SYS_SPD_BUS_NUM		0
@@ -664,27 +704,13 @@ extern struct i2c_bus_hose	i2c_bus[];
 #endif
 
 #ifndef I2C_SOFT_DECLARATIONS
-# if defined(CONFIG_MPC8260)
-#  define I2C_SOFT_DECLARATIONS volatile ioport_t *iop = ioport_addr((immap_t *)CONFIG_SYS_IMMR, I2C_PORT);
-# elif defined(CONFIG_8xx)
-#  define I2C_SOFT_DECLARATIONS	volatile immap_t *immr = (immap_t *)CONFIG_SYS_IMMR;
-
-# elif (defined(CONFIG_AT91RM9200) || \
+# if (defined(CONFIG_AT91RM9200) || \
 	defined(CONFIG_AT91SAM9260) ||  defined(CONFIG_AT91SAM9261) || \
 	defined(CONFIG_AT91SAM9263))
 #  define I2C_SOFT_DECLARATIONS	at91_pio_t *pio	= (at91_pio_t *) ATMEL_BASE_PIOA;
 # else
 #  define I2C_SOFT_DECLARATIONS
 # endif
-#endif
-
-#ifdef CONFIG_8xx
-/* Set default value for the I2C bus speed on 8xx. In the
- * future, we'll define these in all 8xx board config files.
- */
-#ifndef	CONFIG_SYS_I2C_SPEED
-#define	CONFIG_SYS_I2C_SPEED	50000
-#endif
 #endif
 
 /*
@@ -701,11 +727,11 @@ extern struct i2c_bus_hose	i2c_bus[];
  * Initialization, must be called once on start up, may be called
  * repeatedly to change the speed and slave addresses.
  */
+#ifdef CONFIG_SYS_I2C_EARLY_INIT
+void i2c_early_init_f(void);
+#endif
 void i2c_init(int speed, int slaveaddr);
 void i2c_init_board(void);
-#ifdef CONFIG_SYS_I2C_BOARD_LATE_INIT
-void i2c_board_late_init(void);
-#endif
 
 #ifdef CONFIG_SYS_I2C
 /*
@@ -788,21 +814,6 @@ unsigned int i2c_set_bus_speed(unsigned int speed);
 
 unsigned int i2c_get_bus_speed(void);
 
-/*
- * i2c_reloc_fixup:
- *
- * Adjusts I2C pointers after U-Boot is relocated to DRAM
- */
-void i2c_reloc_fixup(void);
-#if defined(CONFIG_SYS_I2C_SOFT)
-void i2c_soft_init(void);
-void i2c_soft_active(void);
-void i2c_soft_tristate(void);
-int i2c_soft_read(void);
-void i2c_soft_sda(int bit);
-void i2c_soft_scl(int bit);
-void i2c_soft_delay(void);
-#endif
 #else
 
 /*
@@ -833,11 +844,6 @@ static inline u8 i2c_reg_read(u8 addr, u8 reg)
 {
 	u8 buf;
 
-#ifdef CONFIG_8xx
-	/* MPC8xx needs this.  Maybe one day we can get rid of it. */
-	i2c_init(CONFIG_SYS_I2C_SPEED, CONFIG_SYS_I2C_SLAVE);
-#endif
-
 #ifdef DEBUG
 	printf("%s: addr=0x%02x, reg=0x%02x\n", __func__, addr, reg);
 #endif
@@ -849,11 +855,6 @@ static inline u8 i2c_reg_read(u8 addr, u8 reg)
 
 static inline void i2c_reg_write(u8 addr, u8 reg, u8 val)
 {
-#ifdef CONFIG_8xx
-	/* MPC8xx needs this.  Maybe one day we can get rid of it. */
-	i2c_init(CONFIG_SYS_I2C_SPEED, CONFIG_SYS_I2C_SLAVE);
-#endif
-
 #ifdef DEBUG
 	printf("%s: addr=0x%02x, reg=0x%02x, val=0x%02x\n",
 	       __func__, addr, reg, val);
@@ -941,13 +942,6 @@ enum {
 	I2C_0, I2C_1, I2C_2, I2C_3, I2C_4, I2C_5, I2C_6, I2C_7,
 	I2C_8, I2C_9, I2C_10,
 };
-
-/* Multi I2C busses handling */
-#ifdef CONFIG_SOFT_I2C_MULTI_BUS
-extern int get_multi_scl_pin(void);
-extern int get_multi_sda_pin(void);
-extern int multi_i2c_init(void);
-#endif
 
 /**
  * Get FDT values for i2c bus.

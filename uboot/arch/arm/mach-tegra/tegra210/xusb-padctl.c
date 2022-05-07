@@ -1,19 +1,24 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  * Copyright (c) 2014-2015, NVIDIA CORPORATION.  All rights reserved.
- *
- * SPDX-License-Identifier: GPL-2.0
  */
 
 #define pr_fmt(fmt) "tegra-xusb-padctl: " fmt
 
 #include <common.h>
 #include <errno.h>
+#include <log.h>
+#include <dm/of_access.h>
+#include <dm/ofnode.h>
+#include <linux/delay.h>
 
 #include "../xusb-padctl-common.h"
 
 #include <asm/arch/clock.h>
 
 #include <dt-bindings/pinctrl/pinctrl-tegra-xusb.h>
+
+DECLARE_GLOBAL_DATA_PTR;
 
 enum tegra210_function {
 	TEGRA210_FUNC_SNPS,
@@ -121,7 +126,7 @@ static int tegra_xusb_padctl_disable(struct tegra_xusb_padctl *padctl)
 	u32 value;
 
 	if (padctl->enable == 0) {
-		error("unbalanced enable/disable");
+		pr_err("unbalanced enable/disable");
 		return 0;
 	}
 
@@ -166,6 +171,17 @@ static int phy_unprepare(struct tegra_xusb_phy *phy)
 
 	return tegra_xusb_padctl_disable(phy->padctl);
 }
+
+#define XUSB_PADCTL_USB3_PAD_MUX 0x28
+#define  XUSB_PADCTL_USB3_PAD_MUX_FORCE_PCIE_PAD_IDDQ_DISABLE (1 << 0)
+#define  XUSB_PADCTL_USB3_PAD_MUX_FORCE_PCIE_PAD_IDDQ_DISABLE_MASK0 (1 << 1)
+#define  XUSB_PADCTL_USB3_PAD_MUX_FORCE_PCIE_PAD_IDDQ_DISABLE_MASK1 (1 << 2)
+#define  XUSB_PADCTL_USB3_PAD_MUX_FORCE_PCIE_PAD_IDDQ_DISABLE_MASK2 (1 << 3)
+#define  XUSB_PADCTL_USB3_PAD_MUX_FORCE_PCIE_PAD_IDDQ_DISABLE_MASK3 (1 << 4)
+#define  XUSB_PADCTL_USB3_PAD_MUX_FORCE_PCIE_PAD_IDDQ_DISABLE_MASK4 (1 << 5)
+#define  XUSB_PADCTL_USB3_PAD_MUX_FORCE_PCIE_PAD_IDDQ_DISABLE_MASK5 (1 << 6)
+#define  XUSB_PADCTL_USB3_PAD_MUX_FORCE_PCIE_PAD_IDDQ_DISABLE_MASK6 (1 << 7)
+#define  XUSB_PADCTL_USB3_PAD_MUX_FORCE_SATA_PAD_IDDQ_DISABLE_MASK0 (1 << 8)
 
 #define XUSB_PADCTL_UPHY_PLL_P0_CTL1 0x360
 #define  XUSB_PADCTL_UPHY_PLL_P0_CTL1_FREQ_NDIV_MASK (0xff << 20)
@@ -363,31 +379,6 @@ static int pcie_phy_enable(struct tegra_xusb_phy *phy)
 	value &= ~XUSB_PADCTL_UPHY_PLL_P0_CTL8_RCAL_CLK_EN;
 	padctl_writel(padctl, value, XUSB_PADCTL_UPHY_PLL_P0_CTL8);
 
-	value = readl(NV_PA_CLK_RST_BASE + CLK_RST_XUSBIO_PLL_CFG0);
-	value &= ~CLK_RST_XUSBIO_PLL_CFG0_PADPLL_RESET_SWCTL;
-	value &= ~CLK_RST_XUSBIO_PLL_CFG0_CLK_ENABLE_SWCTL;
-	value |= CLK_RST_XUSBIO_PLL_CFG0_PADPLL_USE_LOCKDET;
-	value |= CLK_RST_XUSBIO_PLL_CFG0_PADPLL_SLEEP_IDDQ;
-	writel(value, NV_PA_CLK_RST_BASE + CLK_RST_XUSBIO_PLL_CFG0);
-
-	value = padctl_readl(padctl, XUSB_PADCTL_UPHY_PLL_P0_CTL1);
-	value &= ~XUSB_PADCTL_UPHY_PLL_P0_CTL1_PWR_OVRD;
-	padctl_writel(padctl, value, XUSB_PADCTL_UPHY_PLL_P0_CTL1);
-
-	value = padctl_readl(padctl, XUSB_PADCTL_UPHY_PLL_P0_CTL2);
-	value &= ~XUSB_PADCTL_UPHY_PLL_P0_CTL2_CAL_OVRD;
-	padctl_writel(padctl, value, XUSB_PADCTL_UPHY_PLL_P0_CTL2);
-
-	value = padctl_readl(padctl, XUSB_PADCTL_UPHY_PLL_P0_CTL8);
-	value &= ~XUSB_PADCTL_UPHY_PLL_P0_CTL8_RCAL_OVRD;
-	padctl_writel(padctl, value, XUSB_PADCTL_UPHY_PLL_P0_CTL8);
-
-	udelay(1);
-
-	value = readl(NV_PA_CLK_RST_BASE + CLK_RST_XUSBIO_PLL_CFG0);
-	value |= CLK_RST_XUSBIO_PLL_CFG0_SEQ_ENABLE;
-	writel(value, NV_PA_CLK_RST_BASE + CLK_RST_XUSBIO_PLL_CFG0);
-
 	debug("< %s()\n", __func__);
 	return 0;
 }
@@ -421,17 +412,65 @@ static const struct tegra_xusb_padctl_soc tegra210_socdata = {
 	.num_phys = ARRAY_SIZE(tegra210_phys),
 };
 
-void tegra_xusb_padctl_init(const void *fdt)
+void tegra_xusb_padctl_init(void)
 {
-	int count, nodes[1];
+	ofnode nodes[1];
+	int count = 0;
+	int ret;
 
-	debug("> %s(fdt=%p)\n", __func__, fdt);
+	debug("%s: start\n", __func__);
+	if (of_live_active()) {
+		struct device_node *np = of_find_compatible_node(NULL, NULL,
+						"nvidia,tegra210-xusb-padctl");
 
-	count = fdtdec_find_aliases_for_id(fdt, "padctl",
-					   COMPAT_NVIDIA_TEGRA210_XUSB_PADCTL,
-					   nodes, ARRAY_SIZE(nodes));
-	if (tegra_xusb_process_nodes(fdt, nodes, count, &tegra210_socdata))
-		return;
+		debug("np=%p\n", np);
+		if (np) {
+			nodes[0] = np_to_ofnode(np);
+			count = 1;
+		}
+	} else {
+		int node_offsets[1];
+		int i;
+
+		count = fdtdec_find_aliases_for_id(gd->fdt_blob, "padctl",
+				COMPAT_NVIDIA_TEGRA210_XUSB_PADCTL,
+				node_offsets, ARRAY_SIZE(node_offsets));
+		for (i = 0; i < count; i++)
+			nodes[i] = offset_to_ofnode(node_offsets[i]);
+	}
+
+	ret = tegra_xusb_process_nodes(nodes, count, &tegra210_socdata);
+	debug("%s: done, ret=%d\n", __func__, ret);
+}
+
+void tegra_xusb_padctl_exit(void)
+{
+	u32 value;
+
+	debug("> %s\n", __func__);
+
+	value = padctl_readl(&padctl, XUSB_PADCTL_USB3_PAD_MUX);
+	value &= ~XUSB_PADCTL_USB3_PAD_MUX_FORCE_PCIE_PAD_IDDQ_DISABLE;
+	value &= ~XUSB_PADCTL_USB3_PAD_MUX_FORCE_PCIE_PAD_IDDQ_DISABLE_MASK0;
+	value &= ~XUSB_PADCTL_USB3_PAD_MUX_FORCE_PCIE_PAD_IDDQ_DISABLE_MASK1;
+	value &= ~XUSB_PADCTL_USB3_PAD_MUX_FORCE_PCIE_PAD_IDDQ_DISABLE_MASK2;
+	value &= ~XUSB_PADCTL_USB3_PAD_MUX_FORCE_PCIE_PAD_IDDQ_DISABLE_MASK3;
+	value &= ~XUSB_PADCTL_USB3_PAD_MUX_FORCE_PCIE_PAD_IDDQ_DISABLE_MASK4;
+	value &= ~XUSB_PADCTL_USB3_PAD_MUX_FORCE_PCIE_PAD_IDDQ_DISABLE_MASK5;
+	value &= ~XUSB_PADCTL_USB3_PAD_MUX_FORCE_PCIE_PAD_IDDQ_DISABLE_MASK6;
+	value &= ~XUSB_PADCTL_USB3_PAD_MUX_FORCE_SATA_PAD_IDDQ_DISABLE_MASK0;
+	padctl_writel(&padctl, value, XUSB_PADCTL_USB3_PAD_MUX);
+
+	value = padctl_readl(&padctl, XUSB_PADCTL_UPHY_PLL_P0_CTL1);
+	value &= ~XUSB_PADCTL_UPHY_PLL_P0_CTL1_IDDQ;
+	value &= ~XUSB_PADCTL_UPHY_PLL_P0_CTL1_SLEEP_MASK;
+	value |= XUSB_PADCTL_UPHY_PLL_P0_CTL1_SLEEP(3);
+	value &= ~XUSB_PADCTL_UPHY_PLL_P0_CTL1_ENABLE;
+	padctl_writel(&padctl, value, XUSB_PADCTL_UPHY_PLL_P0_CTL1);
+
+	reset_set_enable(PERIPH_ID_PEX_USB_UPHY, 1);
+	while (padctl.enable)
+		tegra_xusb_padctl_disable(&padctl);
 
 	debug("< %s()\n", __func__);
 }

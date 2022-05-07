@@ -1,11 +1,12 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  *  Copyright (C) 2012 Samsung Electronics
  *  Lukasz Majewski <l.majewski@samsung.com>
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
+#include <log.h>
+#include <linux/delay.h>
 #include <power/pmic.h>
 #include <power/max17042_fg.h>
 #include <i2c.h>
@@ -199,7 +200,7 @@ static int power_update_battery(struct pmic *p, struct pmic *bat)
 
 	if (pmic_probe(p)) {
 		puts("Can't find max17042 fuel gauge\n");
-		return -1;
+		return -ENODEV;
 	}
 
 	ret |= pmic_reg_read(p, MAX17042_VFSOC, &val);
@@ -224,7 +225,7 @@ static int power_check_battery(struct pmic *p, struct pmic *bat)
 
 	if (pmic_probe(p)) {
 		puts("Can't find max17042 fuel gauge\n");
-		return -1;
+		return -ENODEV;
 	}
 
 	ret |= pmic_reg_read(p, MAX17042_STATUS, &val);

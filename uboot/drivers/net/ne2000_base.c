@@ -74,6 +74,8 @@ Add SNMP
 
 #include <common.h>
 #include <command.h>
+#include <env.h>
+#include <log.h>
 #include <net.h>
 #include <malloc.h>
 #include <linux/compiler.h>
@@ -495,7 +497,7 @@ dp83902a_recv(u8 *data, int len)
 					printf(" %02x", tmp);
 					if (0 == (++dx % 16)) printf("\n ");
 #endif
-					*data++ = tmp;;
+					*data++ = tmp;
 					mlen--;
 				}
 			}
@@ -582,7 +584,7 @@ dp83902a_Overflow(void)
 	/*
 	 * Read in as many packets as we can and acknowledge any and receive
 	 * interrupts. Since the buffer has overflowed, a receive event of
-	 * some kind will have occured.
+	 * some kind will have occurred.
 	 */
 	dp83902a_RxEvent();
 	DP_OUT(base, DP_ISR, DP_ISR_RxP|DP_ISR_RxE);
@@ -592,7 +594,7 @@ dp83902a_Overflow(void)
 	DP_OUT(base, DP_TCR, DP_TCR_NORMAL);
 
 	/*
-	 * If a transmit command was issued, but no transmit event has occured,
+	 * If a transmit command was issued, but no transmit event has occurred,
 	 * restart it here.
 	 */
 	DP_IN(base, DP_ISR, isr);
@@ -650,7 +652,7 @@ dp83902a_poll(void)
 }
 
 
-/* U-boot specific routines */
+/* U-Boot specific routines */
 static u8 *pbuf = NULL;
 
 static int pkey = -1;
@@ -692,16 +694,6 @@ static int ne2k_setup_driver(struct eth_device *dev)
 		}
 	}
 
-#ifdef CONFIG_DRIVER_NE2000_CCR
-	{
-		vu_char *p = (vu_char *) CONFIG_DRIVER_NE2000_CCR;
-
-		PRINTK("CCR before is %x\n", *p);
-		*p = CONFIG_DRIVER_NE2000_VAL;
-		PRINTK("CCR after is %x\n", *p);
-	}
-#endif
-
 	nic.base = (u8 *) CONFIG_DRIVER_NE2000_BASE;
 
 	nic.data = nic.base + DP_DATA;
@@ -715,20 +707,20 @@ static int ne2k_setup_driver(struct eth_device *dev)
 	 * to the MAC address value in the environment, so we do not read
 	 * it from the prom or eeprom if it is specified in the environment.
 	 */
-	if (!eth_getenv_enetaddr("ethaddr", dev->enetaddr)) {
+	if (!eth_env_get_enetaddr("ethaddr", dev->enetaddr)) {
 		/* If the MAC address is not in the environment, get it: */
 		if (!get_prom(dev->enetaddr, nic.base)) /* get MAC from prom */
 			dp83902a_init(dev->enetaddr);   /* fallback: seeprom */
 		/* And write it into the environment otherwise eth_write_hwaddr
-		 * returns -1 due to eth_getenv_enetaddr_by_index() failing,
+		 * returns -1 due to eth_env_get_enetaddr_by_index() failing,
 		 * and this causes "Warning: failed to set MAC address", and
 		 * cmd_bdinfo has no ethaddr value which it can show: */
-		eth_setenv_enetaddr("ethaddr", dev->enetaddr);
+		eth_env_set_enetaddr("ethaddr", dev->enetaddr);
 	}
 	return 0;
 }
 
-static int ne2k_init(struct eth_device *dev, bd_t *bd)
+static int ne2k_init(struct eth_device *dev, struct bd_info *bd)
 {
 	dp83902a_start(dev->enetaddr);
 	initialized = 1;
@@ -794,7 +786,7 @@ int ne2k_register(void)
 	dev->send = ne2k_send;
 	dev->recv = ne2k_recv;
 
-	sprintf(dev->name, "NE2000");
+	strcpy(dev->name, "NE2000");
 
 	return eth_register(dev);
 }

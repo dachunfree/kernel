@@ -1,12 +1,12 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * (C) Copyright 2011
  * Holger Brunck, Keymile GmbH Hannover, holger.brunck@keymile.com
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
 #include <cli_hush.h>
+#include <env.h>
 #include <i2c.h>
 #include "common.h"
 
@@ -189,7 +189,7 @@ static int ivm_check_crc(unsigned char *buf, int block)
 
 /* take care of the possible MAC address offset and the IVM content offset */
 static int process_mac(unsigned char *valbuf, unsigned char *buf,
-				int offset)
+				int offset, bool unique)
 {
 	unsigned char mac[6];
 	unsigned long val = (buf[4] << 16) + (buf[5] << 8) + buf[6];
@@ -198,6 +198,13 @@ static int process_mac(unsigned char *valbuf, unsigned char *buf,
 	 * MAC address is at offset 1
 	 */
 	memcpy(mac, buf+1, 6);
+
+	/* MAC adress can be set to locally administred, this is only allowed
+	 * for interfaces which have now connection to the outside. For these
+	 * addresses we need to set the second bit in the first byte.
+	 */
+	if (!unique)
+		mac[0] |= 0x2;
 
 	if (offset) {
 		val += offset;
@@ -254,7 +261,7 @@ int ivm_analyze_eeprom(unsigned char *buf, int len)
 
 	GET_STRING("IVM_Symbol", IVM_POS_SYMBOL_ONLY, 8)
 	GET_STRING("IVM_DeviceName", IVM_POS_SHORT_TEXT, 64)
-	tmp = (unsigned char *) getenv("IVM_DeviceName");
+	tmp = (unsigned char *)env_get("IVM_DeviceName");
 	if (tmp) {
 		int	len = strlen((char *)tmp);
 		int	i = 0;
@@ -290,7 +297,7 @@ int ivm_analyze_eeprom(unsigned char *buf, int len)
 	return 0;
 }
 
-static int ivm_populate_env(unsigned char *buf, int len)
+static int ivm_populate_env(unsigned char *buf, int len, int mac_address_offset)
 {
 	unsigned char	*page2;
 	unsigned char	valbuf[MAC_STR_SZ];
@@ -300,25 +307,45 @@ static int ivm_populate_env(unsigned char *buf, int len)
 		return 0;
 	page2 = &buf[CONFIG_SYS_IVM_EEPROM_PAGE_LEN*2];
 
+#ifndef CONFIG_KMTEGR1
 	/* if an offset is defined, add it */
-	process_mac(valbuf, page2, CONFIG_PIGGY_MAC_ADRESS_OFFSET);
-	if (getenv("ethaddr") == NULL)
-		setenv((char *)"ethaddr", (char *)valbuf);
-#ifdef CONFIG_KMVECT1
-/* KMVECT1 has two ethernet interfaces */
-	if (getenv("eth1addr") == NULL) {
-		process_mac(valbuf, page2, 1);
-		setenv((char *)"eth1addr", (char *)valbuf);
-	}
+	process_mac(valbuf, page2, mac_address_offset, true);
+	env_set((char *)"ethaddr", (char *)valbuf);
+#else
+/* KMTEGR1 has a special setup. eth0 has no connection to the outside and
+ * gets an locally administred MAC address, eth1 is the debug interface and
+ * gets the official MAC address from the IVM
+ */
+	process_mac(valbuf, page2, mac_address_offset, false);
+	env_set((char *)"ethaddr", (char *)valbuf);
+	process_mac(valbuf, page2, mac_address_offset, true);
+	env_set((char *)"eth1addr", (char *)valbuf);
 #endif
 
 	return 0;
 }
 
-int ivm_read_eeprom(unsigned char *buf, int len)
+int ivm_read_eeprom(unsigned char *buf, int len, int mac_address_offset)
 {
 	int ret;
+#ifdef CONFIG_DM_I2C
+	struct udevice *eedev = NULL;
 
+	ret = i2c_get_chip_for_busnum(CONFIG_KM_IVM_BUS,
+				      CONFIG_SYS_I2C_EEPROM_ADDR, 1, &eedev);
+	if (ret) {
+		printf("failed to get device for EEPROM at address 0x%02x\n",
+		       CONFIG_SYS_I2C_EEPROM_ADDR);
+		return 1;
+	}
+
+	ret = dm_i2c_read(eedev, 0, buf, len);
+	if (ret != 0) {
+		printf("Error: Unable to read from I2C EEPROM at address %02X:%02X\n",
+		       CONFIG_SYS_I2C_EEPROM_ADDR, 0);
+		return 1;
+	}
+#else
 	i2c_set_bus_num(CONFIG_KM_IVM_BUS);
 	/* add deblocking here */
 	i2c_make_abort();
@@ -328,6 +355,6 @@ int ivm_read_eeprom(unsigned char *buf, int len)
 		printf("Error reading EEprom\n");
 		return -2;
 	}
-
-	return ivm_populate_env(buf, len);
+#endif
+	return ivm_populate_env(buf, len, mac_address_offset);
 }

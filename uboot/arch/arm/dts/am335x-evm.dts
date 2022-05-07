@@ -16,6 +16,7 @@
 
 	chosen {
 		stdout-path = &uart0;
+		tick-timer = &timer2;
 	};
 
 	cpus {
@@ -79,8 +80,6 @@
 
 	gpio_keys: volume_keys@0 {
 		compatible = "gpio-keys";
-		#address-cells = <1>;
-		#size-cells = <0>;
 		autorepeat;
 
 		switch@9 {
@@ -676,6 +675,7 @@
 	pinctrl-0 = <&cpsw_default>;
 	pinctrl-1 = <&cpsw_sleep>;
 	status = "okay";
+	slaves = <1>;
 };
 
 &davinci_mdio {
@@ -683,16 +683,15 @@
 	pinctrl-0 = <&davinci_mdio_default>;
 	pinctrl-1 = <&davinci_mdio_sleep>;
 	status = "okay";
+
+	ethphy0: ethernet-phy@0 {
+		reg = <0>;
+	};
 };
 
 &cpsw_emac0 {
-	phy_id = <&davinci_mdio>, <0>;
-	phy-mode = "rgmii-txid";
-};
-
-&cpsw_emac1 {
-	phy_id = <&davinci_mdio>, <1>;
-	phy-mode = "rgmii-txid";
+	phy-handle = <&ethphy0>;
+	phy-mode = "rgmii-id";
 };
 
 &tscadc {
@@ -716,14 +715,14 @@
 	bus-width = <4>;
 	pinctrl-names = "default";
 	pinctrl-0 = <&mmc1_pins>;
-	cd-gpios = <&gpio0 6 GPIO_ACTIVE_HIGH>;
+	cd-gpios = <&gpio0 6 GPIO_ACTIVE_LOW>;
 };
 
 &mmc3 {
 	/* these are on the crossbar and are outlined in the
 	   xbar-event-map element */
-	dmas = <&edma 12
-		&edma 13>;
+	dmas = <&edma 12 0
+		&edma 13 0>;
 	dma-names = "tx", "rx";
 	status = "okay";
 	vmmc-supply = <&wlan_en_reg>;

@@ -1,10 +1,19 @@
 #ifndef _LINUX_COMPAT_H_
 #define _LINUX_COMPAT_H_
 
+#include <console.h>
+#include <log.h>
 #include <malloc.h>
+
+#include <asm/processor.h>
+
 #include <linux/types.h>
 #include <linux/err.h>
 #include <linux/kernel.h>
+
+#ifdef CONFIG_XEN
+#include <xen/events.h>
+#endif
 
 struct unused {};
 typedef struct unused unused_t;
@@ -14,28 +23,6 @@ struct p_current{
 };
 
 extern struct p_current *current;
-
-#define ndelay(x)	udelay(1)
-
-#define dev_dbg(dev, fmt, args...)		\
-	debug(fmt, ##args)
-#define dev_vdbg(dev, fmt, args...)		\
-	debug(fmt, ##args)
-#define dev_info(dev, fmt, args...)		\
-	printf(fmt, ##args)
-#define dev_err(dev, fmt, args...)		\
-	printf(fmt, ##args)
-#define printk	printf
-#define printk_once	printf
-
-#define KERN_EMERG
-#define KERN_ALERT
-#define KERN_CRIT
-#define KERN_ERR
-#define KERN_WARNING
-#define KERN_NOTICE
-#define KERN_INFO
-#define KERN_DEBUG
 
 #define GFP_ATOMIC ((gfp_t) 0)
 #define GFP_KERNEL ((gfp_t) 0)
@@ -96,20 +83,58 @@ static inline void kmem_cache_destroy(struct kmem_cache *cachep)
 #define add_wait_queue(...)	do { } while (0)
 #define remove_wait_queue(...)	do { } while (0)
 
+#ifndef CONFIG_XEN
+#define eventchn_poll()
+#endif
+
+#define __wait_event_timeout(condition, timeout, ret)		\
+({								\
+	ulong __ret = ret; /* explicit shadow */		\
+	ulong start = get_timer(0);				\
+	for (;;) {						\
+		eventchn_poll();				\
+		if (condition) {				\
+			__ret = 1;				\
+			break;					\
+	}							\
+	if ((get_timer(start) > timeout) || ctrlc()) {		\
+		__ret = 0;					\
+		break;						\
+	}							\
+	cpu_relax();						\
+	}							\
+	__ret;							\
+})
+
+/**
+ * wait_event_timeout() - Wait until the event occurs before the timeout.
+ * @wr_head: The wait queue to wait on.
+ * @condition: Expression for the event to wait for.
+ * @timeout: Maximum waiting time.
+ *
+ * We wait until the @condition evaluates to %true (succeed) or
+ * %false (@timeout elapsed).
+ *
+ * Return:
+ * 0 - if the @condition evaluated to %false after the @timeout elapsed
+ * 1 - if the @condition evaluated to %true
+ */
+#define wait_event_timeout(wq_head, condition, timeout)			\
+({									\
+	ulong __ret;							\
+	if (condition)							\
+		__ret = 1;						\
+	else								\
+		__ret = __wait_event_timeout(condition, timeout, __ret);\
+	__ret;								\
+})
+
 #define KERNEL_VERSION(a,b,c)	(((a) << 16) + ((b) << 8) + (c))
 
-#ifndef BUG
-#define BUG() do { \
-	printf("U-Boot BUG at %s:%d!\n", __FILE__, __LINE__); \
-} while (0)
-
-#define BUG_ON(condition) do { if (condition) BUG(); } while(0)
-#endif /* BUG */
-
-#define WARN_ON(x) if (x) {printf("WARNING in %s line %d\n" \
-				  , __FILE__, __LINE__); }
-
+/* This is also defined in ARMv8's mmu.h */
+#ifndef PAGE_SIZE
 #define PAGE_SIZE	4096
+#endif
 
 /* drivers/char/random.c */
 #define get_random_bytes(...)
@@ -148,8 +173,6 @@ typedef u64 blkcnt_t;
 typedef unsigned long sector_t;
 typedef unsigned long blkcnt_t;
 #endif
-
-#define ENOTSUPP	524	/* Operation is not supported */
 
 /* module */
 #define THIS_MODULE		0
@@ -200,7 +223,6 @@ typedef unsigned long blkcnt_t;
 #define init_waitqueue_head(...)	do { } while (0)
 #define wait_event_interruptible(...)	0
 #define wake_up_interruptible(...)	do { } while (0)
-#define print_hex_dump(...)		do { } while (0)
 #define dump_stack(...)			do { } while (0)
 
 #define task_pid_nr(x)			0
@@ -226,7 +248,7 @@ typedef int	wait_queue_head_t;
 #define spin_lock_init(lock) do {} while (0)
 #define spin_lock(lock) do {} while (0)
 #define spin_unlock(lock) do {} while (0)
-#define spin_lock_irqsave(lock, flags) do { debug("%lu\n", flags); } while (0)
+#define spin_lock_irqsave(lock, flags) do {} while (0)
 #define spin_unlock_irqrestore(lock, flags) do { flags = 0; } while (0)
 
 #define DEFINE_MUTEX(...)

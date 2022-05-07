@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * am3517crane.c - board file for AM3517 CraneBoard
  *
@@ -6,11 +7,10 @@
  * Based on logicpd/am3517evm/am3517evm.c
  *
  * Copyright (C) 2011 Mistral Solutions Pvt Ltd
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
+#include <init.h>
 #include <asm/io.h>
 #include <asm/arch/mmc_host_def.h>
 #include <asm/arch/mem.h>
@@ -43,7 +43,7 @@ int board_init(void)
  */
 int misc_init_r(void)
 {
-#ifdef CONFIG_SYS_I2C_OMAP34XX
+#ifdef CONFIG_SYS_I2C_OMAP24XX
 	i2c_init(CONFIG_SYS_OMAP24_I2C_SPEED, CONFIG_SYS_OMAP24_I2C_SLAVE);
 #endif
 
@@ -63,8 +63,8 @@ void set_muxconf_regs(void)
 	MUX_AM3517CRANE();
 }
 
-#if defined(CONFIG_GENERIC_MMC) && !defined(CONFIG_SPL_BUILD)
-int board_mmc_init(bd_t *bis)
+#if defined(CONFIG_MMC)
+int board_mmc_init(struct bd_info *bis)
 {
 	return omap_mmc_init(0, 0, 0, -1, -1);
 }

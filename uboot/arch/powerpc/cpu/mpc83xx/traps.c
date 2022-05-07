@@ -1,10 +1,9 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * (C) Copyright 2000
  * Wolfgang Denk, DENX Software Engineering, wd@denx.de.
  *
  * Copyright (C) 1995-1996  Gary Thomas (gdt@linuxppc.org)
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 /*
@@ -13,6 +12,7 @@
  */
 
 #include <common.h>
+#include <asm/ptrace.h>
 #include <command.h>
 #include <kgdb.h>
 #include <asm/processor.h>
@@ -23,7 +23,7 @@ DECLARE_GLOBAL_DATA_PTR;
 /* Returns 0 if exception not found and fixup otherwise.  */
 extern unsigned long search_exception_table(unsigned long);
 
-#define END_OF_MEM	(gd->bd->bi_memstart + gd->bd->bi_memsize)
+#define END_OF_MEM	(gd->ram_base + gd->ram_size)
 
 /*
  * Trap & Exception support
@@ -214,31 +214,4 @@ void DebugException(struct pt_regs *regs)
 #if defined(CONFIG_CMD_BEDBUG)
 	do_bedbug_breakpoint( regs );
 #endif
-}
-
-/* Probe an address by reading.  If not present, return -1, otherwise
- * return 0.
- */
-int addr_probe(uint *addr)
-{
-#if 0
-	int	retval;
-
-	__asm__ __volatile__(			\
-		"1:	lwz %0,0(%1)\n"		\
-		"	eieio\n"		\
-		"	li %0,0\n"		\
-		"2:\n"				\
-		".section .fixup,\"ax\"\n"	\
-		"3:	li %0,-1\n"		\
-		"	b 2b\n"			\
-		".section __ex_table,\"a\"\n"	\
-		"	.align 2\n"		\
-		"	.long 1b,3b\n"		\
-		".text"				\
-		: "=r" (retval) : "r"(addr));
-
-	return (retval);
-#endif
-	return 0;
 }

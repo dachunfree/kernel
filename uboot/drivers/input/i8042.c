@@ -1,19 +1,21 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * (C) Copyright 2002 ELTEC Elektronik AG
  * Frank Gottschling <fgottschling@eltec.de>
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 /* i8042.c - Intel 8042 keyboard driver routines */
 
 #include <common.h>
 #include <dm.h>
+#include <env.h>
 #include <errno.h>
 #include <i8042.h>
 #include <input.h>
 #include <keyboard.h>
+#include <log.h>
 #include <asm/io.h>
+#include <linux/delay.h>
 
 DECLARE_GLOBAL_DATA_PTR;
 
@@ -134,6 +136,10 @@ static int kbd_reset(int quirk)
 	    kbd_read(I8042_DATA_REG) != KBD_POR)
 		goto err;
 
+	if (kbd_write(I8042_DATA_REG, CMD_DRAIN_OUTPUT) ||
+	    kbd_read(I8042_DATA_REG) != KBD_ACK)
+		goto err;
+
 	/* set AT translation and disable irq */
 	config = kbd_cmd_read(CMD_RD_CONFIG);
 	if (config == -1)
@@ -164,19 +170,8 @@ static int kbd_controller_present(void)
 	return in8(I8042_STS_REG) != 0xff;
 }
 
-/*
- * Implement a weak default function for boards that optionally
- * need to skip the i8042 initialization.
- *
- * TODO(sjg@chromium.org): Use device tree for this?
- */
-int __weak board_i8042_skip(void)
-{
-	/* As default, don't skip */
-	return 0;
-}
-
-void i8042_flush(void)
+/** Flush all buffer from keyboard controller to host*/
+static void i8042_flush(void)
 {
 	int timeout;
 
@@ -199,7 +194,13 @@ void i8042_flush(void)
 	}
 }
 
-int i8042_disable(void)
+/**
+ * Disables the keyboard so that key strokes no longer generate scancodes to
+ * the host.
+ *
+ * @return 0 if ok, -1 if keyboard input was found while disabling
+ */
+static int i8042_disable(void)
 {
 	if (kbd_input_empty() == 0)
 		return -1;
@@ -263,14 +264,14 @@ static int i8042_start(struct udevice *dev)
 	char *penv;
 	int ret;
 
-	if (!kbd_controller_present() || board_i8042_skip()) {
+	if (!kbd_controller_present()) {
 		debug("i8042 keyboard controller is not present\n");
 		return -ENOENT;
 	}
 
 	/* Init keyboard device (default US layout) */
 	keymap = KBD_US;
-	penv = getenv("keymap");
+	penv = env_get("keymap");
 	if (penv != NULL) {
 		if (strncmp(penv, "de", 3) == 0)
 			keymap = KBD_GER;
@@ -287,6 +288,15 @@ static int i8042_start(struct udevice *dev)
 
 	i8042_kbd_update_leds(dev, NORMAL);
 	debug("%s: started\n", __func__);
+
+	return 0;
+}
+
+static int i8042_kbd_remove(struct udevice *dev)
+{
+	if (i8042_disable())
+		log_debug("i8042_disable() failed. fine, continue.\n");
+	i8042_flush();
 
 	return 0;
 }
@@ -311,7 +321,7 @@ static int i8042_kbd_probe(struct udevice *dev)
 	struct input_config *input = &uc_priv->input;
 	int ret;
 
-	if (fdtdec_get_bool(gd->fdt_blob, dev->of_offset,
+	if (fdtdec_get_bool(gd->fdt_blob, dev_of_offset(dev),
 			    "intel,duplicate-por"))
 		priv->quirks |= QUIRK_DUP_POR;
 
@@ -345,6 +355,7 @@ U_BOOT_DRIVER(i8042_kbd) = {
 	.id	= UCLASS_KEYBOARD,
 	.of_match = i8042_kbd_ids,
 	.probe = i8042_kbd_probe,
+	.remove = i8042_kbd_remove,
 	.ops	= &i8042_kbd_ops,
 	.priv_auto_alloc_size = sizeof(struct i8042_kbd_priv),
 };

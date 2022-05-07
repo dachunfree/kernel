@@ -1,11 +1,15 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * Copyright 2010-2011 Calxeda, Inc.
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
 #include <ahci.h>
+#include <cpu_func.h>
+#include <env.h>
+#include <fdt_support.h>
+#include <init.h>
+#include <net.h>
 #include <netdev.h>
 #include <scsi.h>
 
@@ -48,7 +52,7 @@ int board_init(void)
 }
 
 /* We know all the init functions have been run now */
-int board_eth_init(bd_t *bis)
+int board_eth_init(struct bd_info *bis)
 {
 	int rc = 0;
 
@@ -67,7 +71,7 @@ void scsi_init(void)
 	cphy_disable_overrides();
 	if (reg & PWRDOM_STAT_SATA) {
 		ahci_init((void __iomem *)HB_AHCI_BASE);
-		scsi_scan(1);
+		scsi_scan(true);
 	}
 }
 #endif
@@ -80,11 +84,11 @@ int misc_init_r(void)
 
 	boot_choice = readl(HB_SREG_A9_BOOT_SRC_STAT) & 0xff;
 	sprintf(envbuffer, "bootcmd%d", boot_choice);
-	if (getenv(envbuffer)) {
+	if (env_get(envbuffer)) {
 		sprintf(envbuffer, "run bootcmd%d", boot_choice);
-		setenv("bootcmd", envbuffer);
+		env_set("bootcmd", envbuffer);
 	} else
-		setenv("bootcmd", "");
+		env_set("bootcmd", "");
 
 	return 0;
 }
@@ -97,7 +101,7 @@ int dram_init(void)
 }
 
 #if defined(CONFIG_OF_BOARD_SETUP)
-int ft_board_setup(void *fdt, bd_t *bd)
+int ft_board_setup(void *fdt, struct bd_info *bd)
 {
 	static const char disabled[] = "disabled";
 	u32 reg = readl(HB_SREG_A9_PWRDOM_STAT);

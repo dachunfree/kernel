@@ -1,11 +1,10 @@
+/* SPDX-License-Identifier: GPL-2.0+ */
 /*
  * (C) Copyright 2001 Sysgo Real-Time Solutions, GmbH <www.elinos.com>
  * Andreas Heppel <aheppel@sysgo.de>
  *
  * (C) Copyright 2002
  * Wolfgang Denk, DENX Software Engineering, wd@denx.de.
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #ifndef _PCI_H
@@ -18,6 +17,7 @@
  * Under PCI, each device has 256 bytes of configuration address space,
  * of which the first 64 bytes are standardized as follows:
  */
+#define PCI_STD_HEADER_SIZEOF	64
 #define PCI_VENDOR_ID		0x00	/* 16 bits */
 #define PCI_DEVICE_ID		0x02	/* 16 bits */
 #define PCI_COMMAND		0x04	/* 16 bits */
@@ -215,6 +215,10 @@
 #define  PCI_BASE_ADDRESS_IO_MASK	(~0x03ULL)
 /* bit 1 is reserved if address_space = 1 */
 
+/* Convert a regsister address (e.g. PCI_BASE_ADDRESS_1) to a bar # (e.g. 1) */
+#define pci_offset_to_barnum(offset)	\
+		(((offset) - PCI_BASE_ADDRESS_0) / sizeof(u32))
+
 /* Header type 0 (normal devices) */
 #define PCI_CARDBUS_CIS		0x28
 #define PCI_SUBSYSTEM_VENDOR_ID 0x2c
@@ -272,21 +276,6 @@
 #define  PCI_BRIDGE_CTL_BUS_RESET 0x40	/* Secondary bus reset */
 #define  PCI_BRIDGE_CTL_FAST_BACK 0x80	/* Fast Back2Back enabled on secondary interface */
 
-/* From 440ep */
-#define PCI_ERREN       0x48     /* Error Enable */
-#define PCI_ERRSTS      0x49     /* Error Status */
-#define PCI_BRDGOPT1    0x4A     /* PCI Bridge Options 1 */
-#define PCI_PLBSESR0    0x4C     /* PCI PLB Slave Error Syndrome 0 */
-#define PCI_PLBSESR1    0x50     /* PCI PLB Slave Error Syndrome 1 */
-#define PCI_PLBSEAR     0x54     /* PCI PLB Slave Error Address */
-#define PCI_CAPID       0x58     /* Capability Identifier */
-#define PCI_NEXTITEMPTR 0x59     /* Next Item Pointer */
-#define PCI_PMC         0x5A     /* Power Management Capabilities */
-#define PCI_PMCSR       0x5C     /* Power Management Control Status */
-#define PCI_PMCSRBSE    0x5E     /* PMCSR PCI to PCI Bridge Support Extensions */
-#define PCI_BRDGOPT2    0x60     /* PCI Bridge Options 2 */
-#define PCI_PMSCRR      0x64     /* Power Management State Change Request Re. */
-
 /* Header type 2 (CardBus bridges) */
 #define PCI_CB_CAPABILITY_LIST	0x14
 /* 0x15 reserved */
@@ -334,7 +323,21 @@
 #define  PCI_CAP_ID_SLOTID	0x04	/* Slot Identification */
 #define  PCI_CAP_ID_MSI		0x05	/* Message Signalled Interrupts */
 #define  PCI_CAP_ID_CHSWP	0x06	/* CompactPCI HotSwap */
-#define  PCI_CAP_ID_EXP 	0x10	/* PCI Express */
+#define  PCI_CAP_ID_PCIX	0x07	/* PCI-X */
+#define  PCI_CAP_ID_HT		0x08	/* HyperTransport */
+#define  PCI_CAP_ID_VNDR	0x09	/* Vendor-Specific */
+#define  PCI_CAP_ID_DBG		0x0A	/* Debug port */
+#define  PCI_CAP_ID_CCRC	0x0B	/* CompactPCI Central Resource Control */
+#define  PCI_CAP_ID_SHPC	0x0C	/* PCI Standard Hot-Plug Controller */
+#define  PCI_CAP_ID_SSVID	0x0D	/* Bridge subsystem vendor/device ID */
+#define  PCI_CAP_ID_AGP3	0x0E	/* AGP Target PCI-PCI bridge */
+#define  PCI_CAP_ID_SECDEV	0x0F	/* Secure Device */
+#define  PCI_CAP_ID_EXP		0x10	/* PCI Express */
+#define  PCI_CAP_ID_MSIX	0x11	/* MSI-X */
+#define  PCI_CAP_ID_SATA	0x12	/* SATA Data/Index Conf. */
+#define  PCI_CAP_ID_AF		0x13	/* PCI Advanced Features */
+#define  PCI_CAP_ID_EA		0x14	/* PCI Enhanced Allocation */
+#define  PCI_CAP_ID_MAX		PCI_CAP_ID_EA
 #define PCI_CAP_LIST_NEXT	1	/* Next capability in the list */
 #define PCI_CAP_FLAGS		2	/* Capability defined flags (16 bits) */
 #define PCI_CAP_SIZEOF		4
@@ -406,6 +409,7 @@
 #define  PCI_MSI_FLAGS_QSIZE	0x70	/* Message queue size configured */
 #define  PCI_MSI_FLAGS_QMASK	0x0e	/* Maximum queue size available */
 #define  PCI_MSI_FLAGS_ENABLE	0x01	/* MSI feature enabled */
+#define  PCI_MSI_FLAGS_MASKBIT	0x0100	/* Per-vector masking capable */
 #define PCI_MSI_RFU		3	/* Rest of capability flags */
 #define PCI_MSI_ADDRESS_LO	4	/* Lower 32 bits */
 #define PCI_MSI_ADDRESS_HI	8	/* Upper 32 bits (if PCI_MSI_FLAGS_64BIT set) */
@@ -450,6 +454,65 @@
 #define PCI_EXT_CAP_ID_SECPCI	0x19	/* Secondary PCIe Capability */
 #define PCI_EXT_CAP_ID_PMUX	0x1A	/* Protocol Multiplexing */
 #define PCI_EXT_CAP_ID_PASID	0x1B	/* Process Address Space ID */
+#define PCI_EXT_CAP_ID_DPC	0x1D	/* Downstream Port Containment */
+#define PCI_EXT_CAP_ID_L1SS	0x1E	/* L1 PM Substates */
+#define PCI_EXT_CAP_ID_PTM	0x1F	/* Precision Time Measurement */
+#define PCI_EXT_CAP_ID_MAX	PCI_EXT_CAP_ID_PTM
+
+/* Enhanced Allocation Registers */
+#define PCI_EA_NUM_ENT		2	/* Number of Capability Entries */
+#define  PCI_EA_NUM_ENT_MASK	0x3f	/* Num Entries Mask */
+#define PCI_EA_FIRST_ENT	4	/* First EA Entry in List */
+#define  PCI_EA_ES		0x00000007 /* Entry Size */
+#define  PCI_EA_BEI		0x000000f0 /* BAR Equivalent Indicator */
+/* 9-14 map to VF BARs 0-5 respectively */
+#define  PCI_EA_BEI_VF_BAR0	9
+#define  PCI_EA_BEI_VF_BAR5	14
+/* Base, MaxOffset registers */
+/* bit 0 is reserved */
+#define  PCI_EA_IS_64		0x00000002	/* 64-bit field flag */
+#define  PCI_EA_FIELD_MASK	0xfffffffc	/* For Base & Max Offset */
+
+/* PCI Express capabilities */
+#define PCI_EXP_FLAGS		2	/* Capabilities register */
+#define  PCI_EXP_FLAGS_TYPE	0x00f0	/* Device/Port type */
+#define  PCI_EXP_TYPE_ROOT_PORT 0x4	/* Root Port */
+#define PCI_EXP_DEVCAP		4	/* Device capabilities */
+#define  PCI_EXP_DEVCAP_FLR	0x10000000 /* Function Level Reset */
+#define PCI_EXP_DEVCTL		8	/* Device Control */
+#define  PCI_EXP_DEVCTL_BCR_FLR	0x8000  /* Bridge Configuration Retry / FLR */
+#define PCI_EXP_LNKCAP		12	/* Link Capabilities */
+#define  PCI_EXP_LNKCAP_SLS	0x0000000f /* Supported Link Speeds */
+#define  PCI_EXP_LNKCAP_MLW	0x000003f0 /* Maximum Link Width */
+#define  PCI_EXP_LNKCAP_DLLLARC	0x00100000 /* Data Link Layer Link Active Reporting Capable */
+#define PCI_EXP_LNKSTA		18	/* Link Status */
+#define  PCI_EXP_LNKSTA_CLS	0x000f	/* Current Link Speed */
+#define  PCI_EXP_LNKSTA_CLS_2_5GB 0x0001 /* Current Link Speed 2.5GT/s */
+#define  PCI_EXP_LNKSTA_CLS_5_0GB 0x0002 /* Current Link Speed 5.0GT/s */
+#define  PCI_EXP_LNKSTA_CLS_8_0GB 0x0003 /* Current Link Speed 8.0GT/s */
+#define  PCI_EXP_LNKSTA_NLW	0x03f0	/* Negotiated Link Width */
+#define  PCI_EXP_LNKSTA_NLW_SHIFT 4	/* start of NLW mask in link status */
+#define  PCI_EXP_LNKSTA_DLLLA	0x2000	/* Data Link Layer Link Active */
+#define PCI_EXP_SLTCAP		20	/* Slot Capabilities */
+#define  PCI_EXP_SLTCAP_PSN	0xfff80000 /* Physical Slot Number */
+#define PCI_EXP_DEVCAP2		36	/* Device Capabilities 2 */
+#define  PCI_EXP_DEVCAP2_ARI	0x00000020 /* ARI Forwarding Supported */
+#define PCI_EXP_DEVCTL2		40	/* Device Control 2 */
+#define  PCI_EXP_DEVCTL2_ARI	0x0020 /* Alternative Routing-ID */
+
+#define PCI_EXP_LNKCTL2		48	/* Link Control 2 */
+/* Single Root I/O Virtualization Registers */
+#define PCI_SRIOV_CAP		0x04	/* SR-IOV Capabilities */
+#define PCI_SRIOV_CTRL		0x08	/* SR-IOV Control */
+#define  PCI_SRIOV_CTRL_VFE	0x01	/* VF Enable */
+#define  PCI_SRIOV_CTRL_MSE	0x08	/* VF Memory Space Enable */
+#define  PCI_SRIOV_CTRL_ARI	0x10	/* ARI Capable Hierarchy */
+#define PCI_SRIOV_INITIAL_VF	0x0c	/* Initial VFs */
+#define PCI_SRIOV_TOTAL_VF	0x0e	/* Total VFs */
+#define PCI_SRIOV_NUM_VF	0x10	/* Number of VFs */
+#define PCI_SRIOV_VF_OFFSET	0x14	/* First VF Offset */
+#define PCI_SRIOV_VF_STRIDE	0x16	/* Following VF Stride */
+#define PCI_SRIOV_VF_DID	0x1a	/* VF Device ID */
 
 /* Include the ID list */
 
@@ -457,12 +520,14 @@
 
 #ifndef __ASSEMBLY__
 
+#include <dm/pci.h>
+
 #ifdef CONFIG_SYS_PCI_64BIT
 typedef u64 pci_addr_t;
 typedef u64 pci_size_t;
 #else
-typedef u32 pci_addr_t;
-typedef u32 pci_size_t;
+typedef unsigned long pci_addr_t;
+typedef unsigned long pci_size_t;
 #endif
 
 struct pci_region {
@@ -496,14 +561,28 @@ static inline void pci_set_region(struct pci_region *reg,
 typedef int pci_dev_t;
 
 #define PCI_BUS(d)		(((d) >> 16) & 0xff)
+
+/*
+ * Please note the difference in DEVFN usage in U-Boot vs Linux. U-Boot
+ * uses DEVFN in bits 15-8 but Linux instead expects DEVFN in bits 7-0.
+ * Please see the Linux header include/uapi/linux/pci.h for more details.
+ * This is relevant for the following macros:
+ * PCI_DEV, PCI_FUNC, PCI_DEVFN
+ * The U-Boot macro PCI_DEV is equivalent to the Linux PCI_SLOT version with
+ * the remark from above (input is in bits 15-8 instead of 7-0.
+ */
 #define PCI_DEV(d)		(((d) >> 11) & 0x1f)
 #define PCI_FUNC(d)		(((d) >> 8) & 0x7)
 #define PCI_DEVFN(d, f)		((d) << 11 | (f) << 8)
+
 #define PCI_MASK_BUS(bdf)	((bdf) & 0xffff)
 #define PCI_ADD_BUS(bus, devfn)	(((bus) << 16) | (devfn))
 #define PCI_BDF(b, d, f)	((b) << 16 | PCI_DEVFN(d, f))
 #define PCI_VENDEV(v, d)	(((v) << 16) | (d))
 #define PCI_ANY_ID		(~0)
+
+/* Convert from Linux format to U-Boot format */
+#define PCI_TO_BDF(val)		((val) << 8)
 
 struct pci_device_id {
 	unsigned int vendor, device;	/* Vendor and device ID or PCI_ANY_ID */
@@ -531,19 +610,24 @@ extern void pci_cfgfunc_do_nothing(struct pci_controller* hose, pci_dev_t dev,
 extern void pci_cfgfunc_config_device(struct pci_controller* hose, pci_dev_t dev,
 				      struct pci_config_table *);
 
-#define MAX_PCI_REGIONS		7
-
 #define INDIRECT_TYPE_NO_PCIE_LINK	1
 
-/*
+/**
  * Structure of a PCI controller (host bridge)
  *
  * With driver model this is dev_get_uclass_priv(bus)
+ *
+ * @skip_auto_config_until_reloc: true to avoid auto-config until U-Boot has
+ *	relocated. Normally if PCI is used before relocation, this happens
+ *	before relocation also. Some platforms set up static configuration in
+ *	TPL/SPL to reduce code size and boot time, since these phases only know
+ *	about a small subset of PCI devices. This is normally false.
  */
 struct pci_controller {
 #ifdef CONFIG_DM_PCI
 	struct udevice *bus;
 	struct udevice *ctlr;
+	bool skip_auto_config_until_reloc;
 #else
 	struct pci_controller *next;
 #endif
@@ -566,7 +650,7 @@ struct pci_controller {
 	 * for PCI controllers and a separate UCLASS (or perhaps
 	 * UCLASS_PCI_GENERIC) is used for bridges.
 	 */
-	struct pci_region regions[MAX_PCI_REGIONS];
+	struct pci_region *regions;
 	int region_count;
 
 	struct pci_config_table *config_table;
@@ -585,8 +669,6 @@ struct pci_controller {
 	/* Used by auto config */
 	struct pci_region *pci_mem, *pci_io, *pci_prefetch;
 
-	/* Used by ppc405 autoconfig*/
-	struct pci_region *pci_fb;
 #ifndef CONFIG_DM_PCI
 	int current_busno;
 
@@ -621,6 +703,7 @@ static inline void pci_set_ops(struct pci_controller *hose,
 extern void pci_setup_indirect(struct pci_controller* hose, u32 cfg_addr, u32 cfg_data);
 #endif
 
+#if !defined(CONFIG_DM_PCI) || defined(CONFIG_DM_PCI_COMPAT)
 extern phys_addr_t pci_hose_bus_to_phys(struct pci_controller* hose,
 					pci_addr_t addr, unsigned long flags);
 extern pci_addr_t pci_hose_phys_to_bus(struct pci_controller* hose,
@@ -656,7 +739,6 @@ extern pci_addr_t pci_hose_phys_to_bus(struct pci_controller* hose,
 	pci_bus_to_virt((dev), (addr), PCI_REGION_IO, (len), (map_flags))
 
 /* For driver model these are defined in macros in pci_compat.c */
-#if !defined(CONFIG_DM_PCI) || defined(CONFIG_DM_PCI_COMPAT)
 extern int pci_hose_read_config_byte(struct pci_controller *hose,
 				     pci_dev_t dev, int where, u8 *val);
 extern int pci_hose_read_config_word(struct pci_controller *hose,
@@ -683,8 +765,21 @@ extern int pci_write_config_dword(pci_dev_t dev, int where, u32 val);
 void pciauto_region_init(struct pci_region *res);
 void pciauto_region_align(struct pci_region *res, pci_size_t size);
 void pciauto_config_init(struct pci_controller *hose);
+
+/**
+ * pciauto_region_allocate() - Allocate resources from a PCI resource region
+ *
+ * Allocates @size bytes from the PCI resource @res. If @supports_64bit is
+ * false, the result will be guaranteed to fit in 32 bits.
+ *
+ * @res:		PCI region to allocate from
+ * @size:		Amount of bytes to allocate
+ * @bar:		Returns the PCI bus address of the allocated resource
+ * @supports_64bit:	Whether to allow allocations above the 32-bit boundary
+ * @return 0 if successful, -1 on failure
+ */
 int pciauto_region_allocate(struct pci_region *res, pci_size_t size,
-			    pci_addr_t *bar);
+			    pci_addr_t *bar, bool supports_64bit);
 
 #if !defined(CONFIG_DM_PCI) || defined(CONFIG_DM_PCI_COMPAT)
 extern int pci_hose_read_config_byte_via_dword(struct pci_controller *hose,
@@ -700,6 +795,7 @@ extern void *pci_map_bar(pci_dev_t pdev, int bar, int flags);
 extern void pci_register_hose(struct pci_controller* hose);
 extern struct pci_controller* pci_bus_to_hose(int bus);
 extern struct pci_controller *find_hose_by_cfg_addr(void *cfg_addr);
+extern struct pci_controller *pci_get_hose_head(void);
 
 extern int pci_skip_dev(struct pci_controller *hose, pci_dev_t dev);
 extern int pci_hose_scan(struct pci_controller *hose);
@@ -719,12 +815,6 @@ extern int pciauto_config_device(struct pci_controller *hose, pci_dev_t dev);
 extern pci_dev_t pci_find_device (unsigned int vendor, unsigned int device, int index);
 extern pci_dev_t pci_find_devices (struct pci_device_id *ids, int index);
 pci_dev_t pci_find_class(unsigned int find_class, int index);
-
-extern int pci_hose_config_device(struct pci_controller *hose,
-				  pci_dev_t dev,
-				  unsigned long io,
-				  pci_addr_t mem,
-				  unsigned long command);
 
 extern int pci_hose_find_capability(struct pci_controller *hose, pci_dev_t dev,
 				    int cap);
@@ -753,11 +843,17 @@ int pci_last_busno(void);
 extern void pci_mpc85xx_init (struct pci_controller *hose);
 #endif
 
+#ifdef CONFIG_PCIE_IMX
+extern void imx_pcie_remove(void);
+#endif
+
 #if !defined(CONFIG_DM_PCI) || defined(CONFIG_DM_PCI_COMPAT)
 /**
  * pci_write_bar32() - Write the address of a BAR including control bits
  *
- * This writes a raw address (with control bits) to a bar
+ * This writes a raw address (with control bits) to a bar. This can be used
+ * with devices which require hard-coded addresses, not part of the normal
+ * PCI enumeration process.
  *
  * @hose:	PCI hose to use
  * @dev:	PCI device to update
@@ -765,7 +861,7 @@ extern void pci_mpc85xx_init (struct pci_controller *hose);
  * @addr:	BAR address with control bits
  */
 void pci_write_bar32(struct pci_controller *hose, pci_dev_t dev, int barnum,
-		     u32 addr_and_ctrl);
+		     u32 addr);
 
 /**
  * pci_read_bar32() - read the address of a bar
@@ -807,19 +903,27 @@ struct udevice;
  *
  * Every device on a PCI bus has this per-child data.
  *
- * It can be accessed using dev_get_parent_priv(dev) if dev->parent is a
+ * It can be accessed using dev_get_parent_platdata(dev) if dev->parent is a
  * PCI bus (i.e. UCLASS_PCI)
  *
  * @devfn:	Encoded device and function index - see PCI_DEVFN()
  * @vendor:	PCI vendor ID (see pci_ids.h)
  * @device:	PCI device ID (see pci_ids.h)
  * @class:	PCI class, 3 bytes: (base, sub, prog-if)
+ * @is_virtfn:	True for Virtual Function device
+ * @pfdev:	Handle to Physical Function device
+ * @virtid:	Virtual Function Index
  */
 struct pci_child_platdata {
 	int devfn;
 	unsigned short vendor;
 	unsigned short device;
 	unsigned int class;
+
+	/* Variables for CONFIG_PCI_SRIOV */
+	bool is_virtfn;
+	struct udevice *pfdev;
+	int virtid;
 };
 
 /* PCI bus operations */
@@ -842,8 +946,8 @@ struct dm_pci_ops {
 	 * @size:	Access size
 	 * @return 0 if OK, -ve on error
 	 */
-	int (*read_config)(struct udevice *bus, pci_dev_t bdf, uint offset,
-			   ulong *valuep, enum pci_size_t size);
+	int (*read_config)(const struct udevice *bus, pci_dev_t bdf,
+			   uint offset, ulong *valuep, enum pci_size_t size);
 	/**
 	 * write_config() - Write a PCI configuration value
 	 *
@@ -862,12 +966,12 @@ struct dm_pci_ops {
 #define pci_get_ops(dev)	((struct dm_pci_ops *)(dev)->driver->ops)
 
 /**
- * pci_get_bdf() - Get the BDF value for a device
+ * dm_pci_get_bdf() - Get the BDF value for a device
  *
  * @dev:	Device to check
  * @return bus/device/function value (see PCI_BDF())
  */
-pci_dev_t pci_get_bdf(struct udevice *dev);
+pci_dev_t dm_pci_get_bdf(const struct udevice *dev);
 
 /**
  * pci_bind_bus_devices() - scan a PCI bus and bind devices
@@ -902,13 +1006,13 @@ int pci_bind_bus_devices(struct udevice *bus);
 int pci_auto_config_devices(struct udevice *bus);
 
 /**
- * pci_bus_find_bdf() - Find a device given its PCI bus address
+ * dm_pci_bus_find_bdf() - Find a device given its PCI bus address
  *
  * @bdf:	PCI device address: bus, device and function -see PCI_BDF()
  * @devp:	Returns the device for this address, if found
  * @return 0 if OK, -ENODEV if not found
  */
-int pci_bus_find_bdf(pci_dev_t bdf, struct udevice **devp);
+int dm_pci_bus_find_bdf(pci_dev_t bdf, struct udevice **devp);
 
 /**
  * pci_bus_find_devfn() - Find a device on a bus
@@ -917,7 +1021,7 @@ int pci_bus_find_bdf(pci_dev_t bdf, struct udevice **devp);
  * @devp:	Returns the device for this address, if found
  * @return 0 if OK, -ENODEV if not found
  */
-int pci_bus_find_devfn(struct udevice *bus, pci_dev_t find_devfn,
+int pci_bus_find_devfn(const struct udevice *bus, pci_dev_t find_devfn,
 		       struct udevice **devp);
 
 /**
@@ -995,7 +1099,7 @@ int pci_find_device_id(struct pci_device_id *ids, int index,
  * @bdf:	PCI bus address to scan (PCI_BUS(bdf) is the bus number)
  * @return 0 if OK, -ve on error
  */
-int dm_pci_hose_probe_bus(struct pci_controller *hose, pci_dev_t bdf);
+int dm_pci_hose_probe_bus(struct udevice *bus);
 
 /**
  * pci_bus_read_config() - Read a configuration value from a device
@@ -1005,11 +1109,12 @@ int dm_pci_hose_probe_bus(struct pci_controller *hose, pci_dev_t bdf);
  *
  * @bus:	Bus to read from
  * @bdf:	PCI device address: bus, device and function -see PCI_BDF()
+ * @offset:	Register offset to read
  * @valuep:	Place to put the returned value
  * @size:	Access size
  * @return 0 if OK, -ve on error
  */
-int pci_bus_read_config(struct udevice *bus, pci_dev_t bdf, int offset,
+int pci_bus_read_config(const struct udevice *bus, pci_dev_t bdf, int offset,
 			unsigned long *valuep, enum pci_size_t size);
 
 /**
@@ -1017,6 +1122,7 @@ int pci_bus_read_config(struct udevice *bus, pci_dev_t bdf, int offset,
  *
  * @bus:	Bus to write from
  * @bdf:	PCI device address: bus, device and function -see PCI_BDF()
+ * @offset:	Register offset to write
  * @value:	Value to write
  * @size:	Access size
  * @return 0 if OK, -ve on error
@@ -1025,15 +1131,30 @@ int pci_bus_write_config(struct udevice *bus, pci_dev_t bdf, int offset,
 			 unsigned long value, enum pci_size_t size);
 
 /**
+ * pci_bus_clrset_config32() - Update a configuration value for a device
+ *
+ * The register at @offset is updated to (oldvalue & ~clr) | set.
+ *
+ * @bus:	Bus to access
+ * @bdf:	PCI device address: bus, device and function -see PCI_BDF()
+ * @offset:	Register offset to update
+ * @clr:	Bits to clear
+ * @set:	Bits to set
+ * @return 0 if OK, -ve on error
+ */
+int pci_bus_clrset_config32(struct udevice *bus, pci_dev_t bdf, int offset,
+			    u32 clr, u32 set);
+
+/**
  * Driver model PCI config access functions. Use these in preference to others
  * when you have a valid device
  */
-int dm_pci_read_config(struct udevice *dev, int offset, unsigned long *valuep,
-		       enum pci_size_t size);
+int dm_pci_read_config(const struct udevice *dev, int offset,
+		       unsigned long *valuep, enum pci_size_t size);
 
-int dm_pci_read_config8(struct udevice *dev, int offset, u8 *valuep);
-int dm_pci_read_config16(struct udevice *dev, int offset, u16 *valuep);
-int dm_pci_read_config32(struct udevice *dev, int offset, u32 *valuep);
+int dm_pci_read_config8(const struct udevice *dev, int offset, u8 *valuep);
+int dm_pci_read_config16(const struct udevice *dev, int offset, u16 *valuep);
+int dm_pci_read_config32(const struct udevice *dev, int offset, u32 *valuep);
 
 int dm_pci_write_config(struct udevice *dev, int offset, unsigned long value,
 			enum pci_size_t size);
@@ -1042,12 +1163,97 @@ int dm_pci_write_config8(struct udevice *dev, int offset, u8 value);
 int dm_pci_write_config16(struct udevice *dev, int offset, u16 value);
 int dm_pci_write_config32(struct udevice *dev, int offset, u32 value);
 
+/**
+ * These permit convenient read/modify/write on PCI configuration. The
+ * register is updated to (oldvalue & ~clr) | set.
+ */
+int dm_pci_clrset_config8(struct udevice *dev, int offset, u32 clr, u32 set);
+int dm_pci_clrset_config16(struct udevice *dev, int offset, u32 clr, u32 set);
+int dm_pci_clrset_config32(struct udevice *dev, int offset, u32 clr, u32 set);
+
 /*
  * The following functions provide access to the above without needing the
  * size parameter. We are trying to encourage the use of the 8/16/32-style
  * functions, rather than byte/word/dword. But both are supported.
  */
 int pci_write_config32(pci_dev_t pcidev, int offset, u32 value);
+int pci_write_config16(pci_dev_t pcidev, int offset, u16 value);
+int pci_write_config8(pci_dev_t pcidev, int offset, u8 value);
+int pci_read_config32(pci_dev_t pcidev, int offset, u32 *valuep);
+int pci_read_config16(pci_dev_t pcidev, int offset, u16 *valuep);
+int pci_read_config8(pci_dev_t pcidev, int offset, u8 *valuep);
+
+/**
+ * pci_generic_mmap_write_config() - Generic helper for writing to
+ * memory-mapped PCI configuration space.
+ * @bus: Pointer to the PCI bus
+ * @addr_f: Callback for calculating the config space address
+ * @bdf: Identifies the PCI device to access
+ * @offset: The offset into the device's configuration space
+ * @value: The value to write
+ * @size: Indicates the size of access to perform
+ *
+ * Write the value @value of size @size from offset @offset within the
+ * configuration space of the device identified by the bus, device & function
+ * numbers in @bdf on the PCI bus @bus. The callback function @addr_f is
+ * responsible for calculating the CPU address of the respective configuration
+ * space offset.
+ *
+ * Return: 0 on success, else -EINVAL
+ */
+int pci_generic_mmap_write_config(
+	const struct udevice *bus,
+	int (*addr_f)(const struct udevice *bus, pci_dev_t bdf, uint offset,
+		      void **addrp),
+	pci_dev_t bdf,
+	uint offset,
+	ulong value,
+	enum pci_size_t size);
+
+/**
+ * pci_generic_mmap_read_config() - Generic helper for reading from
+ * memory-mapped PCI configuration space.
+ * @bus: Pointer to the PCI bus
+ * @addr_f: Callback for calculating the config space address
+ * @bdf: Identifies the PCI device to access
+ * @offset: The offset into the device's configuration space
+ * @valuep: A pointer at which to store the read value
+ * @size: Indicates the size of access to perform
+ *
+ * Read a value of size @size from offset @offset within the configuration
+ * space of the device identified by the bus, device & function numbers in @bdf
+ * on the PCI bus @bus. The callback function @addr_f is responsible for
+ * calculating the CPU address of the respective configuration space offset.
+ *
+ * Return: 0 on success, else -EINVAL
+ */
+int pci_generic_mmap_read_config(
+	const struct udevice *bus,
+	int (*addr_f)(const struct udevice *bus, pci_dev_t bdf, uint offset,
+		      void **addrp),
+	pci_dev_t bdf,
+	uint offset,
+	ulong *valuep,
+	enum pci_size_t size);
+
+#if defined(CONFIG_PCI_SRIOV)
+/**
+ * pci_sriov_init() - Scan Virtual Function devices
+ *
+ * @pdev:	Physical Function udevice handle
+ * @vf_en:	Number of Virtual Function devices to enable
+ * @return 0 on success, -ve on error
+ */
+int pci_sriov_init(struct udevice *pdev, int vf_en);
+
+/**
+ * pci_sriov_get_totalvfs() - Get total available Virtual Function devices
+ *
+ * @pdev:	Physical Function udevice handle
+ * @return count on success, -ve on error
+ */
+int pci_sriov_get_totalvfs(struct udevice *pdev);
+#endif
 
 #ifdef CONFIG_DM_PCI_COMPAT
 /* Compatibility with old naming */
@@ -1057,16 +1263,12 @@ static inline int pci_write_config_dword(pci_dev_t pcidev, int offset,
 	return pci_write_config32(pcidev, offset, value);
 }
 
-int pci_write_config16(pci_dev_t pcidev, int offset, u16 value);
-
 /* Compatibility with old naming */
 static inline int pci_write_config_word(pci_dev_t pcidev, int offset,
 					u16 value)
 {
 	return pci_write_config16(pcidev, offset, value);
 }
-
-int pci_write_config8(pci_dev_t pcidev, int offset, u8 value);
 
 /* Compatibility with old naming */
 static inline int pci_write_config_byte(pci_dev_t pcidev, int offset,
@@ -1075,16 +1277,12 @@ static inline int pci_write_config_byte(pci_dev_t pcidev, int offset,
 	return pci_write_config8(pcidev, offset, value);
 }
 
-int pci_read_config32(pci_dev_t pcidev, int offset, u32 *valuep);
-
 /* Compatibility with old naming */
 static inline int pci_read_config_dword(pci_dev_t pcidev, int offset,
 					u32 *valuep)
 {
 	return pci_read_config32(pcidev, offset, valuep);
 }
-
-int pci_read_config16(pci_dev_t pcidev, int offset, u16 *valuep);
 
 /* Compatibility with old naming */
 static inline int pci_read_config_word(pci_dev_t pcidev, int offset,
@@ -1093,15 +1291,12 @@ static inline int pci_read_config_word(pci_dev_t pcidev, int offset,
 	return pci_read_config16(pcidev, offset, valuep);
 }
 
-int pci_read_config8(pci_dev_t pcidev, int offset, u8 *valuep);
-
 /* Compatibility with old naming */
 static inline int pci_read_config_byte(pci_dev_t pcidev, int offset,
 				       u8 *valuep)
 {
 	return pci_read_config8(pcidev, offset, valuep);
 }
-
 #endif /* CONFIG_DM_PCI_COMPAT */
 
 /**
@@ -1165,18 +1360,229 @@ struct udevice *pci_get_controller(struct udevice *dev);
  */
 int pci_get_regions(struct udevice *dev, struct pci_region **iop,
 		    struct pci_region **memp, struct pci_region **prefp);
+int
+pci_get_dma_regions(struct udevice *dev, struct pci_region *memp, int index);
+/**
+ * dm_pci_write_bar32() - Write the address of a BAR
+ *
+ * This writes a raw address to a bar
+ *
+ * @dev:	PCI device to update
+ * @barnum:	BAR number (0-5)
+ * @addr:	BAR address
+ */
+void dm_pci_write_bar32(struct udevice *dev, int barnum, u32 addr);
+
+/**
+ * dm_pci_read_bar32() - read a base address register from a device
+ *
+ * @dev:	Device to check
+ * @barnum:	Bar number to read (numbered from 0)
+ * @return: value of BAR
+ */
+u32 dm_pci_read_bar32(const struct udevice *dev, int barnum);
+
+/**
+ * dm_pci_bus_to_phys() - convert a PCI bus address to a physical address
+ *
+ * @dev:	Device containing the PCI address
+ * @addr:	PCI address to convert
+ * @flags:	Flags for the region type (PCI_REGION_...)
+ * @return physical address corresponding to that PCI bus address
+ */
+phys_addr_t dm_pci_bus_to_phys(struct udevice *dev, pci_addr_t addr,
+			       unsigned long flags);
+
+/**
+ * dm_pci_phys_to_bus() - convert a physical address to a PCI bus address
+ *
+ * @dev:	Device containing the bus address
+ * @addr:	Physical address to convert
+ * @flags:	Flags for the region type (PCI_REGION_...)
+ * @return PCI bus address corresponding to that physical address
+ */
+pci_addr_t dm_pci_phys_to_bus(struct udevice *dev, phys_addr_t addr,
+			      unsigned long flags);
+
+/**
+ * dm_pci_map_bar() - get a virtual address associated with a BAR region
+ *
+ * Looks up a base address register and finds the physical memory address
+ * that corresponds to it.
+ * Can be used for 32b BARs 0-5 on type 0 functions and for 32b BARs 0-1 on
+ * type 1 functions.
+ * Can also be used on type 0 functions that support Enhanced Allocation for
+ * 32b/64b BARs.  Note that duplicate BEI entries are not supported.
+ *
+ * @dev:	Device to check
+ * @bar:	Bar register offset (PCI_BASE_ADDRESS_...)
+ * @flags:	Flags for the region type (PCI_REGION_...)
+ * @return: pointer to the virtual address to use or 0 on error
+ */
+void *dm_pci_map_bar(struct udevice *dev, int bar, int flags);
+
+/**
+ * dm_pci_find_next_capability() - find a capability starting from an offset
+ *
+ * Tell if a device supports a given PCI capability. Returns the
+ * address of the requested capability structure within the device's
+ * PCI configuration space or 0 in case the device does not support it.
+ *
+ * Possible values for @cap:
+ *
+ *  %PCI_CAP_ID_MSI	Message Signalled Interrupts
+ *  %PCI_CAP_ID_PCIX	PCI-X
+ *  %PCI_CAP_ID_EXP	PCI Express
+ *  %PCI_CAP_ID_MSIX	MSI-X
+ *
+ * See PCI_CAP_ID_xxx for the complete capability ID codes.
+ *
+ * @dev:	PCI device to query
+ * @start:	offset to start from
+ * @cap:	capability code
+ * @return:	capability address or 0 if not supported
+ */
+int dm_pci_find_next_capability(struct udevice *dev, u8 start, int cap);
+
+/**
+ * dm_pci_find_capability() - find a capability
+ *
+ * Tell if a device supports a given PCI capability. Returns the
+ * address of the requested capability structure within the device's
+ * PCI configuration space or 0 in case the device does not support it.
+ *
+ * Possible values for @cap:
+ *
+ *  %PCI_CAP_ID_MSI	Message Signalled Interrupts
+ *  %PCI_CAP_ID_PCIX	PCI-X
+ *  %PCI_CAP_ID_EXP	PCI Express
+ *  %PCI_CAP_ID_MSIX	MSI-X
+ *
+ * See PCI_CAP_ID_xxx for the complete capability ID codes.
+ *
+ * @dev:	PCI device to query
+ * @cap:	capability code
+ * @return:	capability address or 0 if not supported
+ */
+int dm_pci_find_capability(struct udevice *dev, int cap);
+
+/**
+ * dm_pci_find_next_ext_capability() - find an extended capability
+ *				       starting from an offset
+ *
+ * Tell if a device supports a given PCI express extended capability.
+ * Returns the address of the requested extended capability structure
+ * within the device's PCI configuration space or 0 in case the device
+ * does not support it.
+ *
+ * Possible values for @cap:
+ *
+ *  %PCI_EXT_CAP_ID_ERR	Advanced Error Reporting
+ *  %PCI_EXT_CAP_ID_VC	Virtual Channel
+ *  %PCI_EXT_CAP_ID_DSN	Device Serial Number
+ *  %PCI_EXT_CAP_ID_PWR	Power Budgeting
+ *
+ * See PCI_EXT_CAP_ID_xxx for the complete extended capability ID codes.
+ *
+ * @dev:	PCI device to query
+ * @start:	offset to start from
+ * @cap:	extended capability code
+ * @return:	extended capability address or 0 if not supported
+ */
+int dm_pci_find_next_ext_capability(struct udevice *dev, int start, int cap);
+
+/**
+ * dm_pci_find_ext_capability() - find an extended capability
+ *
+ * Tell if a device supports a given PCI express extended capability.
+ * Returns the address of the requested extended capability structure
+ * within the device's PCI configuration space or 0 in case the device
+ * does not support it.
+ *
+ * Possible values for @cap:
+ *
+ *  %PCI_EXT_CAP_ID_ERR	Advanced Error Reporting
+ *  %PCI_EXT_CAP_ID_VC	Virtual Channel
+ *  %PCI_EXT_CAP_ID_DSN	Device Serial Number
+ *  %PCI_EXT_CAP_ID_PWR	Power Budgeting
+ *
+ * See PCI_EXT_CAP_ID_xxx for the complete extended capability ID codes.
+ *
+ * @dev:	PCI device to query
+ * @cap:	extended capability code
+ * @return:	extended capability address or 0 if not supported
+ */
+int dm_pci_find_ext_capability(struct udevice *dev, int cap);
+
+/**
+ * dm_pci_flr() - Perform FLR if the device suppoorts it
+ *
+ * @dev:	PCI device to reset
+ * @return:	0 if OK, -ENOENT if FLR is not supported by dev
+ */
+int dm_pci_flr(struct udevice *dev);
+
+#define dm_pci_virt_to_bus(dev, addr, flags) \
+	dm_pci_phys_to_bus(dev, (virt_to_phys(addr)), (flags))
+#define dm_pci_bus_to_virt(dev, addr, flags, len, map_flags) \
+	map_physmem(dm_pci_bus_to_phys(dev, (addr), (flags)), \
+		    (len), (map_flags))
+
+#define dm_pci_phys_to_mem(dev, addr) \
+	dm_pci_phys_to_bus((dev), (addr), PCI_REGION_MEM)
+#define dm_pci_mem_to_phys(dev, addr) \
+	dm_pci_bus_to_phys((dev), (addr), PCI_REGION_MEM)
+#define dm_pci_phys_to_io(dev, addr) \
+	dm_pci_phys_to_bus((dev), (addr), PCI_REGION_IO)
+#define dm_pci_io_to_phys(dev, addr) \
+	dm_pci_bus_to_phys((dev), (addr), PCI_REGION_IO)
+
+#define dm_pci_virt_to_mem(dev, addr) \
+	dm_pci_virt_to_bus((dev), (addr), PCI_REGION_MEM)
+#define dm_pci_mem_to_virt(dev, addr, len, map_flags) \
+	dm_pci_bus_to_virt((dev), (addr), PCI_REGION_MEM, (len), (map_flags))
+#define dm_pci_virt_to_io(dev, addr) \
+	dm_pci_virt_to_bus((dev), (addr), PCI_REGION_IO)
+#define dm_pci_io_to_virt(dev, addr, len, map_flags) \
+	dm_pci_bus_to_virt((dev), (addr), PCI_REGION_IO, (len), (map_flags))
+
+/**
+ * dm_pci_find_device() - find a device by vendor/device ID
+ *
+ * @vendor:	Vendor ID
+ * @device:	Device ID
+ * @index:	0 to find the first match, 1 for second, etc.
+ * @devp:	Returns pointer to the device, if found
+ * @return 0 if found, -ve on error
+ */
+int dm_pci_find_device(unsigned int vendor, unsigned int device, int index,
+		       struct udevice **devp);
+
+/**
+ * dm_pci_find_class() - find a device by class
+ *
+ * @find_class: 3-byte (24-bit) class value to find
+ * @index:	0 to find the first match, 1 for second, etc.
+ * @devp:	Returns pointer to the device, if found
+ * @return 0 if found, -ve on error
+ */
+int dm_pci_find_class(uint find_class, int index, struct udevice **devp);
+
+/**
+ * struct pci_emul_uc_priv - holds info about an emulator device
+ *
+ * There is always at most one emulator per client
+ *
+ * @client: Client device if any, else NULL
+ */
+struct pci_emul_uc_priv {
+	struct udevice *client;
+};
 
 /**
  * struct dm_pci_emul_ops - PCI device emulator operations
  */
 struct dm_pci_emul_ops {
-	/**
-	 * get_devfn(): Check which device and function this emulators
-	 *
-	 * @dev:	device to check
-	 * @return the device and function this emulates, or -ve on error
-	 */
-	int (*get_devfn)(struct udevice *dev);
 	/**
 	 * read_config() - Read a PCI configuration value
 	 *
@@ -1186,8 +1592,8 @@ struct dm_pci_emul_ops {
 	 * @size:	Access size
 	 * @return 0 if OK, -ve on error
 	 */
-	int (*read_config)(struct udevice *dev, uint offset, ulong *valuep,
-			   enum pci_size_t size);
+	int (*read_config)(const struct udevice *dev, uint offset,
+			   ulong *valuep, enum pci_size_t size);
 	/**
 	 * write_config() - Write a PCI configuration value
 	 *
@@ -1268,11 +1674,21 @@ struct dm_pci_emul_ops {
  *
  * @bus:	PCI bus to search
  * @find_devfn:	PCI device and function address (PCI_DEVFN())
+ * @containerp:	Returns container device if found
  * @emulp:	Returns emulated device if found
  * @return 0 if found, -ENODEV if not found
  */
-int sandbox_pci_get_emul(struct udevice *bus, pci_dev_t find_devfn,
-			 struct udevice **emulp);
+int sandbox_pci_get_emul(const struct udevice *bus, pci_dev_t find_devfn,
+			 struct udevice **containerp, struct udevice **emulp);
+
+/**
+ * sandbox_pci_get_client() - Find the client for an emulation device
+ *
+ * @emul:	Emulation device to check
+ * @devp:	Returns the client device emulated by this device
+ * @return 0 if OK, -ENOENT if the device has no client yet
+ */
+int sandbox_pci_get_client(struct udevice *emul, struct udevice **devp);
 
 #endif /* CONFIG_DM_PCI */
 

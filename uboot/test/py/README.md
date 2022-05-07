@@ -11,7 +11,7 @@ results. Advantages of this approach are:
   U-Boot; there can be no disconnect.
 - There is no need to write or embed test-related code into U-Boot itself.
   It is asserted that writing test-related code in Python is simpler and more
-  flexible that writing it all in C.
+  flexible than writing it all in C.
 - It is reasonably simple to interact with U-Boot in this way.
 
 ## Requirements
@@ -21,13 +21,34 @@ involves executing some binary and interacting with its stdin/stdout. You will
 need to implement various "hook" scripts that are called by the test suite at
 the appropriate time.
 
-On Debian or Debian-like distributions, the following packages are required.
-Similar package names should exist in other distributions.
+In order to run the testsuite at a minimum we require that both python3 and
+pip for python3 be installed.  All of the required python modules are
+described in the requirements.txt file in this directory and can be installed
+with the command ```pip install -r requirements.txt```
 
-| Package        | Version tested (Ubuntu 14.04) |
-| -------------- | ----------------------------- |
-| python         | 2.7.5-5ubuntu3                |
-| python-pytest  | 2.5.1-1                       |
+In order to execute certain tests on their supported platforms other tools
+will be required.  The following is an incomplete list:
+
+| Package        |
+| -------------- |
+| gdisk          |
+| dfu-util       |
+| dtc            |
+| openssl        |
+| sudo OR guestmount |
+| e2fsprogs      |
+| util-linux     |
+| coreutils      |
+| dosfstools     |
+| efitools       |
+| mount          |
+| mtools         |
+| sbsigntool     |
+| udisks2        |
+
+
+Please use the apporirate commands for your distribution to match these tools
+up with the package that provides them.
 
 The test script supports either:
 
@@ -39,18 +60,16 @@ The test script supports either:
 
 ### Using `virtualenv` to provide requirements
 
-Older distributions (e.g. Ubuntu 10.04) may not provide all the required
-packages, or may provide versions that are too old to run the test suite. One
-can use the Python `virtualenv` script to locally install more up-to-date
-versions of the required packages without interfering with the OS installation.
-For example:
+The recommended way to run the test suite, in order to ensure reproducibility
+is to use `virtualenv` to set up the necessary environment.  This can be done
+via the following commands:
 
 ```bash
 $ cd /path/to/u-boot
-$ sudo apt-get install python python-virtualenv
-$ virtualenv venv
+$ sudo apt-get install python3 python3-virtualenv
+$ virtualenv -p /usr/bin/python3 venv
 $ . ./venv/bin/activate
-$ pip install pytest
+$ pip install -r test/py/requirements.txt
 ```
 
 ## Testing sandbox
@@ -76,6 +95,43 @@ will be written to `${build_dir}/test-log.html`. This is best viewed in a web
 browser, but may be read directly as plain text, perhaps with the aid of the
 `html2text` utility.
 
+### Testing under a debugger
+
+If you need to run sandbox under a debugger, you may pass the command-line
+option `--gdbserver COMM`. This causes two things to happens:
+
+- Instead of running U-Boot directly, it will be run under gdbserver, with
+  debug communication via the channel `COMM`. You can attach a debugger to the
+  sandbox process in order to debug it. See `man gdbserver` and the example
+  below for details of valid values for `COMM`.
+- All timeouts in tests are disabled, allowing U-Boot an arbitrary amount of
+  time to execute commands. This is useful if U-Boot is stopped at a breakpoint
+  during debugging.
+
+A usage example is:
+
+Window 1:
+```shell
+./test/py/test.py --bd sandbox --gdbserver localhost:1234
+```
+
+Window 2:
+```shell
+gdb ./build-sandbox/u-boot -ex 'target remote localhost:1234'
+```
+
+Alternatively, you could leave off the `-ex` option and type the command
+manually into gdb once it starts.
+
+You can use any debugger you wish, so long as it speaks the gdb remote
+protocol, or any graphical wrapper around gdb.
+
+Some tests deliberately cause the sandbox process to exit, e.g. to test the
+reset command, or sandbox's CTRL-C handling. When this happens, you will need
+to attach the debugger to the new sandbox instance. If these tests are not
+relevant to your debugging session, you can skip them using pytest's -k
+command-line option; see the next section.
+
 ## Command-line options
 
 - `--board-type`, `--bd`, `-B` set the type of the board to be tested. For
@@ -90,6 +146,9 @@ browser, but may be read directly as plain text, perhaps with the aid of the
   before running the tests. If using this option, make sure that any
   environment variables required by the build process are already set, such as
   `$CROSS_COMPILE`.
+- `--buildman` indicates that `--build` should use buildman to build U-Boot.
+  There is no need to set $CROSS_COMPILE` in this case since buildman handles
+  it.
 - `--build-dir` sets the directory containing the compiled U-Boot binaries.
   If omitted, this is `${source_dir}/build-${board_type}`.
 - `--result-dir` sets the directory to write results, such as log files,
@@ -98,10 +157,25 @@ browser, but may be read directly as plain text, perhaps with the aid of the
   data. This is test data that may be re-used across test runs, such as file-
   system images.
 
-`pytest` also implements a number of its own command-line options. Please see
-`pytest` documentation for complete details. Execute `py.test --version` for
-a brief summary. Note that U-Boot's test.py script passes all command-line
-arguments directly to `pytest` for processing.
+`pytest` also implements a number of its own command-line options. Commonly used
+options are mentioned below. Please see `pytest` documentation for complete
+details. Execute `py.test --version` for a brief summary. Note that U-Boot's
+test.py script passes all command-line arguments directly to `pytest` for
+processing.
+
+- `-k` selects which tests to run. The default is to run all known tests. This
+  option takes a single argument which is used to filter test names. Simple
+  logical operators are supported. For example:
+  - `'ums'` runs only tests with "ums" in their name.
+  - `'ut_dm'` runs only tests with "ut_dm" in their name. Note that in this
+    case, "ut_dm" is a parameter to a test rather than the test name. The full
+    test name is e.g. "test_ut[ut_dm_leak]".
+  - `'not reset'` runs everything except tests with "reset" in their name.
+  - `'ut or hush'` runs only tests with "ut" or "hush" in their name.
+  - `'not (ut or hush)'` runs everything except tests with "ut" or "hush" in
+    their name.
+- `-s` prevents pytest from hiding a test's stdout. This allows you to see
+  U-Boot's console log in real time on pytest's stdout.
 
 ## Testing real hardware
 
@@ -126,7 +200,7 @@ The following environment variables are set when running hook scripts:
 - `UBOOT_TEST_PY_DIR` the full path to `test/py/` in the source directory.
 - `UBOOT_BUILD_DIR` the U-Boot build directory.
 - `UBOOT_RESULT_DIR` the test result directory.
-- `UBOOT_PERSISTENT_DATA_DIR` the test peristent data directory.
+- `UBOOT_PERSISTENT_DATA_DIR` the test persistent data directory.
 
 #### `u-boot-test-console`
 
@@ -165,7 +239,7 @@ the following cases:
   from there. Use of this feature will reduce wear on the board's flash, so
   may be preferable if available, and if cold boot testing of U-Boot is not
   required. If this feature is used, the `u-boot-test-reset` script should
-  peform this download, since the board could conceivably be reset multiple
+  perform this download, since the board could conceivably be reset multiple
   times in a single test run.
 
 It is up to the user to determine if those situations exist, and to code this
@@ -193,6 +267,12 @@ example, it may call out to some SoC- or board-specific vendor utility in order
 to download the U-Boot binary directly into RAM and execute it. This would
 avoid the need for `u-boot-test-flash` to actually write U-Boot to flash, thus
 saving wear on the flash chip(s).
+
+#### Examples
+
+https://github.com/swarren/uboot-test-hooks contains some working example hook
+scripts, and may be useful as a reference when implementing hook scripts for
+your platform. These scripts are not considered part of U-Boot itself.
 
 ### Board-type-specific configuration
 
@@ -246,6 +326,7 @@ instances of:
 
 - `buildconfig.get(...`
 - `@pytest.mark.buildconfigspec(...`
+- `@pytest.mark.notbuildconfigspec(...`
 
 ### Complete invocation example
 
@@ -257,19 +338,27 @@ If U-Boot has already been built:
 
 ```bash
 PATH=$HOME/ubtest/bin:$PATH \
-    PYTHONPATH=${HOME}/ubtest/py:${PYTHONPATH} \
+    PYTHONPATH=${HOME}/ubtest/py/${HOSTNAME}:${PYTHONPATH} \
     ./test/py/test.py --bd seaboard
 ```
 
 If you want the test script to compile U-Boot for you too, then you likely
 need to set `$CROSS_COMPILE` to allow this, and invoke the test script as
-follow:
+follows:
 
 ```bash
 CROSS_COMPILE=arm-none-eabi- \
     PATH=$HOME/ubtest/bin:$PATH \
-    PYTHONPATH=${HOME}/ubtest/py:${PYTHONPATH} \
+    PYTHONPATH=${HOME}/ubtest/py/${HOSTNAME}:${PYTHONPATH} \
     ./test/py/test.py --bd seaboard --build
+```
+
+or, using buildman to handle it:
+
+```bash
+    PATH=$HOME/ubtest/bin:$PATH \
+    PYTHONPATH=${HOME}/ubtest/py/${HOSTNAME}:${PYTHONPATH} \
+    ./test/py/test.py --bd seaboard --build --buildman
 ```
 
 ## Writing tests

@@ -1,11 +1,11 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * (C) Copyright 2002
  * Wolfgang Denk, DENX Software Engineering, wd@denx.de.
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
+#include <log.h>
 
 /* Memory test
  *
@@ -170,14 +170,7 @@ DECLARE_GLOBAL_DATA_PTR;
  */
 static void move64(const unsigned long long *src, unsigned long long *dest)
 {
-#if defined(CONFIG_MPC8260)
-	asm ("lfd  0, 0(3)\n\t" /* fpr0	  =  *scr	*/
-	 "stfd 0, 0(4)"		/* *dest  =  fpr0	*/
-	 : : : "fr0" );		/* Clobbers fr0		*/
-    return;
-#else
 	*dest = *src;
-#endif
 }
 
 /*
@@ -234,7 +227,7 @@ static int memory_post_dataline(unsigned long long * pmem)
 			hi = (temp64>>32) & 0xffffffff;
 			lo = temp64 & 0xffffffff;
 
-			post_log("Memory (date line) error at %08x, "
+			post_log("Memory (data line) error at %08x, "
 				  "wrote %08x%08x, read %08x%08x !\n",
 					  pmem, pathi, patlo, hi, lo);
 			ret = -1;
@@ -477,7 +470,7 @@ static int memory_post_tests(unsigned long start, unsigned long size)
 __attribute__((weak))
 int arch_memory_test_prepare(u32 *vstart, u32 *size, phys_addr_t *phys_offset)
 {
-	bd_t *bd = gd->bd;
+	struct bd_info *bd = gd->bd;
 
 	*vstart = CONFIG_SYS_SDRAM_BASE;
 	*size = (gd->ram_size >= 256 << 20 ?

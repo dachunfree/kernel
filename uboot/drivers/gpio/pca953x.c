@@ -1,19 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  * Copyright 2008 Extreme Engineering Solutions, Inc.
- *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * Version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
- * MA 02111-1307 USA
  */
 
 /*
@@ -22,6 +9,7 @@
  */
 
 #include <common.h>
+#include <command.h>
 #include <i2c.h>
 #include <pca953x.h>
 
@@ -154,8 +142,7 @@ int pca953x_get_val(uint8_t chip)
 	return (int)val;
 }
 
-#ifdef CONFIG_CMD_PCA953X
-#ifdef CONFIG_CMD_PCA953X_INFO
+#if defined(CONFIG_CMD_PCA953X) && !defined(CONFIG_SPL_BUILD)
 /*
  * Display pca953x information
  */
@@ -205,31 +192,29 @@ static int pca953x_info(uint8_t chip)
 
 	return 0;
 }
-#endif /* CONFIG_CMD_PCA953X_INFO */
 
-cmd_tbl_t cmd_pca953x[] = {
+static struct cmd_tbl cmd_pca953x[] = {
 	U_BOOT_CMD_MKENT(device, 3, 0, (void *)PCA953X_CMD_DEVICE, "", ""),
 	U_BOOT_CMD_MKENT(output, 4, 0, (void *)PCA953X_CMD_OUTPUT, "", ""),
 	U_BOOT_CMD_MKENT(input, 3, 0, (void *)PCA953X_CMD_INPUT, "", ""),
 	U_BOOT_CMD_MKENT(invert, 4, 0, (void *)PCA953X_CMD_INVERT, "", ""),
-#ifdef CONFIG_CMD_PCA953X_INFO
 	U_BOOT_CMD_MKENT(info, 2, 0, (void *)PCA953X_CMD_INFO, "", ""),
-#endif
 };
 
-int do_pca953x(cmd_tbl_t *cmdtp, int flag, int argc, char * const argv[])
+static int do_pca953x(struct cmd_tbl *cmdtp, int flag, int argc,
+		      char *const argv[])
 {
 	static uint8_t chip = CONFIG_SYS_I2C_PCA953X_ADDR;
 	int ret = CMD_RET_USAGE, val;
 	ulong ul_arg2 = 0;
 	ulong ul_arg3 = 0;
-	cmd_tbl_t *c;
+	struct cmd_tbl *c;
 
 	c = find_cmd_tbl(argv[1], cmd_pca953x, ARRAY_SIZE(cmd_pca953x));
 
 	/* All commands but "device" require 'maxargs' arguments */
 	if (!c || !((argc == (c->maxargs)) ||
-		(((int)c->cmd == PCA953X_CMD_DEVICE) &&
+		(((long)c->cmd == PCA953X_CMD_DEVICE) &&
 		 (argc == (c->maxargs - 1))))) {
 		return CMD_RET_USAGE;
 	}
@@ -242,14 +227,12 @@ int do_pca953x(cmd_tbl_t *cmdtp, int flag, int argc, char * const argv[])
 	if (argc > 3)
 		ul_arg3 = simple_strtoul(argv[3], NULL, 16) & 0x1;
 
-	switch ((int)c->cmd) {
-#ifdef CONFIG_CMD_PCA953X_INFO
+	switch ((long)c->cmd) {
 	case PCA953X_CMD_INFO:
 		ret = pca953x_info(chip);
 		if (ret)
 			ret = CMD_RET_FAILURE;
 		break;
-#endif
 
 	case PCA953X_CMD_DEVICE:
 		if (argc == 3)
@@ -299,10 +282,8 @@ U_BOOT_CMD(
 	"pca953x gpio access",
 	"device [dev]\n"
 	"	- show or set current device address\n"
-#ifdef CONFIG_CMD_PCA953X_INFO
 	"pca953x info\n"
 	"	- display info for current chip\n"
-#endif
 	"pca953x output pin 0|1\n"
 	"	- set pin as output and drive low or high\n"
 	"pca953x invert pin 0|1\n"

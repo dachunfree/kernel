@@ -1,15 +1,18 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * board.c
  *
  * Board functions for TCL SL50 board
  *
  * Copyright (C) 2011, Texas Instruments, Incorporated - http://www.ti.com/
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
+#include <env.h>
 #include <errno.h>
+#include <init.h>
+#include <net.h>
+#include <serial.h>
 #include <spl.h>
 #include <asm/arch/cpu.h>
 #include <asm/arch/hardware.h>
@@ -28,9 +31,8 @@
 #include <cpsw.h>
 #include <power/tps65217.h>
 #include <power/tps65910.h>
-#include <environment.h>
+#include <env_internal.h>
 #include <watchdog.h>
-#include <environment.h>
 #include "board.h"
 
 DECLARE_GLOBAL_DATA_PTR;
@@ -76,8 +78,8 @@ int spl_start_uboot(void)
 
 #ifdef CONFIG_SPL_ENV_SUPPORT
 	env_init();
-	env_relocate_spec();
-	if (getenv_yesno("boot_os") != 1)
+	env_load();
+	if (env_get_yesno("boot_os") != 1)
 		return 1;
 #endif
 
@@ -299,12 +301,12 @@ static struct cpsw_platform_data cpsw_data = {
  * Build in only these cases to avoid warnings about unused variables
  * when we build an SPL that has neither option but full U-Boot will.
  */
-#if ((defined(CONFIG_SPL_ETH_SUPPORT) || defined(CONFIG_SPL_USBETH_SUPPORT)) \
+#if ((defined(CONFIG_SPL_ETH_SUPPORT) || defined(CONFIG_SPL_USB_ETHER)) \
 		&& defined(CONFIG_SPL_BUILD)) || \
 	((defined(CONFIG_DRIVER_TI_CPSW) || \
 	  defined(CONFIG_USB_ETHER) && defined(CONFIG_MUSB_GADGET)) && \
 	 !defined(CONFIG_SPL_BUILD))
-int board_eth_init(bd_t *bis)
+int board_eth_init(struct bd_info *bis)
 {
 	int rv, n = 0;
 	uint8_t mac_addr[6];
@@ -322,11 +324,11 @@ int board_eth_init(bd_t *bis)
 
 #if (defined(CONFIG_DRIVER_TI_CPSW) && !defined(CONFIG_SPL_BUILD)) || \
 	(defined(CONFIG_SPL_ETH_SUPPORT) && defined(CONFIG_SPL_BUILD))
-	if (!getenv("ethaddr")) {
+	if (!env_get("ethaddr")) {
 		printf("<ethaddr> not set. Validating first E-fuse MAC\n");
 
 		if (is_valid_ethaddr(mac_addr))
-			eth_setenv_enetaddr("ethaddr", mac_addr);
+			eth_env_set_enetaddr("ethaddr", mac_addr);
 	}
 
 #ifdef CONFIG_DRIVER_TI_CPSW
@@ -340,9 +342,9 @@ int board_eth_init(bd_t *bis)
 	mac_addr[4] = mac_lo & 0xFF;
 	mac_addr[5] = (mac_lo & 0xFF00) >> 8;
 
-	if (!getenv("eth1addr")) {
+	if (!env_get("eth1addr")) {
 		if (is_valid_ethaddr(mac_addr))
-			eth_setenv_enetaddr("eth1addr", mac_addr);
+			eth_env_set_enetaddr("eth1addr", mac_addr);
 	}
 
 
@@ -371,9 +373,9 @@ int board_eth_init(bd_t *bis)
 
 #endif
 #if defined(CONFIG_USB_ETHER) && \
-	(!defined(CONFIG_SPL_BUILD) || defined(CONFIG_SPL_USBETH_SUPPORT))
+	(!defined(CONFIG_SPL_BUILD) || defined(CONFIG_SPL_USB_ETHER))
 	if (is_valid_ether_addr(mac_addr))
-		eth_setenv_enetaddr("usbnet_devaddr", mac_addr);
+		eth_env_set_enetaddr("usbnet_devaddr", mac_addr);
 
 	rv = usb_eth_initialize(bis);
 	if (rv < 0)

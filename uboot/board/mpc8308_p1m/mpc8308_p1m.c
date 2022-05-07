@@ -1,13 +1,15 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * Copyright (C) 2010 Freescale Semiconductor, Inc.
  * Copyright (C) 2010 Ilya Yanok, Emcraft Systems, yanok@emcraft.com
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
 #include <i2c.h>
-#include <libfdt.h>
+#include <init.h>
+#include <net.h>
+#include <linux/delay.h>
+#include <linux/libfdt.h>
 #include <fdt_support.h>
 #include <pci.h>
 #include <mpc83xx.h>
@@ -15,8 +17,6 @@
 #include <asm/io.h>
 #include <asm/fsl_serdes.h>
 #include <asm/fsl_mpc83xx_serdes.h>
-
-DECLARE_GLOBAL_DATA_PTR;
 
 int checkboard(void)
 {
@@ -62,16 +62,16 @@ void pci_init_board(void)
 }
 
 #if defined(CONFIG_OF_BOARD_SETUP)
-int ft_board_setup(void *blob, bd_t *bd)
+int ft_board_setup(void *blob, struct bd_info *bd)
 {
 	ft_cpu_setup(blob, bd);
-	fdt_fixup_dr_usb(blob, bd);
+	fsl_fdt_fixup_dr_usb(blob, bd);
 
 	return 0;
 }
 #endif
 
-int board_eth_init(bd_t *bis)
+int board_eth_init(struct bd_info *bis)
 {
 	int rv, num_if = 0;
 

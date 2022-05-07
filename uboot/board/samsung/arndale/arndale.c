@@ -1,10 +1,12 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * Copyright (C) 2013 Samsung Electronics
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
+#include <cpu_func.h>
+#include <init.h>
+#include <log.h>
 #include <usb.h>
 #include <asm/gpio.h>
 #include <asm/arch/pinmux.h>
@@ -55,7 +57,7 @@ int power_init_board(void)
 	return 0;
 }
 
-void dram_init_banksize(void)
+int dram_init_banksize(void)
 {
 	int i;
 	u32 addr, size;
@@ -67,10 +69,12 @@ void dram_init_banksize(void)
 		gd->bd->bi_dram[i].start = addr;
 		gd->bd->bi_dram[i].size = size;
 	}
+
+	return 0;
 }
 
-#ifdef CONFIG_GENERIC_MMC
-int board_mmc_init(bd_t *bis)
+#ifdef CONFIG_MMC
+int board_mmc_init(struct bd_info *bis)
 {
 	int ret;
 	/* dwmmc initializattion for available channels */

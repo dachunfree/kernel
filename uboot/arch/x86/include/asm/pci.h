@@ -1,8 +1,7 @@
+/* SPDX-License-Identifier: GPL-2.0+ */
 /*
  * (C) Copyright 2002
  * Daniel Engström, Omicron Ceti AB, daniel@omicron.se
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #ifndef _PCI_I386_H_
@@ -18,30 +17,48 @@
 
 #ifndef __ASSEMBLY__
 
-#define DEFINE_PCI_DEVICE_TABLE(_table) \
-	const struct pci_device_id _table[]
-
-struct pci_controller;
-
-void pci_setup_type1(struct pci_controller *hose);
-
-/*
- * Simple PCI access routines - these work from either the early PCI hose
- * or the 'real' one, created after U-Boot has memory available
+/**
+ * pci_x86_read_config() - Read a configuration value from a device
+ *
+ * This function can be called before PCI is set up in driver model.
+ *
+ * @bdf:	PCI device address: bus, device and function -see PCI_BDF()
+ * @offset:	Register offset to read
+ * @valuep:	Place to put the returned value
+ * @size:	Access size
+ * @return 0 if OK, -ve on error
  */
-unsigned int x86_pci_read_config8(pci_dev_t dev, unsigned where);
-unsigned int x86_pci_read_config16(pci_dev_t dev, unsigned where);
-unsigned int x86_pci_read_config32(pci_dev_t dev, unsigned where);
+int pci_x86_read_config(pci_dev_t bdf, uint offset, ulong *valuep,
+			enum pci_size_t size);
 
-void x86_pci_write_config8(pci_dev_t dev, unsigned where, unsigned value);
-void x86_pci_write_config16(pci_dev_t dev, unsigned where, unsigned value);
-void x86_pci_write_config32(pci_dev_t dev, unsigned where, unsigned value);
+/**
+ * pci_bus_write_config() - Write a configuration value to a device
+ *
+ * This function can be called before PCI is set up in driver model.
+ *
+ * @bdf:	PCI device address: bus, device and function -see PCI_BDF()
+ * @offset:	Register offset to write
+ * @value:	Value to write
+ * @size:	Access size
+ * @return 0 if OK, -ve on error
+ */
+int pci_x86_write_config(pci_dev_t bdf, uint offset, ulong value,
+			 enum pci_size_t size);
 
-int pci_x86_read_config(struct udevice *bus, pci_dev_t bdf, uint offset,
-			ulong *valuep, enum pci_size_t size);
-
-int pci_x86_write_config(struct udevice *bus, pci_dev_t bdf, uint offset,
-			 ulong value, enum pci_size_t size);
+/**
+ * pci_bus_clrset_config32() - Update a configuration value for a device
+ *
+ * The register at @offset is updated to (oldvalue & ~clr) | set. This function
+ * can be called before PCI is set up in driver model.
+ *
+ * @bdf:	PCI device address: bus, device and function -see PCI_BDF()
+ * @offset:	Register offset to update
+ * @clr:	Bits to clear
+ * @set:	Bits to set
+ * @return 0 if OK, -ve on error
+ */
+int pci_x86_clrset_config(pci_dev_t bdf, uint offset, ulong clr, ulong set,
+			  enum pci_size_t size);
 
 /**
  * Assign IRQ number to a PCI device

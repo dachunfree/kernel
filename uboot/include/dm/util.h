@@ -1,24 +1,15 @@
+/* SPDX-License-Identifier: GPL-2.0+ */
 /*
  * Copyright (c) 2013 Google, Inc
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #ifndef __DM_UTIL_H
 #define __DM_UTIL_H
 
-#ifdef CONFIG_DM_WARN
+#if CONFIG_IS_ENABLED(DM_WARN)
 void dm_warn(const char *fmt, ...);
 #else
 static inline void dm_warn(const char *fmt, ...)
-{
-}
-#endif
-
-#ifdef DEBUG
-void dm_dbg(const char *fmt, ...);
-#else
-static inline void dm_dbg(const char *fmt, ...)
 {
 }
 #endif
@@ -47,5 +38,14 @@ static inline void dm_dump_devres(void)
 {
 }
 #endif
+
+/* Dump out a list of drivers */
+void dm_dump_drivers(void);
+
+/* Dump out a list with each driver's compatibility strings */
+void dm_dump_driver_compat(void);
+
+/* Dump out a list of drivers with static platform data */
+void dm_dump_static_driver_info(void);
 
 #endif

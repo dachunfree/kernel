@@ -1,87 +1,130 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
- * Copyright (C) 2014-2015 Masahiro Yamada <yamada.masahiro@socionext.com>
- *
- * SPDX-License-Identifier:	GPL-2.0+
+ * Copyright (C) 2014      Panasonic Corporation
+ * Copyright (C) 2015-2016 Socionext Inc.
+ *   Author: Masahiro Yamada <yamada.masahiro@socionext.com>
  */
 
-#include <common.h>
+#include <env.h>
+#include <init.h>
 #include <spl.h>
-#include <libfdt.h>
-#include <nand.h>
-#include <linux/io.h>
-#include <../drivers/mtd/nand/denali.h>
+#include <linux/libfdt.h>
+#include <stdio.h>
+#include <linux/printk.h>
 
-static void nand_denali_wp_disable(void)
-{
-#ifdef CONFIG_NAND_DENALI
-	/*
-	 * Since the boot rom enables the write protection for NAND boot mode,
-	 * it must be disabled somewhere for "nand write", "nand erase", etc.
-	 * The workaround is here to not disturb the Denali NAND controller
-	 * driver just for a really SoC-specific thing.
-	 */
-	void __iomem *denali_reg = (void __iomem *)CONFIG_SYS_NAND_REGS_BASE;
+#include "init.h"
 
-	writel(WRITE_PROTECT__FLAG, denali_reg + WRITE_PROTECT);
-#endif
-}
-
-struct uniphier_fdt_file {
-	const char *compatible;
-	const char *file_name;
-};
-
-static const struct uniphier_fdt_file uniphier_fdt_files[] = {
-	{ "socionext,ph1-ld4-ref", "uniphier-ph1-ld4-ref.dtb", },
-	{ "socionext,ph1-ld6b-ref", "uniphier-ph1-ld6b-ref.dtb", },
-	{ "socionext,ph1-ld10-ref", "uniphier-ph1-ld10-ref.dtb", },
-	{ "socionext,ph1-pro4-ref", "uniphier-ph1-pro4-ref.dtb", },
-	{ "socionext,ph1-pro5-4kbox", "uniphier-ph1-pro5-4kbox.dtb", },
-	{ "socionext,ph1-sld3-ref", "uniphier-ph1-sld3-ref.dtb", },
-	{ "socionext,ph1-sld8-ref", "uniphier-ph1-sld8-ref.dtb", },
-	{ "socionext,proxstream2-gentil", "uniphier-proxstream2-gentil.dtb", },
-	{ "socionext,proxstream2-vodka", "uniphier-proxstream2-vodka.dtb", },
-};
-
-static void uniphier_set_fdt_file(void)
+static void uniphier_set_env_fdt_file(void)
 {
 	DECLARE_GLOBAL_DATA_PTR;
-	int i;
+	const char *compat;
+	char dtb_name[256];
+	int buf_len = sizeof(dtb_name);
+	int ret;
 
-	/* lookup DTB file name based on the compatible string */
-	for (i = 0; i < ARRAY_SIZE(uniphier_fdt_files); i++) {
-		if (!fdt_node_check_compatible(gd->fdt_blob, 0,
-					uniphier_fdt_files[i].compatible)) {
-			setenv("fdt_file", uniphier_fdt_files[i].file_name);
-			return;
-		}
+	if (env_get("fdtfile"))
+		return;		/* do nothing if it is already set */
+
+	compat = fdt_stringlist_get(gd->fdt_blob, 0, "compatible", 0, NULL);
+	if (!compat)
+		goto fail;
+
+	/* rip off the vendor prefix "socionext,"  */
+	compat = strchr(compat, ',');
+	if (!compat)
+		goto fail;
+	compat++;
+
+	strncpy(dtb_name, compat, buf_len);
+	buf_len -= strlen(compat);
+
+	strncat(dtb_name, ".dtb", buf_len);
+
+	ret = env_set("fdtfile", dtb_name);
+	if (ret)
+		goto fail;
+
+	return;
+fail:
+	pr_warn("\"fdt_file\" environment variable was not set correctly\n");
+}
+
+static void uniphier_set_env_addr(const char *env, const char *offset_env)
+{
+	DECLARE_GLOBAL_DATA_PTR;
+	unsigned long offset = 0;
+	const char *str;
+	char *end;
+	int ret;
+
+	if (env_get(env))
+		return;		/* do nothing if it is already set */
+
+	if (offset_env) {
+		str = env_get(offset_env);
+		if (!str)
+			goto fail;
+
+		offset = simple_strtoul(str, &end, 16);
+		if (*end)
+			goto fail;
 	}
+
+	ret = env_set_hex(env, gd->ram_base + offset);
+	if (ret)
+		goto fail;
+
+	return;
+
+fail:
+	pr_warn("\"%s\" environment variable was not set correctly\n", env);
 }
 
 int board_late_init(void)
 {
 	puts("MODE:  ");
 
-	switch (spl_boot_device()) {
+	switch (uniphier_boot_device_raw()) {
 	case BOOT_DEVICE_MMC1:
-		printf("eMMC Boot\n");
-		setenv("bootmode", "emmcboot");
+		printf("eMMC Boot");
+		env_set("bootdev", "emmc");
+		break;
+	case BOOT_DEVICE_MMC2:
+		printf("SD Boot");
+		env_set("bootdev", "sd");
 		break;
 	case BOOT_DEVICE_NAND:
-		printf("NAND Boot\n");
-		setenv("bootmode", "nandboot");
-		nand_denali_wp_disable();
+		printf("NAND Boot");
+		env_set("bootdev", "nand");
 		break;
 	case BOOT_DEVICE_NOR:
-		printf("NOR Boot\n");
-		setenv("bootmode", "norboot");
+		printf("NOR Boot");
+		env_set("bootdev", "nor");
+		break;
+	case BOOT_DEVICE_USB:
+		printf("USB Boot");
+		env_set("bootdev", "usb");
 		break;
 	default:
-		printf("Unsupported Boot Mode\n");
-		return -1;
+		printf("Unknown");
+		break;
 	}
 
-	uniphier_set_fdt_file();
+	if (uniphier_have_internal_stm())
+		printf(" (STM: %s)",
+		       uniphier_boot_from_backend() ? "OFF" : "ON");
+
+	printf("\n");
+
+	uniphier_set_env_fdt_file();
+
+	uniphier_set_env_addr("dram_base", NULL);
+
+	uniphier_set_env_addr("loadaddr", "loadaddr_offset");
+
+	uniphier_set_env_addr("kernel_addr_r", "kernel_addr_r_offset");
+	uniphier_set_env_addr("ramdisk_addr_r", "ramdisk_addr_r_offset");
+	uniphier_set_env_addr("fdt_addr_r", "fdt_addr_r_offset");
 
 	return 0;
 }

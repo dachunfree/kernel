@@ -1,7 +1,6 @@
+/* SPDX-License-Identifier: GPL-2.0+ */
 /*
  * Copyright (C) 2013 Boundary Devices Inc.
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 #ifndef __ASM_ARCH_MX6_DDR_H__
 #define __ASM_ARCH_MX6_DDR_H__
@@ -16,7 +15,7 @@
 #ifdef CONFIG_MX6SX
 #include "mx6sx-ddr.h"
 #else
-#ifdef CONFIG_MX6UL
+#if defined(CONFIG_MX6UL) || defined(CONFIG_MX6ULL)
 #include "mx6ul-ddr.h"
 #else
 #ifdef CONFIG_MX6SL
@@ -307,6 +306,25 @@ struct mx6dq_iomux_grp_regs {
 	u32 grp_b6ds;
 };
 
+/*
+ * NoC scheduler registers - only on IMX6DQP
+ */
+#define MX6DQP_NOC_SCHED_BASE	0x00bb0000
+struct mx6dqp_noc_sched_regs {
+	u32 coreid;
+	u32 revid;
+	u32 ddrconf;
+	u32 ddrtiming;
+	u32 ddrmode;
+	u32 rlat;
+	u32 res1[4];
+	u32 ipu1;
+	u32 ipu2;
+	u32 res2[2];
+	u32 activate;
+	u32 res3[16];
+};
+
 #define MX6SDL_IOM_DDR_BASE     0x020e0400
 struct mx6sdl_iomux_ddr_regs {
 	u32 res1[25];
@@ -408,6 +426,8 @@ struct mx6_ddr_sysinfo {
 	u8 sde_to_rst;	/* Time from SDE enable until DDR reset# is high */
 	u8 pd_fast_exit;/* enable precharge powerdown fast-exit */
 	u8 ddr_type;	/* DDR type: DDR3(0) or LPDDR2(1) */
+	u8 refsel;	/* REF_SEL field of register MDREF */
+	u8 refr;	/* REFR field of register MDREF */
 };
 
 /*
@@ -456,6 +476,13 @@ void mx6sl_dram_iocfg(unsigned width,
 		      const struct mx6sl_iomux_ddr_regs *,
 		      const struct mx6sl_iomux_grp_regs *);
 
+#if defined(CONFIG_MX6_DDRCAL)
+int mmdc_do_write_level_calibration(struct mx6_ddr_sysinfo const *sysinfo);
+int mmdc_do_dqs_calibration(struct mx6_ddr_sysinfo const *sysinfo);
+void mmdc_read_calibration(struct mx6_ddr_sysinfo const *sysinfo,
+                           struct mx6_mmdc_calibration *calib);
+#endif
+
 /* configure mx6 mmdc registers */
 void mx6_dram_cfg(const struct mx6_ddr_sysinfo *,
 		  const struct mx6_mmdc_calibration *,
@@ -488,6 +515,7 @@ void mx6_dram_cfg(const struct mx6_ddr_sysinfo *,
 #define MX6_MMDC_P0_MPDGCTRL1	0x021b0840
 #define MX6_MMDC_P0_MPRDDLCTL	0x021b0848
 #define MX6_MMDC_P0_MPWRDLCTL	0x021b0850
+#define MX6_MMDC_P0_MPZQLP2CTL	0x021b085C
 #define MX6_MMDC_P0_MPMUR0	0x021b08b8
 
 #define MX6_MMDC_P1_MDCTL	0x021b4000
@@ -515,6 +543,7 @@ void mx6_dram_cfg(const struct mx6_ddr_sysinfo *,
 #define MX6_MMDC_P1_MPDGCTRL1	0x021b4840
 #define MX6_MMDC_P1_MPRDDLCTL	0x021b4848
 #define MX6_MMDC_P1_MPWRDLCTL	0x021b4850
+#define MX6_MMDC_P1_MPZQLP2CTL	0x021b485C
 #define MX6_MMDC_P1_MPMUR0	0x021b48b8
 
 #endif	/*__ASM_ARCH_MX6_DDR_H__ */

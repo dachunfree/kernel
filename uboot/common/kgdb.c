@@ -88,6 +88,7 @@
  ****************************************************************************/
 
 #include <common.h>
+#include <asm/ptrace.h>
 
 #include <kgdb.h>
 #include <command.h>
@@ -326,7 +327,7 @@ handle_exception (struct pt_regs *regs)
 		return (0);
 	}
 
-	/* probably should check which exception occured as well */
+	/* probably should check which exception occurred as well */
 	if (longjmp_on_fault) {
 		longjmp_on_fault = 0;
 		kgdb_longjmp(error_jmp_buf, KGDBERR_MEMFAULT);
@@ -574,7 +575,7 @@ breakpoint(void)
 }
 
 int
-do_kgdb(cmd_tbl_t *cmdtp, int flag, int argc, char * const argv[])
+do_kgdb(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[])
 {
     printf("Entering KGDB mode via exception handler...\n\n");
     kgdb_breakpoint(argc - 1, argv + 1);

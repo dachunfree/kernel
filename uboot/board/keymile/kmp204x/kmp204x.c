@@ -1,14 +1,17 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * (C) Copyright 2013 Keymile AG
  * Valentin Longchamp <valentin.longchamp@keymile.com>
  *
  * Copyright 2011,2012 Freescale Semiconductor, Inc.
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
 #include <command.h>
+#include <env.h>
+#include <fdt_support.h>
+#include <image.h>
+#include <init.h>
 #include <netdev.h>
 #include <linux/compiler.h>
 #include <asm/mmu.h>
@@ -22,63 +25,17 @@
 #include <fm_eth.h>
 
 #include "../common/common.h"
+#include "../common/qrio.h"
 #include "kmp204x.h"
-
-DECLARE_GLOBAL_DATA_PTR;
 
 static uchar ivm_content[CONFIG_SYS_IVM_EEPROM_MAX_LEN];
 
 int checkboard(void)
 {
-	printf("Board: Keymile %s\n", CONFIG_KM_BOARD_NAME);
+	printf("Board: Keymile %s\n", CONFIG_SYS_CONFIG_NAME);
 
 	return 0;
 }
-
-/* I2C deblocking uses the algorithm defined in board/keymile/common/common.c
- * 2 dedicated QRIO GPIOs externally pull the SCL and SDA lines
- * For I2C only the low state is activly driven and high state is pulled-up
- * by a resistor. Therefore the deblock GPIOs are used
- *  -> as an active output to drive a low state
- *  -> as an open-drain input to have a pulled-up high state
- */
-
-/* QRIO GPIOs used for deblocking */
-#define DEBLOCK_PORT1	GPIO_A
-#define DEBLOCK_SCL1	20
-#define DEBLOCK_SDA1	21
-
-/* By default deblock GPIOs are floating */
-static void i2c_deblock_gpio_cfg(void)
-{
-	/* set I2C bus 1 deblocking GPIOs input, but 0 value for open drain */
-	qrio_gpio_direction_input(DEBLOCK_PORT1, DEBLOCK_SCL1);
-	qrio_gpio_direction_input(DEBLOCK_PORT1, DEBLOCK_SDA1);
-
-	qrio_set_gpio(DEBLOCK_PORT1, DEBLOCK_SCL1, 0);
-	qrio_set_gpio(DEBLOCK_PORT1, DEBLOCK_SDA1, 0);
-}
-
-void set_sda(int state)
-{
-	qrio_set_opendrain_gpio(DEBLOCK_PORT1, DEBLOCK_SDA1, state);
-}
-
-void set_scl(int state)
-{
-	qrio_set_opendrain_gpio(DEBLOCK_PORT1, DEBLOCK_SCL1, state);
-}
-
-int get_sda(void)
-{
-	return qrio_get_gpio(DEBLOCK_PORT1, DEBLOCK_SDA1);
-}
-
-int get_scl(void)
-{
-	return qrio_get_gpio(DEBLOCK_PORT1, DEBLOCK_SCL1);
-}
-
 
 #define ZL30158_RST	8
 #define BFTIC4_RST	0
@@ -126,7 +83,7 @@ int board_early_init_r(void)
 	invalidate_icache();
 
 	set_liodns();
-	setup_portals();
+	setup_qbman_portals();
 
 	ret = trigger_fpga_config();
 	if (ret)
@@ -138,7 +95,7 @@ int board_early_init_r(void)
 	/* enable Application Buffer */
 	qrio_enable_app_buffer();
 
-	return ret;
+	return 0;
 }
 
 unsigned long get_board_sys_clk(unsigned long dummy)
@@ -197,7 +154,8 @@ int misc_init_r(void)
 		}
 	}
 
-	ivm_read_eeprom(ivm_content, CONFIG_SYS_IVM_EEPROM_MAX_LEN);
+	ivm_read_eeprom(ivm_content, CONFIG_SYS_IVM_EEPROM_MAX_LEN,
+			CONFIG_PIGGY_MAC_ADDRESS_OFFSET);
 	return 0;
 }
 
@@ -222,7 +180,7 @@ int last_stage_init(void)
 	if (dip_switch != 0) {
 		/* start bootloader */
 		puts("DIP:   Enabled\n");
-		setenv("actual_bank", "0");
+		env_set("actual_bank", "0");
 	}
 #endif
 	set_km_env();
@@ -239,7 +197,7 @@ void fdt_fixup_fman_mac_addresses(void *blob)
 	unsigned char mac_addr[6];
 
 	/* get the mac addr from env */
-	tmp = getenv("ethaddr");
+	tmp = env_get("ethaddr");
 	if (!tmp) {
 		printf("ethaddr env variable not defined\n");
 		return;
@@ -264,20 +222,20 @@ void fdt_fixup_fman_mac_addresses(void *blob)
 }
 #endif
 
-int ft_board_setup(void *blob, bd_t *bd)
+int ft_board_setup(void *blob, struct bd_info *bd)
 {
 	phys_addr_t base;
 	phys_size_t size;
 
 	ft_cpu_setup(blob, bd);
 
-	base = getenv_bootm_low();
-	size = getenv_bootm_size();
+	base = env_get_bootm_low();
+	size = env_get_bootm_size();
 
 	fdt_fixup_memory(blob, (u64)base, (u64)size);
 
 #if defined(CONFIG_HAS_FSL_DR_USB) || defined(CONFIG_HAS_FSL_MPH_USB)
-	fdt_fixup_dr_usb(blob, bd);
+	fsl_fdt_fixup_dr_usb(blob, bd);
 #endif
 
 #ifdef CONFIG_PCI
@@ -296,7 +254,7 @@ int ft_board_setup(void *blob, bd_t *bd)
 #if defined(CONFIG_POST)
 
 /* DIC26_SELFTEST GPIO used to start factory test sw */
-#define SELFTEST_PORT	GPIO_A
+#define SELFTEST_PORT	QRIO_GPIO_A
 #define SELFTEST_PIN	31
 
 int post_hotkeys_pressed(void)

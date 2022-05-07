@@ -1,7 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  * Copyright (C) Marvell International Ltd. and its affiliates
- *
- * SPDX-License-Identifier:	GPL-2.0
  */
 
 #include <common.h>
@@ -9,6 +8,7 @@
 #include <asm/io.h>
 #include <asm/arch/cpu.h>
 #include <asm/arch/soc.h>
+#include <linux/delay.h>
 
 #include "high_speed_env_spec.h"
 #include "sys_env_lib.h"
@@ -27,7 +27,7 @@
  */
 struct cfg_seq serdes_seq_db[SERDES_LAST_SEQ];
 
-#define	SERDES_VERION		"2.0"
+#define	SERDES_VERSION		"2.0"
 #define ENDED_OK		"High speed PHY - Ended Successfully\n"
 
 #define LINK_WAIT_CNTR		100
@@ -533,7 +533,7 @@ struct op_params pex_and_usb3_tx_config_params3[] = {
 struct op_params pex_by4_config_params[] = {
 	/* unit_base_reg, unit_offset, mask, data, wait_time, num_of_loops */
 	{GLOBAL_CLK_SRC_HI, 0x800, 0x7, {0x5, 0x0, 0x0, 0x2}, 0, 0},
-	/* Lane Alignement enable */
+	/* Lane Alignment enable */
 	{LANE_ALIGN_REG0, 0x800, 0x1000, {0x0, 0x0, 0x0, 0x0}, 0, 0},
 	/* Max PLL phy config */
 	{CALIBRATION_CTRL_REG, 0x800, 0x1000, {0x1000, 0x1000, 0x1000, 0x1000},
@@ -598,6 +598,8 @@ struct op_params pex_electrical_config_serdes_rev2_params[] = {
 	{LANE_CFG4_REG, 0x800, 0x8, {0x8}, 0, 0},
 	/* tximpcal_th and rximpcal_th */
 	{VTHIMPCAL_CTRL_REG, 0x800, 0xff00, {0x3000}, 0, 0},
+	/* Force receiver detected */
+	{LANE_CFG0_REG, 0x800, 0x8000, {0x8000}, 0, 0},
 };
 
 /* PEX - configuration seq for REF_CLOCK_25MHz */
@@ -670,12 +672,29 @@ struct op_params usb2_power_up_params[] = {
 	{0xc200c, 0x0 /*NA*/, 0x1000000, {0x1000000}, 0, 0},
 	/* Phy0 register 3  - TX Channel control 0 */
 	{0xc400c, 0x0 /*NA*/, 0x1000000, {0x1000000}, 0, 0},
-	/* check PLLCAL_DONE is set and IMPCAL_DONE is set */
+	/* Decrease the amplitude of the low speed eye to meet the spec */
+	{0xc000c, 0x0 /*NA*/, 0xf000, {0x1000}, 0, 0},
+	{0xc200c, 0x0 /*NA*/, 0xf000, {0x1000}, 0, 0},
+	{0xc400c, 0x0 /*NA*/, 0xf000, {0x1000}, 0, 0},
+	/* Change the High speed impedance threshold */
+	{0xc0008, 0x0 /*NA*/, 0x700, {CONFIG_ARMADA_38X_HS_IMPEDANCE_THRESH << 8}, 0, 0},
+	{0xc2008, 0x0 /*NA*/, 0x700, {CONFIG_ARMADA_38X_HS_IMPEDANCE_THRESH << 8}, 0, 0},
+	{0xc4008, 0x0 /*NA*/, 0x700, {CONFIG_ARMADA_38X_HS_IMPEDANCE_THRESH << 8}, 0, 0},
+	/* Change the squelch level of the receiver to meet the receiver electrical measurements (squelch and receiver sensitivity tests) */
+	{0xc0014, 0x0 /*NA*/, 0xf, {0x8}, 0, 0},
+	{0xc2014, 0x0 /*NA*/, 0xf, {0x8}, 0, 0},
+	{0xc4014, 0x0 /*NA*/, 0xf, {0x8}, 0, 0},
+	/* Check PLLCAL_DONE is set and IMPCAL_DONE is set */
 	{0xc0008, 0x0 /*NA*/, 0x80800000, {0x80800000}, 1, 1000},
-	/* check REG_SQCAL_DONE  is set */
+	/* Check REG_SQCAL_DONE  is set */
 	{0xc0018, 0x0 /*NA*/, 0x80000000, {0x80000000}, 1, 1000},
-	/* check PLL_READY  is set */
-	{0xc0000, 0x0 /*NA*/, 0x80000000, {0x80000000}, 1, 1000}
+	/* Check PLL_READY  is set */
+	{0xc0000, 0x0 /*NA*/, 0x80000000, {0x80000000}, 1, 1000},
+	/* Start calibrate of high seed impedance */
+	{0xc0008, 0x0 /*NA*/, 0x2000, {0x2000}, 0, 0},
+	{0x0, 0x0 /*NA*/, 0x0, {0x0}, 10, 0},
+	/* De-assert  the calibration signal */
+	{0xc0008, 0x0 /*NA*/, 0x2000, {0x0}, 0, 0},
 };
 
 /*
@@ -835,25 +854,26 @@ u32 hws_serdes_topology_verify(enum serdes_type serdes_type, u32 serdes_id,
 		}
 	} else {
 		test_result = SERDES_ALREADY_IN_USE;
-		if (test_result == SERDES_ALREADY_IN_USE) {
-			printf("%s: Error: serdes lane %d is configured to type %s: type already in use\n",
-			       __func__, serdes_id,
-			       serdes_type_to_string[serdes_type]);
-			return MV_FAIL;
-		} else if (test_result == WRONG_NUMBER_OF_UNITS) {
-			printf("%s: Warning: serdes lane %d is set to type %s.\n",
-			       __func__, serdes_id,
-			       serdes_type_to_string[serdes_type]);
-			printf("%s: Maximum supported lanes are already set to this type (limit = %d)\n",
-			       __func__, serd_max_num);
-			return MV_FAIL;
-		} else if (test_result == UNIT_NUMBER_VIOLATION) {
-			printf("%s: Warning: serdes lane %d type is %s: current device support only %d units of this type.\n",
-			       __func__, serdes_id,
-			       serdes_type_to_string[serdes_type],
-			       serd_max_num);
-			return MV_FAIL;
-		}
+	}
+
+	if (test_result == SERDES_ALREADY_IN_USE) {
+		printf("%s: Error: serdes lane %d is configured to type %s: type already in use\n",
+		       __func__, serdes_id,
+		       serdes_type_to_string[serdes_type]);
+		return MV_FAIL;
+	} else if (test_result == WRONG_NUMBER_OF_UNITS) {
+		printf("%s: Warning: serdes lane %d is set to type %s.\n",
+		       __func__, serdes_id,
+		       serdes_type_to_string[serdes_type]);
+		printf("%s: Maximum supported lanes are already set to this type (limit = %d)\n",
+		       __func__, serd_max_num);
+		return MV_FAIL;
+	} else if (test_result == UNIT_NUMBER_VIOLATION) {
+		printf("%s: Warning: serdes lane %d type is %s: current device support only %d units of this type.\n",
+		       __func__, serdes_id,
+		       serdes_type_to_string[serdes_type],
+		       serd_max_num);
+		return MV_FAIL;
 	}
 
 	return MV_OK;
@@ -1364,16 +1384,16 @@ static void print_topology_details(const struct serdes_map *serdes_map,
 
 	DEBUG_INIT_S("board SerDes lanes topology details:\n");
 
-	DEBUG_INIT_S(" | Lane #  | Speed |  Type       |\n");
+	DEBUG_INIT_S(" | Lane # | Speed |  Type       |\n");
 	DEBUG_INIT_S(" --------------------------------\n");
 	for (lane_num = 0; lane_num < count; lane_num++) {
 		if (serdes_map[lane_num].serdes_type == DEFAULT_SERDES)
 			continue;
 		DEBUG_INIT_S(" |   ");
 		DEBUG_INIT_D(hws_get_physical_serdes_num(lane_num), 1);
-		DEBUG_INIT_S("    |  ");
+		DEBUG_INIT_S("    |   ");
 		DEBUG_INIT_D(serdes_map[lane_num].serdes_speed, 2);
-		DEBUG_INIT_S("   |  ");
+		DEBUG_INIT_S("   | ");
 		DEBUG_INIT_S((char *)
 			     serdes_type_to_string[serdes_map[lane_num].
 						   serdes_type]);
@@ -1415,7 +1435,7 @@ int serdes_phy_config(void)
 	DEBUG_INIT_FULL_S("\n### ctrl_high_speed_serdes_phy_config ###\n");
 
 	DEBUG_INIT_S("High speed PHY - Version: ");
-	DEBUG_INIT_S(SERDES_VERION);
+	DEBUG_INIT_S(SERDES_VERSION);
 	DEBUG_INIT_S("\n");
 
 	/* Init serdes sequences DB */

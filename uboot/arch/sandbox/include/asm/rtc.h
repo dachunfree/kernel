@@ -1,10 +1,9 @@
+/* SPDX-License-Identifier: GPL-2.0+ */
 /*
  * Simulate an I2C real time clock
  *
  * Copyright (c) 2015 Google, Inc
  * Written by Simon Glass <sjg@chromium.org>
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #ifndef __asm_rtc_h
@@ -21,6 +20,11 @@ enum {
 	REG_WDAY,
 
 	REG_RESET	= 0x20,
+
+	REG_AUX0	= 0x30,
+	REG_AUX1,
+	REG_AUX2,
+	REG_AUX3,
 
 	REG_COUNT	= 0x80,
 };

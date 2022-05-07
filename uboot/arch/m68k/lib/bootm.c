@@ -1,17 +1,19 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * (C) Copyright 2003
  * Wolfgang Denk, DENX Software Engineering, wd@denx.de.
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
+#include <bootstage.h>
 #include <command.h>
+#include <env.h>
 #include <image.h>
+#include <lmb.h>
+#include <log.h>
 #include <u-boot/zlib.h>
 #include <bzlib.h>
 #include <watchdog.h>
-#include <environment.h>
 #include <asm/byteorder.h>
 #ifdef CONFIG_SHOW_BOOT_PROGRESS
 # include <status_led.h>
@@ -25,7 +27,7 @@ DECLARE_GLOBAL_DATA_PTR;
 #define LINUX_MAX_ARGS		256
 
 static ulong get_sp (void);
-static void set_clocks_in_mhz (bd_t *kbd);
+static void set_clocks_in_mhz (struct bd_info *kbd);
 
 void arch_lmb_reserve(struct lmb *lmb)
 {
@@ -48,11 +50,12 @@ void arch_lmb_reserve(struct lmb *lmb)
 	lmb_reserve(lmb, sp, (CONFIG_SYS_SDRAM_BASE + gd->ram_size - sp));
 }
 
-int do_bootm_linux(int flag, int argc, char * const argv[], bootm_headers_t *images)
+int do_bootm_linux(int flag, int argc, char *const argv[],
+		   bootm_headers_t *images)
 {
 	int ret;
-	bd_t  *kbd;
-	void  (*kernel) (bd_t *, ulong, ulong, ulong, ulong);
+	struct bd_info  *kbd;
+	void  (*kernel) (struct bd_info *, ulong, ulong, ulong, ulong);
 	struct lmb *lmb = &images->lmb;
 
 	/*
@@ -76,7 +79,7 @@ int do_bootm_linux(int flag, int argc, char * const argv[], bootm_headers_t *ima
 	if (ret)
 		goto error;
 
-	kernel = (void (*)(bd_t *, ulong, ulong, ulong, ulong))images->ep;
+	kernel = (void (*)(struct bd_info *, ulong, ulong, ulong, ulong))images->ep;
 
 	debug("## Transferring control to Linux (at address %08lx) ...\n",
 	      (ulong) kernel);
@@ -109,11 +112,12 @@ static ulong get_sp (void)
 	return sp;
 }
 
-static void set_clocks_in_mhz (bd_t *kbd)
+static void set_clocks_in_mhz (struct bd_info *kbd)
 {
 	char *s;
 
-	if ((s = getenv("clocks_in_mhz")) != NULL) {
+	s = env_get("clocks_in_mhz");
+	if (s) {
 		/* convert all clock information to MHz */
 		kbd->bi_intfreq /= 1000000L;
 		kbd->bi_busfreq /= 1000000L;

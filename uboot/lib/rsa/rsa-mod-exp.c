@@ -1,15 +1,15 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * Copyright (c) 2013, Google Inc.
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #ifndef USE_HOSTCC
 #include <common.h>
 #include <fdtdec.h>
+#include <log.h>
 #include <asm/types.h>
 #include <asm/byteorder.h>
-#include <asm/errno.h>
+#include <linux/errno.h>
 #include <asm/types.h>
 #include <asm/unaligned.h>
 #else
@@ -24,6 +24,14 @@
 
 #define get_unaligned_be32(a) fdt32_to_cpu(*(uint32_t *)a)
 #define put_unaligned_be32(a, b) (*(uint32_t *)(b) = cpu_to_fdt32(a))
+
+static inline uint64_t fdt64_to_cpup(const void *p)
+{
+	fdt64_t w;
+
+	memcpy(&w, p, sizeof(w));
+	return fdt64_to_cpu(w);
+}
 
 /* Default public exponent for backward compatibility */
 #define RSA_DEFAULT_PUBEXP	65537
@@ -263,8 +271,7 @@ int rsa_mod_exp_sw(const uint8_t *sig, uint32_t sig_len,
 	if (!prop->public_exponent)
 		key.exponent = RSA_DEFAULT_PUBEXP;
 	else
-		key.exponent =
-			fdt64_to_cpu(*((uint64_t *)(prop->public_exponent)));
+		key.exponent = fdt64_to_cpup(prop->public_exponent);
 
 	if (!key.len || !prop->modulus || !prop->rr) {
 		debug("%s: Missing RSA key info", __func__);
@@ -302,17 +309,24 @@ int rsa_mod_exp_sw(const uint8_t *sig, uint32_t sig_len,
 	return 0;
 }
 
+#if defined(CONFIG_CMD_ZYNQ_RSA)
 /**
- * zynq_pow_mod() - in-place public exponentiation
+ * zynq_pow_mod - in-place public exponentiation
  *
  * @keyptr:	RSA key
  * @inout:	Big-endian word array containing value and result
+ * @return 0 on successful calculation, otherwise failure error code
+ *
+ * FIXME: Use pow_mod() instead of zynq_pow_mod()
+ *        pow_mod calculation required for zynq is bit different from
+ *        pw_mod above here, hence defined zynq specific routine.
  */
 int zynq_pow_mod(uint32_t *keyptr, uint32_t *inout)
 {
-	uint32_t *result, *ptr;
+	u32 *result, *ptr;
 	uint i;
 	struct rsa_public_key *key;
+	u32 val[RSA2048_BYTES], acc[RSA2048_BYTES], tmp[RSA2048_BYTES];
 
 	key = (struct rsa_public_key *)keyptr;
 
@@ -323,7 +337,6 @@ int zynq_pow_mod(uint32_t *keyptr, uint32_t *inout)
 		return -EINVAL;
 	}
 
-	uint32_t val[key->len], acc[key->len], tmp[key->len];
 	result = tmp;  /* Re-use location. */
 
 	for (i = 0, ptr = inout; i < key->len; i++, ptr++)
@@ -345,3 +358,4 @@ int zynq_pow_mod(uint32_t *keyptr, uint32_t *inout)
 
 	return 0;
 }
+#endif

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * URB OHCI HCD (Host Controller Driver) for USB on the AT91RM9200 and PCI bus.
  *
@@ -16,8 +17,6 @@
  *
  * Modified for the MP2USB by (C) Copyright 2005 Eric Benard
  * ebenard@eukrea.com - based on s3c24x0's driver
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 /*
  * IMPORTANT NOTES
@@ -29,9 +28,12 @@
  */
 
 #include <common.h>
+#include <cpu_func.h>
 #include <asm/byteorder.h>
 #include <dm.h>
 #include <errno.h>
+#include <asm/cache.h>
+#include <linux/delay.h>
 
 #if defined(CONFIG_PCI_OHCI)
 # include <pci.h>
@@ -51,11 +53,9 @@
 #endif
 
 #if defined(CONFIG_CPU_ARM920T) || \
-    defined(CONFIG_S3C24X0) || \
-    defined(CONFIG_440EP) || \
-    defined(CONFIG_PCI_OHCI) || \
-    defined(CONFIG_MPC5200) || \
-    defined(CONFIG_SYS_OHCI_USE_NPS)
+	defined(CONFIG_PCI_OHCI) || \
+	defined(CONFIG_DM_PCI) || \
+	defined(CONFIG_SYS_OHCI_USE_NPS)
 # define OHCI_USE_NPS		/* force NoPowerSwitching mode */
 #endif
 
@@ -68,6 +68,7 @@
 #define OHCI_CONTROL_INIT \
 	(OHCI_CTRL_CBSR & 0x3) | OHCI_CTRL_IE | OHCI_CTRL_PLE
 
+#if !CONFIG_IS_ENABLED(DM_USB)
 #ifdef CONFIG_PCI_OHCI
 static struct pci_device_id ohci_pci_ids[] = {
 	{0x10b9, 0x5237},	/* ULI1575 PCI OHCI module ids */
@@ -76,6 +77,7 @@ static struct pci_device_id ohci_pci_ids[] = {
 	/* Please add supported PCI OHCI controller ids here */
 	{0, 0}
 };
+#endif
 #endif
 
 #ifdef CONFIG_PCI_EHCI_DEVNO
@@ -124,7 +126,7 @@ static struct pci_device_id ehci_pci_ids[] = {
 #define invalidate_dcache_iso_td(addr) invalidate_dcache_buffer(addr, 32)
 #define invalidate_dcache_hcca(addr) invalidate_dcache_buffer(addr, 256)
 
-#ifdef CONFIG_DM_USB
+#if CONFIG_IS_ENABLED(DM_USB)
 /*
  * The various ohci_mdelay(1) calls in the code seem unnecessary. We keep
  * them around when building for older boards not yet converted to the dm
@@ -135,7 +137,7 @@ static struct pci_device_id ehci_pci_ids[] = {
 #define ohci_mdelay(x) mdelay(x)
 #endif
 
-#ifndef CONFIG_DM_USB
+#if !CONFIG_IS_ENABLED(DM_USB)
 /* global ohci_t */
 static ohci_t gohci;
 /* this must be aligned to a 256 byte boundary */
@@ -682,7 +684,7 @@ static int ep_link(ohci_t *ohci, ed_t *edi)
 		ed->hwNextED = 0;
 		flush_dcache_ed(ed);
 		if (ohci->ed_controltail == NULL)
-			ohci_writel(ed, &ohci->regs->ed_controlhead);
+			ohci_writel((uintptr_t)ed, &ohci->regs->ed_controlhead);
 		else
 			ohci->ed_controltail->hwNextED =
 						   m32_swap((unsigned long)ed);
@@ -700,7 +702,7 @@ static int ep_link(ohci_t *ohci, ed_t *edi)
 		ed->hwNextED = 0;
 		flush_dcache_ed(ed);
 		if (ohci->ed_bulktail == NULL)
-			ohci_writel(ed, &ohci->regs->ed_bulkhead);
+			ohci_writel((uintptr_t)ed, &ohci->regs->ed_bulkhead);
 		else
 			ohci->ed_bulktail->hwNextED =
 						   m32_swap((unsigned long)ed);
@@ -753,7 +755,7 @@ static void periodic_unlink(struct ohci *ohci, volatile struct ed *ed,
 
 		/* ED might have been unlinked through another path */
 		while (*ed_p != 0) {
-			if (((struct ed *)
+			if (((struct ed *)(uintptr_t)
 					m32_swap((unsigned long)ed_p)) == ed) {
 				*ed_p = ed->hwNextED;
 				aligned_ed_p = (unsigned long)ed_p;
@@ -762,7 +764,7 @@ static void periodic_unlink(struct ohci *ohci, volatile struct ed *ed,
 					aligned_ed_p + ARCH_DMA_MINALIGN);
 				break;
 			}
-			ed_p = &(((struct ed *)
+			ed_p = &(((struct ed *)(uintptr_t)
 				     m32_swap((unsigned long)ed_p))->hwNextED);
 		}
 	}
@@ -798,7 +800,7 @@ static int ep_unlink(ohci_t *ohci, ed_t *edi)
 		if (ohci->ed_controltail == ed) {
 			ohci->ed_controltail = ed->ed_prev;
 		} else {
-			((ed_t *)m32_swap(
+			((ed_t *)(uintptr_t)m32_swap(
 			    *((__u32 *)&ed->hwNextED)))->ed_prev = ed->ed_prev;
 		}
 		break;
@@ -819,7 +821,7 @@ static int ep_unlink(ohci_t *ohci, ed_t *edi)
 		if (ohci->ed_bulktail == ed) {
 			ohci->ed_bulktail = ed->ed_prev;
 		} else {
-			((ed_t *)m32_swap(
+			((ed_t *)(uintptr_t)m32_swap(
 			     *((__u32 *)&ed->hwNextED)))->ed_prev = ed->ed_prev;
 		}
 		break;
@@ -914,12 +916,13 @@ static void td_fill(ohci_t *ohci, unsigned int info,
 
 	/* fill the old dummy TD */
 	td = urb_priv->td [index] =
-			     (td_t *)(m32_swap(urb_priv->ed->hwTailP) & ~0xf);
+			     (td_t *)(uintptr_t)
+			     (m32_swap(urb_priv->ed->hwTailP) & ~0xf);
 
 	td->ed = urb_priv->ed;
 	td->next_dl_td = NULL;
 	td->index = index;
-	td->data = (__u32)data;
+	td->data = (uintptr_t)data;
 #ifdef OHCI_FILL_TRACE
 	if (usb_pipebulk(urb_priv->pipe) && usb_pipeout(urb_priv->pipe)) {
 		for (i = 0; i < len; i++)
@@ -963,7 +966,7 @@ static void td_submit_job(ohci_t *ohci, struct usb_device *dev,
 	flush_dcache_buffer(buffer, data_len);
 
 	/* OHCI handles the DATA-toggles itself, we just use the USB-toggle
-	 * bits for reseting */
+	 * bits for resetting */
 	if (usb_gettoggle(dev, usb_pipeendpoint(pipe), usb_pipeout(pipe))) {
 		toggle = TD_T_TOGGLE;
 	} else {
@@ -1088,10 +1091,6 @@ static void check_status(td_t *td_list)
 				*phwHeadP &= m32_swap(0xfffffff2);
 			flush_dcache_ed(td_list->ed);
 		}
-#ifdef CONFIG_MPC5200
-		td_list->hwNextTD = 0;
-		flush_dcache_td(td_list);
-#endif
 	}
 }
 
@@ -1099,7 +1098,7 @@ static void check_status(td_t *td_list)
  * we reverse the reversed done-list */
 static td_t *dl_reverse_done_list(ohci_t *ohci)
 {
-	__u32 td_list_hc;
+	uintptr_t td_list_hc;
 	td_t *td_rev = NULL;
 	td_t *td_list = NULL;
 
@@ -1552,10 +1551,8 @@ static int submit_common_msg(ohci_t *ohci, struct usb_device *dev,
 		return -1;
 	}
 
-#if 0
 	mdelay(10);
 	/* ohci_dump_status(ohci); */
-#endif
 
 	timeout = USB_TIMEOUT_MS(pipe);
 
@@ -1698,7 +1695,7 @@ static int _ohci_destroy_int_queue(ohci_t *ohci, struct usb_device *dev,
 	return 0;
 }
 
-#ifndef CONFIG_DM_USB
+#if !CONFIG_IS_ENABLED(DM_USB)
 /* submit routines called from usb.c */
 int submit_bulk_msg(struct usb_device *dev, unsigned long pipe, void *buffer,
 		int transfer_len)
@@ -1709,7 +1706,7 @@ int submit_bulk_msg(struct usb_device *dev, unsigned long pipe, void *buffer,
 }
 
 int submit_int_msg(struct usb_device *dev, unsigned long pipe, void *buffer,
-		int transfer_len, int interval)
+		int transfer_len, int interval, bool nonblock)
 {
 	info("submit_int_msg");
 	return submit_common_msg(&gohci, dev, pipe, buffer, transfer_len, NULL,
@@ -1862,7 +1859,7 @@ static int hc_start(ohci_t *ohci)
 	ohci_writel(0, &ohci->regs->ed_controlhead);
 	ohci_writel(0, &ohci->regs->ed_bulkhead);
 
-	ohci_writel((__u32)ohci->hcca,
+	ohci_writel((uintptr_t)ohci->hcca,
 		    &ohci->regs->hcca); /* reset clears this */
 
 	fminterval = 0x2edf;
@@ -1987,7 +1984,7 @@ static int hc_interrupt(ohci_t *ohci)
 
 /*-------------------------------------------------------------------------*/
 
-#ifndef CONFIG_DM_USB
+#if !CONFIG_IS_ENABLED(DM_USB)
 
 /*-------------------------------------------------------------------------*/
 
@@ -2053,8 +2050,11 @@ int usb_lowlevel_init(int index, enum usb_init_type init, void **controller)
 		pci_read_config_dword(pdev, PCI_BASE_ADDRESS_0, &base);
 		printf("OHCI regs address 0x%08x\n", base);
 		gohci.regs = (struct ohci_regs *)base;
-	} else
+	} else {
+		printf("%s: OHCI devnr: %d not found\n", __func__,
+		       CONFIG_PCI_OHCI_DEVNO);
 		return -1;
+	}
 #else
 	gohci.regs = (struct ohci_regs *)CONFIG_SYS_USB_OHCI_REGS_BASE;
 #endif
@@ -2137,7 +2137,7 @@ int submit_control_msg(struct usb_device *dev, unsigned long pipe,
 }
 #endif
 
-#ifdef CONFIG_DM_USB
+#if CONFIG_IS_ENABLED(DM_USB)
 static int ohci_submit_control_msg(struct udevice *dev, struct usb_device *udev,
 				   unsigned long pipe, void *buffer, int length,
 				   struct devrequest *setup)
@@ -2158,7 +2158,7 @@ static int ohci_submit_bulk_msg(struct udevice *dev, struct usb_device *udev,
 
 static int ohci_submit_int_msg(struct udevice *dev, struct usb_device *udev,
 			       unsigned long pipe, void *buffer, int length,
-			       int interval)
+			       int interval, bool nonblock)
 {
 	ohci_t *ohci = dev_get_priv(usb_get_bus(dev));
 

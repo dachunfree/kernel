@@ -584,6 +584,7 @@ void resched_curr(struct rq *rq)
 	cpu = cpu_of(rq);
 
 	if (cpu == smp_processor_id()) {
+		//设置抢占标志
 		set_tsk_need_resched(curr);
 		set_preempt_need_resched();
 		return;
@@ -832,7 +833,7 @@ static inline void enqueue_task(struct rq *rq, struct task_struct *p, int flags)
 	update_rq_clock(rq);
 	if (!(flags & ENQUEUE_RESTORE))
 		sched_info_queued(rq, p);
-	p->sched_class->enqueue_task(rq, p, flags);
+	p->sched_class->enqueue_task(rq, p, flags); //enqueue_task_fair
 }
 
 static inline void dequeue_task(struct rq *rq, struct task_struct *p, int flags)

@@ -1,8 +1,7 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * Copyright (c) 2013, Google Inc.
  * Written by Simon Glass <sjg@chromium.org>
- *
- * SPDX-License-Identifier:	GPL-2.0+
  *
  * Perform a grep of an FDT either displaying the source subset or producing
  * a new .dtb subset which can be used as required.
@@ -10,14 +9,18 @@
 
 #include <assert.h>
 #include <ctype.h>
+#include <errno.h>
 #include <getopt.h>
+#include <fcntl.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <fdt_region.h>
 
-#include <../include/libfdt.h>
-#include <libfdt_internal.h>
+#include "fdt_host.h"
+#include "libfdt_internal.h"
 
 /* Define DEBUG to get some debugging output on stderr */
 #ifdef DEBUG
@@ -131,11 +134,11 @@ static int value_add(struct display_info *disp, struct value_node **headp,
 	}
 
 	str = strdup(str);
+	if (!str)
+		goto err_mem;
 	node = malloc(sizeof(*node));
-	if (!str || !node) {
-		fprintf(stderr, "Out of memory\n");
-		return -1;
-	}
+	if (!node)
+		goto err_mem;
 	node->next = *headp;
 	node->type = type;
 	node->include = include;
@@ -143,6 +146,9 @@ static int value_add(struct display_info *disp, struct value_node **headp,
 	*headp = node;
 
 	return 0;
+err_mem:
+	fprintf(stderr, "Out of memory\n");
+	return -1;
 }
 
 static bool util_is_printable_string(const void *data, int len)
@@ -405,7 +411,7 @@ static int display_fdt_by_regions(struct display_info *disp, const void *blob,
  * The output of this function may or may not be a valid FDT. To ensure it
  * is, these disp->flags must be set:
  *
- *   FDT_REG_SUPERNODES: ensures that subnodes are preceeded by their
+ *   FDT_REG_SUPERNODES: ensures that subnodes are preceded by their
  *		parents. Without this option, fragments of subnode data may be
  *		output without the supernodes above them. This is useful for
  *		hashing but cannot produce a valid FDT.
@@ -522,18 +528,21 @@ static int check_type_include(void *priv, int type, const char *data, int size)
 	 * return 1 at the first match. For exclusive conditions, we must
 	 * check that there are no matches.
 	 */
-	for (val = disp->value_head; val; val = val->next) {
-		if (!(type & val->type))
-			continue;
-		match = fdt_stringlist_contains(data, size, val->string);
-		debug("      - val->type=%x, str='%s', match=%d\n",
-		      val->type, val->string, match);
-		if (match && val->include) {
-			debug("   - match inc %s\n", val->string);
-			return 1;
+	if (data) {
+		for (val = disp->value_head; val; val = val->next) {
+			if (!(type & val->type))
+				continue;
+			match = fdt_stringlist_contains(data, size,
+							val->string);
+			debug("      - val->type=%x, str='%s', match=%d\n",
+			      val->type, val->string, match);
+			if (match && val->include) {
+				debug("   - match inc %s\n", val->string);
+				return 1;
+			}
+			if (match)
+				none_match &= ~val->type;
 		}
-		if (match)
-			none_match &= ~val->type;
 	}
 
 	/*
@@ -660,6 +669,8 @@ static int fdtgrep_find_regions(const void *fdt,
 		if (!ret)
 			count++;
 	}
+	if (ret && ret != -FDT_ERR_NOTFOUND)
+		return ret;
 
 	/* Find all the aliases and add those regions back in */
 	if (disp->add_aliases && count < max_regions) {
@@ -667,7 +678,11 @@ static int fdtgrep_find_regions(const void *fdt,
 
 		new_count = fdt_add_alias_regions(fdt, region, count,
 						  max_regions, &state);
-		if (new_count <= max_regions) {
+		if (new_count == -FDT_ERR_NOTFOUND) {
+			/* No alias node found */
+		} else if (new_count < 0) {
+			return new_count;
+		} else if (new_count <= max_regions) {
 			/*
 			* The alias regions will now be at the end of the list.
 			* Sort the regions by offset to get things into the
@@ -678,9 +693,6 @@ static int fdtgrep_find_regions(const void *fdt,
 			      h_cmp_region);
 		}
 	}
-
-	if (ret != -FDT_ERR_NOTFOUND)
-		return ret;
 
 	return count;
 }
@@ -765,7 +777,7 @@ char *utilfdt_read(const char *filename)
  */
 static int do_fdtgrep(struct display_info *disp, const char *filename)
 {
-	struct fdt_region *region;
+	struct fdt_region *region = NULL;
 	int max_regions;
 	int count = 100;
 	char path[1024];
@@ -793,8 +805,8 @@ static int do_fdtgrep(struct display_info *disp, const char *filename)
 	 * The first pass will count the regions, but if it is too many,
 	 * we do another pass to actually record them.
 	 */
-	for (i = 0; i < 3; i++) {
-		region = malloc(count * sizeof(struct fdt_region));
+	for (i = 0; i < 2; i++) {
+		region = realloc(region, count * sizeof(struct fdt_region));
 		if (!region) {
 			fprintf(stderr, "Out of memory for %d regions\n",
 				count);
@@ -807,11 +819,16 @@ static int do_fdtgrep(struct display_info *disp, const char *filename)
 				disp->flags);
 		if (count < 0) {
 			report_error("fdt_find_regions", count);
+			free(region);
 			return -1;
 		}
 		if (count <= max_regions)
 			break;
+	}
+	if (count > max_regions) {
 		free(region);
+		fprintf(stderr, "Internal error with fdtgrep_find_region()\n");
+		return -1;
 	}
 
 	/* Optionally print a list of regions */
@@ -906,7 +923,9 @@ static const char usage_synopsis[] =
 /* Helper for getopt case statements */
 #define case_USAGE_COMMON_FLAGS \
 	case 'h': usage(NULL); \
+	/* fallthrough */ \
 	case 'V': util_version(); \
+	/* fallthrough */ \
 	case '?': usage("unknown option");
 
 static const char usage_short_opts[] =
@@ -1068,6 +1087,7 @@ static void scan_args(struct display_info *disp, int argc, char *argv[])
 
 		switch (opt) {
 		case_USAGE_COMMON_FLAGS
+		/* fallthrough */
 		case 'a':
 			disp->show_addr = 1;
 			break;
@@ -1079,7 +1099,7 @@ static void scan_args(struct display_info *disp, int argc, char *argv[])
 			break;
 		case 'C':
 			inc = 0;
-			/* no break */
+			/* fallthrough */
 		case 'c':
 			type = FDT_IS_COMPAT;
 			break;
@@ -1094,7 +1114,7 @@ static void scan_args(struct display_info *disp, int argc, char *argv[])
 			break;
 		case 'G':
 			inc = 0;
-			/* no break */
+			/* fallthrough */
 		case 'g':
 			type = FDT_ANY_GLOBAL;
 			break;
@@ -1112,7 +1132,7 @@ static void scan_args(struct display_info *disp, int argc, char *argv[])
 			break;
 		case 'N':
 			inc = 0;
-			/* no break */
+			/* fallthrough */
 		case 'n':
 			type = FDT_IS_NODE;
 			break;
@@ -1131,7 +1151,7 @@ static void scan_args(struct display_info *disp, int argc, char *argv[])
 			break;
 		case 'P':
 			inc = 0;
-			/* no break */
+			/* fallthrough */
 		case 'p':
 			type = FDT_IS_PROP;
 			break;

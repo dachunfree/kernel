@@ -1,8 +1,7 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * (C) Copyright 2007
  * DENX Software Engineering, Anatolij Gustschin, agust@denx.de
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 /*
@@ -11,8 +10,10 @@
  */
 
 #include <common.h>
+#include <linux/delay.h>
 
 #include <asm/io.h>
+#include <env.h>
 #include <pci.h>
 #include <video_fb.h>
 #include "videomodes.h"
@@ -79,7 +80,7 @@ static void gdc_sw_reset (void)
 	GraphicDevice *dev = &mb862xx;
 
 	HOST_WR_REG (GC_SRST, 0x1);
-	udelay (500);
+	udelay(500);
 	video_hw_init ();
 }
 
@@ -222,9 +223,9 @@ unsigned int pci_video_init (void)
 
 	/* Setup clocks and memory mode for Coral-P(A) */
 	HOST_WR_REG(GC_CCF, CONFIG_SYS_MB862xx_CCF);
-	udelay (200);
+	udelay(200);
 	HOST_WR_REG(GC_MMR, CONFIG_SYS_MB862xx_MMR);
-	udelay (100);
+	udelay(100);
 	return dev->frameAdrs;
 }
 
@@ -246,7 +247,8 @@ unsigned int card_init (void)
 	tmp = 0;
 	videomode = 0x310;
 	/* get video mode via environment */
-	if ((penv = getenv ("videomode")) != NULL) {
+	penv = env_get("videomode");
+	if (penv) {
 		/* decide if it is a string */
 		if (penv[0] <= '9') {
 			videomode = (int) simple_strtoul (penv, NULL, 16);

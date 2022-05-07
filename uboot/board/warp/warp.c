@@ -1,26 +1,26 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * Copyright (C) 2014, 2015 O.S. Systems Software LTDA.
  * Copyright (C) 2014 Kynetics LLC.
  * Copyright (C) 2014 Revolution Robotics, Inc.
  *
  * Author: Otavio Salvador <otavio@ossystems.com.br>
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
+#include <init.h>
 #include <asm/arch/clock.h>
 #include <asm/arch/iomux.h>
 #include <asm/arch/imx-regs.h>
 #include <asm/arch/mx6-pins.h>
 #include <asm/arch/sys_proto.h>
 #include <asm/gpio.h>
-#include <asm/imx-common/iomux-v3.h>
-#include <asm/imx-common/mxc_i2c.h>
+#include <asm/mach-imx/iomux-v3.h>
+#include <asm/mach-imx/mxc_i2c.h>
 #include <asm/io.h>
 #include <linux/sizes.h>
 #include <common.h>
 #include <watchdog.h>
-#include <fsl_esdhc.h>
+#include <fsl_esdhc_imx.h>
 #include <i2c.h>
 #include <mmc.h>
 #include <usb.h>
@@ -46,7 +46,7 @@ DECLARE_GLOBAL_DATA_PTR;
 
 int dram_init(void)
 {
-	gd->ram_size = get_ram_size((void *)PHYS_SDRAM, PHYS_SDRAM_SIZE);
+	gd->ram_size = imx_ddr_size();
 
 	return 0;
 }
@@ -62,7 +62,7 @@ static void setup_iomux_uart(void)
 }
 
 static struct fsl_esdhc_cfg usdhc_cfg[1] = {
-	{USDHC2_BASE_ADDR},
+	{USDHC2_BASE_ADDR, 0, 0, 0, 1},
 };
 
 int board_mmc_getcd(struct mmc *mmc)
@@ -70,7 +70,7 @@ int board_mmc_getcd(struct mmc *mmc)
 	return 1;	/* Assume boot SD always present */
 }
 
-int board_mmc_init(bd_t *bis)
+int board_mmc_init(struct bd_info *bis)
 {
 	static iomux_v3_cfg_t const usdhc2_pads[] = {
 		MX6_PAD_SD2_CLK__USDHC2_CLK | MUX_PAD_CTRL(USDHC_PAD_CTRL),

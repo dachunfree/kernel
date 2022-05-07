@@ -1,16 +1,32 @@
+/* SPDX-License-Identifier: GPL-2.0+ */
 /*
  * K2G EVM: Pinmux configuration
  *
  * (C) Copyright 2015
  *     Texas Instruments Incorporated, <www.ti.com>
- *
- * SPDX-License-Identifier:     GPL-2.0+
  */
 
 #include <common.h>
+#include <hang.h>
 #include <asm/io.h>
 #include <asm/arch/mux-k2g.h>
 #include <asm/arch/hardware.h>
+#include "board.h"
+
+struct pin_cfg k2g_generic_pin_cfg[] = {
+	/* UART0 */
+	{ 115,  MODE(0) },	/* SOC_UART0_RXD */
+	{ 116,  MODE(0) },	/* SOC_UART0_TXD */
+
+	/* I2C 0 */
+	{ 223,  MODE(0) },	/* SOC_I2C0_SCL */
+	{ 224,  MODE(0) },	/* SOC_I2C0_SDA */
+
+	/* I2C 1 */
+	{ 225,  MODE(0) },	/* SOC_I2C1_SCL */
+	{ 226,  MODE(0) },	/* SOC_I2C1_SDA */
+	{ MAX_PIN_N, }
+};
 
 struct pin_cfg k2g_evm_pin_cfg[] = {
 	/* GPMC */
@@ -110,21 +126,23 @@ struct pin_cfg k2g_evm_pin_cfg[] = {
 	{ 70,	MODE(0) },	/* SOC_MMC1_SDWP */
 	{ 71,	MODE(0) },	/* MMC1POW TP124 */
 
-	/* RGMII */
-	{ 72,	MODE(1) | PIN_IEN },	/* SOC_RGMII_RXCLK */
-	{ 77,	MODE(1) | PIN_IEN },	/* SOC_RGMII_RXD3 */
-	{ 78,	MODE(1) | PIN_IEN },	/* SOC_RGMII_RXD2 */
-	{ 79,	MODE(1) | PIN_IEN },	/* SOC_RGMII_RXD1 */
-	{ 80,	MODE(1) | PIN_IEN },	/* SOC_RGMII_RXD0 */
-	{ 81,	MODE(1) | PIN_IEN },	/* SOC_RGMII_RXCTL */
-	{ 85,	MODE(1) },	/* SOC_RGMII_TXCLK */
-	{ 91,	MODE(1)	},	/* SOC_RGMII_TXD3 */
-	{ 92,	MODE(1) },	/* SOC_RGMII_TXD2 */
-	{ 93,	MODE(1) },	/* SOC_RGMII_TXD1 */
-	{ 94,	MODE(1) },	/* SOC_RGMII_TXD0 */
-	{ 95,	MODE(1) },	/* SOC_RGMII_TXCTL */
-	{ 98,	MODE(0) },	/* SOC_MDIO_DATA */
-	{ 99,	MODE(0) },	/* SOC_MDIO_CLK */
+		/* EMAC */
+	{ 72,	BUFFER_CLASS_D | PIN_PDIS | MODE(1) },	/* RGMII_RXC */
+	{ 77,	BUFFER_CLASS_D | PIN_PDIS | MODE(1) },	/* RGMII_RXD3 */
+	{ 78,	BUFFER_CLASS_D | PIN_PDIS | MODE(1) },	/* RGMII_RXD2 */
+	{ 79,	BUFFER_CLASS_D | PIN_PDIS | MODE(1) },	/* RGMII_RXD1 */
+	{ 80,	BUFFER_CLASS_D | PIN_PDIS | MODE(1) },	/* RGMII_RXD0 */
+	{ 81,	BUFFER_CLASS_D | PIN_PDIS | MODE(1) },	/* RGMII_RXCTL */
+	{ 85,	BUFFER_CLASS_D | PIN_PDIS | MODE(1) },	/* RGMII_TXC */
+	{ 91,	BUFFER_CLASS_D | PIN_PDIS | MODE(1) },	/* RGMII_TXD3 */
+	{ 92,	BUFFER_CLASS_D | PIN_PDIS | MODE(1) },	/* RGMII_TXD2 */
+	{ 93,	BUFFER_CLASS_D | PIN_PDIS | MODE(1) },	/* RGMII_TXD1 */
+	{ 94,	BUFFER_CLASS_D | PIN_PDIS | MODE(1) },	/* RGMII_TXD0 */
+	{ 95,	BUFFER_CLASS_D | PIN_PDIS | MODE(1) },	/* RGMII_TXCTL */
+
+	/* MDIO */
+	{ 98,	BUFFER_CLASS_B | PIN_PDIS | MODE(0) },	/* MDIO_DATA */
+	{ 99,	BUFFER_CLASS_B | PIN_PDIS | MODE(0) },	/* MDIO_CLK */
 
 	/* PWM */
 	{ 73,	MODE(4) },	/* SOC_EHRPWM3A */
@@ -307,7 +325,62 @@ struct pin_cfg k2g_evm_pin_cfg[] = {
 	{ MAX_PIN_N, }
 };
 
+struct pin_cfg k2g_ice_evm_pin_cfg[] = {
+	/* MMC 1 */
+	{ 63, MODE(0) | PIN_PTD },	/* MMC1_DAT3.MMC1_DAT3 */
+	{ 64, MODE(0) | PIN_PTU },	/* MMC1_DAT2.MMC1_DAT2 */
+	{ 65, MODE(0) | PIN_PTU },	/* MMC1_DAT1.MMC1_DAT1 */
+	{ 66, MODE(0) | PIN_PTD },	/* MMC1_DAT0.MMC1_DAT0 */
+	{ 67, MODE(0) | PIN_PTD },	/* MMC1_CLK.MMC1_CLK   */
+	{ 68, MODE(0) | PIN_PTD },	/* MMC1_CMD.MMC1_CMD   */
+	{ 69, MODE(3) | PIN_PTU },	/* MMC1_SDCD.GPIO0_69  */
+	{ 70, MODE(0) | PIN_PTU },	/* MMC1_SDWP.MMC1_SDWP */
+	{ 71, MODE(0) | PIN_PTD },	/* MMC1_POW.MMC1_POW   */
+
+	/* I2C 0 */
+	{ 223,  MODE(0) },		/* SOC_I2C0_SCL */
+	{ 224,  MODE(0) },		/* SOC_I2C0_SDA */
+
+	/* QSPI */
+	{ 129,	MODE(0) },	/* SOC_QSPI_CLK */
+	{ 130,	MODE(0) },	/* SOC_QSPI_RTCLK */
+	{ 131,	MODE(0) },	/* SOC_QSPI_D0 */
+	{ 132,	MODE(0) },	/* SOC_QSPI_D1 */
+	{ 133,	MODE(0) },	/* SOC_QSPI_D2 */
+	{ 134,	MODE(0) },	/* SOC_QSPI_D3 */
+	{ 135,	MODE(0) },	/* SOC_QSPI_CSN0 */
+
+	/* EMAC */
+	{ 72,	BUFFER_CLASS_D | PIN_PDIS | MODE(1) },	/* RGMII_RXC */
+	{ 77,	BUFFER_CLASS_D | PIN_PDIS | MODE(1) },	/* RGMII_RXD3 */
+	{ 78,	BUFFER_CLASS_D | PIN_PDIS | MODE(1) },	/* RGMII_RXD2 */
+	{ 79,	BUFFER_CLASS_D | PIN_PDIS | MODE(1) },	/* RGMII_RXD1 */
+	{ 80,	BUFFER_CLASS_D | PIN_PDIS | MODE(1) },	/* RGMII_RXD0 */
+	{ 81,	BUFFER_CLASS_D | PIN_PDIS | MODE(1) },	/* RGMII_RXCTL */
+	{ 85,	BUFFER_CLASS_D | PIN_PDIS | MODE(1) },	/* RGMII_TXC */
+	{ 91,	BUFFER_CLASS_D | PIN_PDIS | MODE(1) },	/* RGMII_TXD3 */
+	{ 92,	BUFFER_CLASS_D | PIN_PDIS | MODE(1) },	/* RGMII_TXD2 */
+	{ 93,	BUFFER_CLASS_D | PIN_PDIS | MODE(1) },	/* RGMII_TXD1 */
+	{ 94,	BUFFER_CLASS_D | PIN_PDIS | MODE(1) },	/* RGMII_TXD0 */
+	{ 95,	BUFFER_CLASS_D | PIN_PDIS | MODE(1) },	/* RGMII_TXCTL */
+
+	/* MDIO */
+	{ 98,	BUFFER_CLASS_B | PIN_PDIS | MODE(0) },	/* MDIO_DATA */
+	{ 99,	BUFFER_CLASS_B | PIN_PDIS | MODE(0) },	/* MDIO_CLK */
+
+	{ MAX_PIN_N, }
+};
+
 void k2g_mux_config(void)
 {
-	configure_pin_mux(k2g_evm_pin_cfg);
+	if (!board_ti_was_eeprom_read()) {
+		configure_pin_mux(k2g_generic_pin_cfg);
+	} else if (board_is_k2g_gp() || board_is_k2g_g1()) {
+		configure_pin_mux(k2g_evm_pin_cfg);
+	} else if (board_is_k2g_ice()) {
+		configure_pin_mux(k2g_ice_evm_pin_cfg);
+	} else {
+		puts("Unknown board, cannot configure pinmux.");
+		hang();
+	}
 }

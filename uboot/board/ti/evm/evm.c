@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * (C) Copyright 2004-2011
  * Texas Instruments, <www.ti.com>
@@ -8,25 +9,30 @@
  * Derived from Beagle Board and 3430 SDP code by
  *	Richard Woodruff <r-woodruff2@ti.com>
  *	Syed Mohammed Khasim <khasim@ti.com>
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 #include <common.h>
-#include <netdev.h>
+#include <dm.h>
+#include <env.h>
+#include <init.h>
+#include <net.h>
+#include <ns16550.h>
+#include <serial.h>
 #include <asm/io.h>
 #include <asm/arch/mem.h>
 #include <asm/arch/mux.h>
 #include <asm/arch/sys_proto.h>
 #include <asm/arch/mmc_host_def.h>
 #include <asm/gpio.h>
-#include <i2c.h>
 #include <twl4030.h>
 #include <asm/mach-types.h>
-#include <linux/mtd/nand.h>
+#include <linux/delay.h>
+#include <linux/mtd/rawnand.h>
 #include "evm.h"
 
-#define OMAP3EVM_GPIO_ETH_RST_GEN1		64
-#define OMAP3EVM_GPIO_ETH_RST_GEN2		7
+#define OMAP3EVM_GPIO_ETH_RST_GEN1 64
+#define OMAP3EVM_GPIO_ETH_RST_GEN2 7
+
+#define CONFIG_SMC911X_BASE 0x2C000000
 
 DECLARE_GLOBAL_DATA_PTR;
 
@@ -39,7 +45,7 @@ u32 get_omap3_evm_rev(void)
 
 static void omap3_evm_get_revision(void)
 {
-#if defined(CONFIG_CMD_NET)
+#if defined(CONFIG_SMC911X)
 	/*
 	 * Board revision can be ascertained only by identifying
 	 * the Ethernet chipset.
@@ -60,25 +66,19 @@ static void omap3_evm_get_revision(void)
 	default:
 		omap3_evm_version = OMAP3EVM_BOARD_GEN_2;
        }
-#else
+#else /* !CONFIG_SMC911X */
 #if defined(CONFIG_STATIC_BOARD_REV)
-	/*
-	 * Look for static defintion of the board revision
-	 */
+	/* Look for static defintion of the board revision */
 	omap3_evm_version = CONFIG_STATIC_BOARD_REV;
 #else
-	/*
-	 * Fallback to the default above.
-	 */
+	/* Fallback to the default above */
 	omap3_evm_version = OMAP3EVM_BOARD_GEN_2;
-#endif
-#endif	/* CONFIG_CMD_NET */
+#endif /* CONFIG_STATIC_BOARD_REV */
+#endif /* CONFIG_SMC911X */
 }
 
-#ifdef CONFIG_USB_OMAP3
-/*
- * MUSB port on OMAP3EVM Rev >= E requires extvbus programming.
- */
+#if defined(CONFIG_USB_MUSB_GADGET) || defined(CONFIG_USB_MUSB_HOST)
+/* MUSB port on OMAP3EVM Rev >= E requires extvbus programming. */
 u8 omap3_evm_need_extvbus(void)
 {
 	u8 retval = 0;
@@ -88,7 +88,7 @@ u8 omap3_evm_need_extvbus(void)
 
 	return retval;
 }
-#endif
+#endif /* CONFIG_USB_MUSB_{GADGET,HOST} */
 
 /*
  * Routine: board_init
@@ -105,7 +105,18 @@ int board_init(void)
 	return 0;
 }
 
-#ifdef CONFIG_SPL_BUILD
+#if defined(CONFIG_SPL_OS_BOOT)
+int spl_start_uboot(void)
+{
+	/* break into full u-boot on 'c' */
+	if (serial_tstc() && serial_getc() == 'c')
+		return 1;
+
+	return 0;
+}
+#endif /* CONFIG_SPL_OS_BOOT */
+
+#if defined(CONFIG_SPL_BUILD)
 /*
  * Routine: get_board_mem_timings
  * Description: If we use SPL then there is no x-loader nor config header
@@ -138,7 +149,7 @@ void get_board_mem_timings(struct board_sdrc_timings *timings)
 	timings->rfr_ctrl = SDP_3430_SDRC_RFR_CTRL_165MHz;
 	timings->mr = MICRON_V_MR_165;
 }
-#endif
+#endif /* CONFIG_SPL_BUILD */
 
 /*
  * Routine: misc_init_r
@@ -146,21 +157,22 @@ void get_board_mem_timings(struct board_sdrc_timings *timings)
  */
 int misc_init_r(void)
 {
+	twl4030_power_init();
 
-#ifdef CONFIG_SYS_I2C_OMAP34XX
-	i2c_init(CONFIG_SYS_OMAP24_I2C_SPEED, CONFIG_SYS_OMAP24_I2C_SLAVE);
-#endif
-
-#if defined(CONFIG_CMD_NET)
+#if defined(CONFIG_SMC911X)
 	setup_net_chip();
 #endif
 	omap3_evm_get_revision();
 
-#if defined(CONFIG_CMD_NET)
+#if defined(CONFIG_SMC911X)
 	reset_net_chip();
 #endif
 	omap_die_id_display();
 
+#if defined(CONFIG_USB_ETHER) && defined(CONFIG_USB_MUSB_GADGET) && \
+						!defined(CONFIG_SMC911X)
+	omap_die_id_usbethaddr();
+#endif
 	return 0;
 }
 
@@ -175,7 +187,7 @@ void set_muxconf_regs(void)
 	MUX_EVM();
 }
 
-#ifdef CONFIG_CMD_NET
+#if defined(CONFIG_SMC911X)
 /*
  * Routine: setup_net_chip
  * Description: Setting up the configuration GPMC registers specific to the
@@ -233,42 +245,11 @@ static void reset_net_chip(void)
 	udelay(1);
 	gpio_set_value(rst_gpio, 1);
 }
+#endif /* CONFIG_SMC911X */
 
-int board_eth_init(bd_t *bis)
-{
-	int rc = 0;
-#ifdef CONFIG_SMC911X
-#define STR_ENV_ETHADDR	"ethaddr"
-
-	struct eth_device *dev;
-	uchar eth_addr[6];
-
-	rc = smc911x_initialize(0, CONFIG_SMC911X_BASE);
-
-	if (!eth_getenv_enetaddr(STR_ENV_ETHADDR, eth_addr)) {
-		dev = eth_get_dev_by_index(0);
-		if (dev) {
-			eth_setenv_enetaddr(STR_ENV_ETHADDR, dev->enetaddr);
-		} else {
-			printf("omap3evm: Couldn't get eth device\n");
-			rc = -1;
-		}
-	}
-#endif
-	return rc;
-}
-#endif /* CONFIG_CMD_NET */
-
-#if defined(CONFIG_GENERIC_MMC) && !defined(CONFIG_SPL_BUILD)
-int board_mmc_init(bd_t *bis)
-{
-	return omap_mmc_init(0, 0, 0, -1, -1);
-}
-#endif
-
-#if defined(CONFIG_GENERIC_MMC)
+#if defined(CONFIG_MMC)
 void board_mmc_power_init(void)
 {
 	twl4030_power_mmc_init(0);
 }
-#endif
+#endif /* CONFIG_MMC */

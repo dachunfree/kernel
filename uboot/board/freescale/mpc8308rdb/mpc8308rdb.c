@@ -1,15 +1,17 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * Copyright (C) 2010 Freescale Semiconductor, Inc.
  * Copyright (C) 2010 Ilya Yanok, Emcraft Systems, yanok@emcraft.com
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
 #include <hwconfig.h>
 #include <i2c.h>
+#include <init.h>
+#include <net.h>
 #include <spi.h>
-#include <libfdt.h>
+#include <linux/delay.h>
+#include <linux/libfdt.h>
 #include <fdt_support.h>
 #include <pci.h>
 #include <mpc83xx.h>
@@ -19,8 +21,6 @@
 #include <asm/io.h>
 #include <asm/fsl_serdes.h>
 #include <asm/fsl_mpc83xx_serdes.h>
-
-DECLARE_GLOBAL_DATA_PTR;
 
 /*
  * The following are used to control the SPI chip selects for the SPI command.
@@ -52,7 +52,7 @@ void spi_cs_deactivate(struct spi_slave *slave)
 #endif /* CONFIG_MPC8XXX_SPI */
 
 #ifdef CONFIG_FSL_ESDHC
-int board_mmc_init(bd_t *bd)
+int board_mmc_init(struct bd_info *bd)
 {
 	return fsl_esdhc_mmc_init(bd);
 }
@@ -161,17 +161,17 @@ int misc_init_r(void)
 	return 0;
 }
 #if defined(CONFIG_OF_BOARD_SETUP)
-int ft_board_setup(void *blob, bd_t *bd)
+int ft_board_setup(void *blob, struct bd_info *bd)
 {
 	ft_cpu_setup(blob, bd);
-	fdt_fixup_dr_usb(blob, bd);
+	fsl_fdt_fixup_dr_usb(blob, bd);
 	fdt_fixup_esdhc(blob, bd);
 
 	return 0;
 }
 #endif
 
-int board_eth_init(bd_t *bis)
+int board_eth_init(struct bd_info *bis)
 {
 	int rv, num_if = 0;
 

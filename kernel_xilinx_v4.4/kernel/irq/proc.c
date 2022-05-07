@@ -478,22 +478,22 @@ int show_interrupts(struct seq_file *p, void *v)
 	if ((!action || irq_desc_is_chained(desc)) && !any_count)
 		goto out;
 
-	seq_printf(p, "%*d: ", prec, i);
+	seq_printf(p, "%*d: ", prec, i);  //1、打印逻辑中断号
 	for_each_online_cpu(j)
-		seq_printf(p, "%10u ", kstat_irqs_cpu(i, j));
+		seq_printf(p, "%10u ", kstat_irqs_cpu(i, j));  //2、打印中断次数
 
 	if (desc->irq_data.chip) {
 		if (desc->irq_data.chip->irq_print_chip)
 			desc->irq_data.chip->irq_print_chip(&desc->irq_data, p);
 		else if (desc->irq_data.chip->name)
-			seq_printf(p, " %8s", desc->irq_data.chip->name);
+			seq_printf(p, " %8s", desc->irq_data.chip->name);  //3、打印中断名称
 		else
 			seq_printf(p, " %8s", "-");
 	} else {
 		seq_printf(p, " %8s", "None");
 	}
 	if (desc->irq_data.domain)
-		seq_printf(p, " %*d", prec, (int) desc->irq_data.hwirq);
+		seq_printf(p, " %*d", prec, (int) desc->irq_data.hwirq);  //4、打印硬件中断号，
 #ifdef CONFIG_GENERIC_IRQ_SHOW_LEVEL
 	seq_printf(p, " %-8s", irqd_is_level_type(&desc->irq_data) ? "Level" : "Edge");
 #endif

@@ -17,6 +17,7 @@
 #include "yaffscfg.h"
 #include "yportenv.h"
 #include "yaffs_trace.h"
+#include <dm/devres.h>
 
 #define YAFFSFS_MAX_SYMLINK_DEREFERENCES 5
 
@@ -2847,12 +2848,9 @@ static void yaffsfs_RemoveObjectCallback(struct yaffs_obj *obj)
 	 * the next one to prevent a hanging ptr.
 	 */
 	list_for_each(i, &search_contexts) {
-		if (i) {
-			dsc = list_entry(i, struct yaffsfs_DirSearchContxt,
-					 others);
-			if (dsc->nextReturn == obj)
-				yaffsfs_DirAdvance(dsc);
-		}
+		dsc = list_entry(i, struct yaffsfs_DirSearchContxt, others);
+		if (dsc->nextReturn == obj)
+			yaffsfs_DirAdvance(dsc);
 	}
 
 }
@@ -3018,7 +3016,7 @@ int yaffs_symlink(const YCHAR *oldpath, const YCHAR *newpath)
 		yaffsfs_SetError(-ENFILE);
 	else if (parent->my_dev->read_only)
 		yaffsfs_SetError(-EROFS);
-	else if (parent) {
+	else {
 		obj = yaffs_create_symlink(parent, name, mode, 0, 0, oldpath);
 		if (obj)
 			retVal = 0;

@@ -1,24 +1,19 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * Copyright (C) 2015 Google, Inc
  * Written by Simon Glass <sjg@chromium.org>
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
 #include <dm.h>
+#include <log.h>
 #include <video_bridge.h>
 
 static int ptn3460_attach(struct udevice *dev)
 {
-	int ret;
-
 	debug("%s: %s\n", __func__, dev->name);
-	ret = video_bridge_set_active(dev, true);
-	if (ret)
-		return ret;
 
-	return 0;
+	return video_bridge_set_active(dev, true);
 }
 
 struct video_bridge_ops ptn3460_ops = {

@@ -1,15 +1,14 @@
+/* SPDX-License-Identifier: GPL-2.0+ */
 /*
  * Copyright (c) 2014 Xilinx, Inc. Michal Simek
  * Copyright (c) 2004-2008 Texas Instruments
  *
  * (C) Copyright 2002
  * Gary Jennejohn, DENX Software Engineering, <garyj@denx.de>
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
-MEMORY { .sram : ORIGIN = CONFIG_SPL_TEXT_BASE,\
-		LENGTH = CONFIG_SPL_MAX_SIZE }
+MEMORY { .sram : ORIGIN = IMAGE_TEXT_BASE,\
+		LENGTH = IMAGE_MAX_SIZE }
 MEMORY { .sdram : ORIGIN = CONFIG_SPL_BSS_START_ADDR, \
 		LENGTH = CONFIG_SPL_BSS_MAX_SIZE }
 
@@ -38,16 +37,11 @@ SECTIONS
 	} > .sram
 
 	. = ALIGN(4);
-#ifdef CONFIG_SPL_DM
 	.u_boot_list : {
-		KEEP(*(SORT(.u_boot_list_*_driver_*)));
-		KEEP(*(SORT(.u_boot_list_*_uclass_*)));
+		KEEP(*(SORT(.u_boot_list*)));
 	} > .sram
 
 	. = ALIGN(4);
-#endif
-
-	. = .;
 
 	_image_binary_end = .;
 

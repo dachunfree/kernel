@@ -1,11 +1,12 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * Copyright 2014 Freescale Semiconductor, Inc.
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
-#include <libfdt.h>
+#include <clock_legacy.h>
+#include <net.h>
+#include <linux/libfdt.h>
 #include <fdt_support.h>
 #include <asm/io.h>
 #include <asm/processor.h>
@@ -17,12 +18,17 @@
 #include <tsec.h>
 #include <asm/arch/immap_ls102xa.h>
 #include <fsl_sec.h>
+#include <dm.h>
 
 DECLARE_GLOBAL_DATA_PTR;
 
 void ft_fixup_enet_phy_connect_type(void *fdt)
 {
+#ifdef CONFIG_DM_ETH
+	struct udevice *dev;
+#else
 	struct eth_device *dev;
+#endif
 	struct tsec_private *priv;
 	const char *enet_path, *phy_path;
 	char enet[16];
@@ -30,17 +36,18 @@ void ft_fixup_enet_phy_connect_type(void *fdt)
 	int phy_node;
 	int i = 0;
 	uint32_t ph;
+#ifdef CONFIG_DM_ETH
+	char *name[3] = { "ethernet@2d10000", "ethernet@2d50000",
+			  "ethernet@2d90000" };
+#else
+	char *name[3] = { "eTSEC1", "eTSEC2", "eTSEC3" };
+#endif
 
-	while ((dev = eth_get_dev_by_index(i++)) != NULL) {
-		if (strstr(dev->name, "eTSEC1")) {
-			strcpy(enet, "ethernet0");
-			strcpy(phy, "enet0_rgmii_phy");
-		} else if (strstr(dev->name, "eTSEC2")) {
-			strcpy(enet, "ethernet1");
-			strcpy(phy, "enet1_rgmii_phy");
-		} else if (strstr(dev->name, "eTSEC3")) {
-			strcpy(enet, "ethernet2");
-			strcpy(phy, "enet2_rgmii_phy");
+	for (; i < ARRAY_SIZE(name); i++) {
+		dev = eth_get_dev_by_name(name[i]);
+		if (dev) {
+			sprintf(enet, "ethernet%d", i);
+			sprintf(phy, "enet%d_rgmii_phy", i);
 		} else {
 			continue;
 		}
@@ -69,13 +76,13 @@ void ft_fixup_enet_phy_connect_type(void *fdt)
 		do_fixup_by_path(fdt, enet_path, "phy-connection-type",
 				 phy_string_for_interface(
 				 PHY_INTERFACE_MODE_RGMII_ID),
-				 sizeof(phy_string_for_interface(
-				 PHY_INTERFACE_MODE_RGMII_ID)),
+				 strlen(phy_string_for_interface(
+				 PHY_INTERFACE_MODE_RGMII_ID)) + 1,
 				 1);
 	}
 }
 
-void ft_cpu_setup(void *blob, bd_t *bd)
+void ft_cpu_setup(void *blob, struct bd_info *bd)
 {
 	int off;
 	int val;
@@ -97,8 +104,6 @@ void ft_cpu_setup(void *blob, bd_t *bd)
 		fdt_fixup_crypto_node(blob, sec_in32(&sec->secvid_ms));
 	}
 #endif
-
-	fdt_fixup_ethernet(blob);
 
 	off = fdt_node_offset_by_prop_value(blob, -1, "device_type", "cpu", 4);
 	while (off != -FDT_ERR_NOTFOUND) {

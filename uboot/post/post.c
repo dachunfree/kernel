@@ -1,22 +1,22 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * (C) Copyright 2002
  * Wolfgang Denk, DENX Software Engineering, wd@denx.de.
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
+#include <bootstage.h>
+#include <env.h>
+#include <log.h>
+#include <malloc.h>
 #include <stdio_dev.h>
+#include <time.h>
 #include <watchdog.h>
 #include <div64.h>
 #include <post.h>
 
 #ifdef CONFIG_SYS_POST_HOTKEYS_GPIO
 #include <asm/gpio.h>
-#endif
-
-#ifdef CONFIG_LOGBUFFER
-#include <logbuff.h>
 #endif
 
 DECLARE_GLOBAL_DATA_PTR;
@@ -180,7 +180,7 @@ static void post_get_env_flags(int *test_flags)
 	int i, j;
 
 	for (i = 0; i < varnum; i++) {
-		if (getenv_f(var[i], list, sizeof(list)) <= 0)
+		if (env_get_f(var[i], list, sizeof(list)) <= 0)
 			continue;
 
 		for (j = 0; j < post_list_size; j++)
@@ -189,7 +189,7 @@ static void post_get_env_flags(int *test_flags)
 		last = 0;
 		name = list;
 		while (!last) {
-			while (*name && *name == ' ')
+			while (*name == ' ')
 				name++;
 			if (*name == 0)
 				break;
@@ -407,13 +407,8 @@ int post_log(char *format, ...)
 	vsprintf(printbuffer, format, args);
 	va_end(args);
 
-#ifdef CONFIG_LOGBUFFER
-	/* Send to the logbuffer */
-	logbuff_log(printbuffer);
-#else
 	/* Send to the stdout file */
 	puts(printbuffer);
-#endif
 
 	return 0;
 }
@@ -474,7 +469,7 @@ void post_reloc(void)
  */
 unsigned long post_time_ms(unsigned long base)
 {
-#if defined(CONFIG_PPC) || defined(CONFIG_BLACKFIN) || defined(CONFIG_ARM)
+#if defined(CONFIG_PPC) || defined(CONFIG_ARM)
 	return (unsigned long)lldiv(get_ticks(), get_tbclk() / CONFIG_SYS_HZ)
 		- base;
 #else

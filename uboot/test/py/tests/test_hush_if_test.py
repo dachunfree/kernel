@@ -1,12 +1,17 @@
-# Copyright (c) 2015-2016, NVIDIA CORPORATION. All rights reserved.
-#
 # SPDX-License-Identifier: GPL-2.0
+# Copyright (c) 2015-2016, NVIDIA CORPORATION. All rights reserved.
 
 # Test operation of the "if" shell command.
 
 import os
 import os.path
 import pytest
+
+# TODO: These tests should be converted to a C test.
+# For more information please take a look at the thread
+# https://lists.denx.de/pipermail/u-boot/2019-October/388732.html
+
+pytestmark = pytest.mark.buildconfigspec('hush_parser')
 
 # The list of "if test" conditions to test.
 subtests = (
@@ -50,6 +55,33 @@ subtests = (
     ('test 456 -ge 123', True),
     ('test 123 -ge 123', True),
     ('test 123 -ge 456', False),
+
+    # Octal tests
+
+    ('test 010 -eq 010', True),
+    ('test 010 -eq 011', False),
+
+    ('test 010 -ne 011', True),
+    ('test 010 -ne 010', False),
+
+    # Hexadecimal tests
+
+    ('test 0x2000000 -gt 0x2000001', False),
+    ('test 0x2000000 -gt 0x2000000', False),
+    ('test 0x2000000 -gt 0x1ffffff', True),
+
+    # Mixed tests
+
+    ('test 010 -eq 10', False),
+    ('test 010 -ne 10', True),
+    ('test 0xa -eq 10', True),
+    ('test 0xa -eq 012', True),
+
+    ('test 2000000 -gt 0x1ffffff', False),
+    ('test 0x2000000 -gt 1ffffff', True),
+    ('test 0x2000000 -lt 1ffffff', False),
+    ('test 0x2000000 -eq 2000000', False),
+    ('test 0x2000000 -ne 2000000', True),
 
     ('test -z ""', True),
     ('test -z "aaa"', False),
@@ -95,38 +127,44 @@ subtests = (
 )
 
 def exec_hush_if(u_boot_console, expr, result):
-    '''Execute a shell "if" command, and validate its result.'''
+    """Execute a shell "if" command, and validate its result."""
+
+    config = u_boot_console.config.buildconfig
+    maxargs = int(config.get('config_sys_maxargs', '0'))
+    args = len(expr.split(' ')) - 1
+    if args > maxargs:
+        u_boot_console.log.warning('CONFIG_SYS_MAXARGS too low; need ' +
+            str(args))
+        pytest.skip()
 
     cmd = 'if ' + expr + '; then echo true; else echo false; fi'
     response = u_boot_console.run_command(cmd)
     assert response.strip() == str(result).lower()
 
-@pytest.mark.buildconfigspec('sys_hush_parser')
 def test_hush_if_test_setup(u_boot_console):
-    '''Set up environment variables used during the "if" tests.'''
+    """Set up environment variables used during the "if" tests."""
 
     u_boot_console.run_command('setenv ut_var_nonexistent')
     u_boot_console.run_command('setenv ut_var_exists 1')
 
-@pytest.mark.buildconfigspec('sys_hush_parser')
+@pytest.mark.buildconfigspec('cmd_echo')
 @pytest.mark.parametrize('expr,result', subtests)
 def test_hush_if_test(u_boot_console, expr, result):
-    '''Test a single "if test" condition.'''
+    """Test a single "if test" condition."""
 
     exec_hush_if(u_boot_console, expr, result)
 
-@pytest.mark.buildconfigspec('sys_hush_parser')
 def test_hush_if_test_teardown(u_boot_console):
-    '''Clean up environment variables used during the "if" tests.'''
+    """Clean up environment variables used during the "if" tests."""
 
     u_boot_console.run_command('setenv ut_var_exists')
 
-@pytest.mark.buildconfigspec('sys_hush_parser')
 # We might test this on real filesystems via UMS, DFU, 'save', etc.
 # Of those, only UMS currently allows file removal though.
+@pytest.mark.buildconfigspec('cmd_echo')
 @pytest.mark.boardspec('sandbox')
 def test_hush_if_test_host_file_exists(u_boot_console):
-    '''Test the "if test -e" shell command.'''
+    """Test the "if test -e" shell command."""
 
     test_file = u_boot_console.config.result_dir + \
         '/creating_this_file_breaks_u_boot_tests'
@@ -141,7 +179,7 @@ def test_hush_if_test_host_file_exists(u_boot_console):
     exec_hush_if(u_boot_console, expr, False)
 
     try:
-        with file(test_file, 'wb'):
+        with open(test_file, 'wb'):
             pass
         assert os.path.exists(test_file)
 

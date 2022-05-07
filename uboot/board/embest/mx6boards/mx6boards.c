@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * Copyright (C) 2014 Eukréa Electromatique
  * Author: Eric Bénard <eric@eukrea.com>
@@ -9,25 +10,28 @@
  * and on hummingboard.c which is :
  * Copyright (C) 2013 SolidRun ltd.
  * Copyright (C) 2013 Jon Nettleton <jon.nettleton@gmail.com>.
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
+#include <common.h>
+#include <init.h>
+#include <net.h>
 #include <asm/arch/clock.h>
 #include <asm/arch/sys_proto.h>
 #include <asm/arch/imx-regs.h>
 #include <asm/arch/iomux.h>
 #include <asm/arch/mx6-pins.h>
-#include <asm/errno.h>
+#include <linux/delay.h>
+#include <linux/errno.h>
 #include <asm/gpio.h>
-#include <asm/imx-common/iomux-v3.h>
-#include <asm/imx-common/boot_mode.h>
-#include <asm/imx-common/mxc_i2c.h>
-#include <asm/imx-common/spi.h>
-#include <asm/imx-common/video.h>
+#include <asm/mach-imx/iomux-v3.h>
+#include <asm/mach-imx/boot_mode.h>
+#include <asm/mach-imx/mxc_i2c.h>
+#include <asm/mach-imx/spi.h>
+#include <asm/mach-imx/video.h>
 #include <i2c.h>
+#include <input.h>
 #include <mmc.h>
-#include <fsl_esdhc.h>
+#include <fsl_esdhc_imx.h>
 #include <miiphy.h>
 #include <netdev.h>
 #include <asm/arch/mxc_hdmi.h>
@@ -35,7 +39,7 @@
 #include <linux/fb.h>
 #include <ipu_pixfmt.h>
 #include <asm/io.h>
-#include <asm/arch/sys_proto.h>
+
 DECLARE_GLOBAL_DATA_PTR;
 
 #define UART_PAD_CTRL  (PAD_CTL_PUS_100K_UP |			\
@@ -181,7 +185,7 @@ iomux_v3_cfg_t const usdhc4_pads[] = {
 	MX6_PAD_NANDF_ALE__GPIO6_IO08 | MUX_PAD_CTRL(NO_PAD_CTRL),
 };
 
-#ifdef CONFIG_FSL_ESDHC
+#ifdef CONFIG_FSL_ESDHC_IMX
 struct fsl_esdhc_cfg usdhc_cfg[3] = {
 	{USDHC2_BASE_ADDR},
 	{USDHC3_BASE_ADDR},
@@ -214,14 +218,14 @@ int board_mmc_getcd(struct mmc *mmc)
 	return ret;
 }
 
-int board_mmc_init(bd_t *bis)
+int board_mmc_init(struct bd_info *bis)
 {
 	int ret;
 	int i;
 
 	/*
 	 * According to the board_mmc_init() the following map is done:
-	 * (U-boot device node)    (Physical Port)
+	 * (U-Boot device node)    (Physical Port)
 	 * ** RiOTboard :
 	 * mmc0                    SDCard slot (bottom)
 	 * mmc1                    uSDCard slot (top)
@@ -508,7 +512,7 @@ int overwrite_console(void)
 	return 1;
 }
 
-int board_eth_init(bd_t *bis)
+int board_eth_init(struct bd_info *bis)
 {
 	setup_iomux_enet();
 
@@ -608,3 +612,51 @@ int checkboard(void)
 
 	return 0;
 }
+
+#ifdef CONFIG_SPL_BUILD
+#include <spl.h>
+
+void board_init_f(ulong dummy)
+{
+	u32 cputype = cpu_type(get_cpu_rev());
+
+	switch (cputype) {
+	case MXC_CPU_MX6SOLO:
+		board_type = BOARD_IS_RIOTBOARD;
+		break;
+	case MXC_CPU_MX6D:
+		board_type = BOARD_IS_MARSBOARD;
+		break;
+	}
+	arch_cpu_init();
+
+	/* setup GP timer */
+	timer_init();
+
+#ifdef CONFIG_SPL_SERIAL_SUPPORT
+	setup_iomux_uart();
+	preloader_console_init();
+#endif
+}
+
+void board_boot_order(u32 *spl_boot_list)
+{
+	spl_boot_list[0] = BOOT_DEVICE_MMC1;
+}
+
+/*
+ * In order to jump to standard u-boot shell, you have to connect pin 5 of J13
+ * to pin 3 (ground).
+ */
+int spl_start_uboot(void)
+{
+	int gpio_key = IMX_GPIO_NR(4, 16);
+
+	gpio_direction_input(gpio_key);
+	if (gpio_get_value(gpio_key) == 0)
+		return 1;
+	else
+		return 0;
+}
+
+#endif

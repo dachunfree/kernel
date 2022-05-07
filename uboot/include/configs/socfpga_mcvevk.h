@@ -1,62 +1,36 @@
+/* SPDX-License-Identifier: GPL-2.0+ */
 /*
  * Copyright (C) 2015 Marek Vasut <marex@denx.de>
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
-#ifndef __CONFIG_DENX_MCVEVK_H__
-#define __CONFIG_DENX_MCVEVK_H__
+#ifndef __CONFIG_ARIES_MCVEVK_H__
+#define __CONFIG_ARIES_MCVEVK_H__
 
 #include <asm/arch/base_addr_ac5.h>
-
-/* U-Boot Commands */
-#define CONFIG_SYS_NO_FLASH
-#define CONFIG_DOS_PARTITION
-#define CONFIG_FAT_WRITE
-#define CONFIG_HW_WATCHDOG
-
-#define CONFIG_CMD_ASKENV
-#define CONFIG_CMD_BOOTZ
-#define CONFIG_CMD_CACHE
-#define CONFIG_CMD_DFU
-#define CONFIG_CMD_DHCP
-#define CONFIG_CMD_EXT4
-#define CONFIG_CMD_EXT4_WRITE
-#define CONFIG_CMD_FAT
-#define CONFIG_CMD_FS_GENERIC
-#define CONFIG_CMD_GREPENV
-#define CONFIG_CMD_MII
-#define CONFIG_CMD_MMC
-#define CONFIG_CMD_PING
-#define CONFIG_CMD_USB
-#define CONFIG_CMD_USB_MASS_STORAGE
 
 /* Memory configurations */
 #define PHYS_SDRAM_1_SIZE		0x40000000	/* 1GiB on MCV */
 
 /* Booting Linux */
-#define CONFIG_BOOTDELAY	3
 #define CONFIG_BOOTFILE		"fitImage"
-#define CONFIG_BOOTARGS		"console=ttyS0," __stringify(CONFIG_BAUDRATE)
-#define CONFIG_PREBOOT		"run try_bootscript"
 #define CONFIG_BOOTCOMMAND	"run mmc_mmc"
 #define CONFIG_LOADADDR		0x01000000
 #define CONFIG_SYS_LOAD_ADDR	CONFIG_LOADADDR
 
 /* Environment is in MMC */
-#define CONFIG_ENV_OVERWRITE
-#define CONFIG_ENV_IS_IN_MMC
 
 /* Extra Environment */
 #define CONFIG_EXTRA_ENV_SETTINGS					\
 	"consdev=ttyS0\0"						\
 	"baudrate=115200\0"						\
 	"bootscript=boot.scr\0"						\
-	"bootdev=/dev/mmcblk0p2\0"					\
-	"rootdev=/dev/mmcblk0p3\0"					\
+	"setuuid=part uuid mmc 0:3 uuid\0"				\
 	"netdev=eth0\0"							\
 	"hostname=mcvevk\0"						\
 	"kernel_addr_r=0x10000000\0"					\
-	"update_filename=u-boot-with-spl-dtb.sfp\0"			\
+	"socfpga_legacy_reset_compat=1\0"				\
+	"bootm_size=0xa000000\0"					\
+	"dfu_alt_info=mmc raw 0 3867148288\0"				\
+	"update_filename=u-boot-with-spl.sfp\0"				\
 	"update_sd_offset=0x800\0"					\
 	"update_sd="		/* Update the SD firmware partition */	\
 		"if mmc rescan ; then "					\
@@ -95,18 +69,18 @@
 	"netload="							\
 		"tftp ${kernel_addr_r} ${hostname}/${bootfile}\0"	\
 	"miscargs=nohlt panic=1\0"					\
-	"mmcargs=setenv bootargs root=${rootdev} rw rootwait\0"		\
+	"mmcargs=setenv bootargs root=PARTUUID=${uuid} rw rootwait\0"	\
 	"nfsargs="							\
 		"setenv bootargs root=/dev/nfs rw "			\
 			"nfsroot=${serverip}:${rootpath},v3,tcp\0"	\
 	"mmc_mmc="							\
-		"run mmcload mmcargs addargs ; "			\
+	"run mmcload setuuid mmcargs addargs ; "			\
 		"bootm ${kernel_addr_r}\0"				\
 	"mmc_nfs="							\
 		"run mmcload nfsargs addip addargs ; "			\
 		"bootm ${kernel_addr_r}\0"				\
 	"net_mmc="							\
-		"run netload mmcargs addargs ; "			\
+	"run netload setuuid mmcargs addargs ; "			\
 		"bootm ${kernel_addr_r}\0"				\
 	"net_nfs="							\
 		"run netload nfsargs addip addargs ; "			\
@@ -124,4 +98,4 @@
 /* The rest of the configuration is shared */
 #include <configs/socfpga_common.h>
 
-#endif	/* __CONFIG_DENX_MCVEVK_H__ */
+#endif	/* __CONFIG_ARIES_MCVEVK_H__ */

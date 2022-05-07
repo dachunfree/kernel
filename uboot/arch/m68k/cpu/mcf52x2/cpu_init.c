@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * (C) Copyright 2003
  * Josef Baumgartner <josef.baumgartner@telex.de>
@@ -14,11 +15,11 @@
  *
  * MCF5275 additions
  * Copyright (C) 2008 Arthur Shipkowski (art@videon-central.com)
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
+#include <cpu_func.h>
+#include <init.h>
 #include <watchdog.h>
 #include <asm/immap.h>
 #include <asm/io.h>
@@ -158,7 +159,7 @@ void uart_port_conf(int port)
 }
 
 #if defined(CONFIG_CMD_NET)
-int fecpin_setclear(struct eth_device *dev, int setclear)
+int fecpin_setclear(fec_info_t *info, int setclear)
 {
 	gpio_t *gpio = (gpio_t *) MMAP_GPIO;
 
@@ -305,7 +306,7 @@ void uart_port_conf(int port)
 }
 
 #if defined(CONFIG_CMD_NET)
-int fecpin_setclear(struct eth_device *dev, int setclear)
+int fecpin_setclear(fec_info_t *info, int setclear)
 {
 	if (setclear) {
 		/* Enable Ethernet pins */
@@ -317,18 +318,6 @@ int fecpin_setclear(struct eth_device *dev, int setclear)
 	return 0;
 }
 #endif				/* CONFIG_CMD_NET */
-
-#if defined(CONFIG_CF_QSPI)
-
-/* Configure PIOs for SIN, SOUT, and SCK */
-void cfspi_port_conf(void)
-{
-	mbar_writeByte(MCF_GPIO_PAR_QSPI,
-		       MCF_GPIO_PAR_QSPI_SIN_SIN   |
-		       MCF_GPIO_PAR_QSPI_SOUT_SOUT |
-		       MCF_GPIO_PAR_QSPI_SCK_SCK);
-}
-#endif				/* CONFIG_CF_QSPI */
 
 #endif				/* CONFIG_M5271 */
 
@@ -438,7 +427,7 @@ void uart_port_conf(int port)
 }
 
 #if defined(CONFIG_CMD_NET)
-int fecpin_setclear(struct eth_device *dev, int setclear)
+int fecpin_setclear(fec_info_t *info, int setclear)
 {
 	gpio_t *gpio = (gpio_t *) MMAP_GPIO;
 
@@ -521,14 +510,17 @@ void uart_port_conf(int port)
 }
 
 #if defined(CONFIG_CMD_NET)
-int fecpin_setclear(struct eth_device *dev, int setclear)
+int fecpin_setclear(fec_info_t *info, int setclear)
 {
-	struct fec_info_s *info = (struct fec_info_s *) dev->priv;
 	gpio_t *gpio = (gpio_t *)MMAP_GPIO;
+	u32 fec0_base;
+
+	if (fec_get_base_addr(0, &fec0_base))
+		return -1;
 
 	if (setclear) {
 		/* Enable Ethernet pins */
-		if (info->iobase == CONFIG_SYS_FEC0_IOBASE) {
+		if (info->iobase == fec0_base) {
 			setbits_be16(&gpio->par_feci2c, 0x0f00);
 			setbits_8(&gpio->par_fec0hl, 0xc0);
 		} else {
@@ -536,7 +528,7 @@ int fecpin_setclear(struct eth_device *dev, int setclear)
 			setbits_8(&gpio->par_fec1hl, 0xc0);
 		}
 	} else {
-		if (info->iobase == CONFIG_SYS_FEC0_IOBASE) {
+		if (info->iobase == fec0_base) {
 			clrbits_be16(&gpio->par_feci2c, 0x0f00);
 			clrbits_8(&gpio->par_fec0hl, 0xc0);
 		} else {
@@ -656,7 +648,7 @@ void uart_port_conf(int port)
 }
 
 #if defined(CONFIG_CMD_NET)
-int fecpin_setclear(struct eth_device *dev, int setclear)
+int fecpin_setclear(fec_info_t *info, int setclear)
 {
 	if (setclear) {
 		MCFGPIO_PASPAR |= 0x0F00;

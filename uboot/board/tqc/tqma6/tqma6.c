@@ -1,26 +1,28 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * Copyright (C) 2012 Freescale Semiconductor, Inc.
  * Author: Fabio Estevam <fabio.estevam@freescale.com>
  *
  * Copyright (C) 2013, 2014 TQ Systems (ported SabreSD to TQMa6x)
  * Author: Markus Niebel <markus.niebel@tq-group.com>
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
+#include <init.h>
 #include <asm/arch/clock.h>
 #include <asm/arch/mx6-pins.h>
 #include <asm/arch/imx-regs.h>
 #include <asm/arch/iomux.h>
 #include <asm/arch/sys_proto.h>
-#include <asm/errno.h>
+#include <env.h>
+#include <fdt_support.h>
+#include <linux/errno.h>
 #include <asm/gpio.h>
 #include <asm/io.h>
-#include <asm/imx-common/mxc_i2c.h>
-#include <asm/imx-common/spi.h>
+#include <asm/mach-imx/mxc_i2c.h>
+#include <asm/mach-imx/spi.h>
 #include <common.h>
-#include <fsl_esdhc.h>
-#include <libfdt.h>
+#include <fsl_esdhc_imx.h>
+#include <linux/libfdt.h>
 #include <i2c.h>
 #include <mmc.h>
 #include <power/pfuze100_pmic.h>
@@ -47,7 +49,7 @@ DECLARE_GLOBAL_DATA_PTR;
 	PAD_CTL_DSE_80ohm | PAD_CTL_SRE_FAST | PAD_CTL_HYS)
 
 #define I2C_PAD_CTRL	(PAD_CTL_PUS_100K_UP | PAD_CTL_SPEED_MED | \
-	PAD_CTL_DSE_40ohm | PAD_CTL_HYS |			\
+	PAD_CTL_DSE_80ohm | PAD_CTL_HYS |			\
 	PAD_CTL_ODE | PAD_CTL_SRE_FAST)
 
 int dram_init(void)
@@ -59,6 +61,7 @@ int dram_init(void)
 
 static const uint16_t tqma6_emmc_dsr = 0x0100;
 
+#ifndef CONFIG_DM_MMC
 /* eMMC on USDHCI3 always present */
 static iomux_v3_cfg_t const tqma6_usdhc3_pads[] = {
 	NEW_PAD_CTRL(MX6_PAD_SD3_CLK__SD3_CLK,		USDHC_PAD_CTRL),
@@ -77,7 +80,7 @@ static iomux_v3_cfg_t const tqma6_usdhc3_pads[] = {
 
 /*
  * According to board_mmc_init() the following map is done:
- * (U-boot device node)    (Physical Port)
+ * (U-Boot device node)    (Physical Port)
  * mmc0                    eMMC (SD3) on TQMa6
  * mmc1 .. n               optional slots used on baseboard
  */
@@ -114,7 +117,7 @@ int board_mmc_getwp(struct mmc *mmc)
 	return ret;
 }
 
-int board_mmc_init(bd_t *bis)
+int board_mmc_init(struct bd_info *bis)
 {
 	imx_iomux_v3_setup_multiple_pads(tqma6_usdhc3_pads,
 					 ARRAY_SIZE(tqma6_usdhc3_pads));
@@ -131,7 +134,9 @@ int board_mmc_init(bd_t *bis)
 
 	return 0;
 }
+#endif
 
+#ifndef CONFIG_DM_SPI
 static iomux_v3_cfg_t const tqma6_ecspi1_pads[] = {
 	/* SS1 */
 	NEW_PAD_CTRL(MX6_PAD_EIM_D19__GPIO3_IO19, SPI_PAD_CTRL),
@@ -156,12 +161,16 @@ __weak void tqma6_iomuxc_spi(void)
 					 ARRAY_SIZE(tqma6_ecspi1_pads));
 }
 
+#if defined(CONFIG_SF_DEFAULT_BUS) && defined(CONFIG_SF_DEFAULT_CS)
 int board_spi_cs_gpio(unsigned bus, unsigned cs)
 {
 	return ((bus == CONFIG_SF_DEFAULT_BUS) &&
 		(cs == CONFIG_SF_DEFAULT_CS)) ? TQMA6_SF_CS_GPIO : -1;
 }
+#endif
+#endif
 
+#ifdef CONFIG_SYS_I2C
 static struct i2c_pads_info tqma6_i2c3_pads = {
 	/* I2C3: on board LM75, M24C64,  */
 	.scl = {
@@ -191,6 +200,7 @@ static void tqma6_setup_i2c(void)
 	if (ret)
 		printf("setup I2C3 failed: %d\n", ret);
 }
+#endif
 
 int board_early_init_f(void)
 {
@@ -202,8 +212,12 @@ int board_init(void)
 	/* address of boot parameters */
 	gd->bd->bi_boot_params = PHYS_SDRAM + 0x100;
 
+#ifndef CONFIG_DM_SPI
 	tqma6_iomuxc_spi();
+#endif
+#ifdef CONFIG_SYS_I2C
 	tqma6_setup_i2c();
+#endif
 
 	tqma6_bb_board_init();
 
@@ -232,24 +246,28 @@ static const char *tqma6_get_boardname(void)
 	};
 }
 
-int board_late_init(void)
+#ifdef CONFIG_POWER
+/* setup board specific PMIC */
+int power_init_board(void)
 {
 	struct pmic *p;
-	u32 reg;
+	u32 reg, rev;
 
-	setenv("board_name", tqma6_get_boardname());
-
-	/*
-	 * configure PFUZE100 PMIC:
-	 * TODO: should go to power_init_board if bus switching is
-	 * fixed in generic power code
-	 */
 	power_pfuze100_init(TQMA6_PFUZE100_I2C_BUS);
 	p = pmic_get("PFUZE100");
 	if (p && !pmic_probe(p)) {
 		pmic_reg_read(p, PFUZE100_DEVICEID, &reg);
-		printf("PMIC: PFUZE100 ID=0x%02x\n", reg);
+		pmic_reg_read(p, PFUZE100_REVID, &rev);
+		printf("PMIC: PFUZE100 ID=0x%02x REV=0x%02x\n", reg, rev);
 	}
+
+	return 0;
+}
+#endif
+
+int board_late_init(void)
+{
+	env_set("board_name", tqma6_get_boardname());
 
 	tqma6_bb_board_late_init();
 
@@ -267,8 +285,15 @@ int checkboard(void)
  * Device Tree Support
  */
 #if defined(CONFIG_OF_BOARD_SETUP) && defined(CONFIG_OF_LIBFDT)
-int ft_board_setup(void *blob, bd_t *bd)
+#define MODELSTRLEN 32u
+int ft_board_setup(void *blob, struct bd_info *bd)
 {
+	char modelstr[MODELSTRLEN];
+
+	snprintf(modelstr, MODELSTRLEN, "TQ %s on %s", tqma6_get_boardname(),
+		 tqma6_bb_get_boardname());
+	do_fixup_by_path_string(blob, "/", "model", modelstr);
+	fdt_fixup_memory(blob, (u64)PHYS_SDRAM, (u64)gd->ram_size);
 	/* bring in eMMC dsr settings */
 	do_fixup_by_path_u32(blob,
 			     "/soc/aips-bus@02100000/usdhc@02198000",

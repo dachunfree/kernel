@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * Bluegiga APX4 Development Kit
  *
@@ -10,17 +11,19 @@
  * Based on m28evk.c:
  * Copyright (C) 2011 Marek Vasut <marek.vasut@gmail.com>
  * on behalf of DENX Software Engineering GmbH
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
+#include <init.h>
+#include <net.h>
 #include <asm/gpio.h>
 #include <asm/io.h>
+#include <asm/setup.h>
 #include <asm/arch/imx-regs.h>
 #include <asm/arch/iomux-mx28.h>
 #include <asm/arch/clock.h>
 #include <asm/arch/sys_proto.h>
+#include <env.h>
 #include <linux/mii.h>
 #include <miiphy.h>
 #include <netdev.h>
@@ -56,7 +59,7 @@ int board_init(void)
 }
 
 #ifdef CONFIG_CMD_MMC
-int board_mmc_init(bd_t *bis)
+int board_mmc_init(struct bd_info *bis)
 {
 	return mxsmmc_initialize(bis, 0, NULL, NULL);
 }
@@ -74,7 +77,7 @@ int fecmxc_mii_postcall(int phy)
 	return 0;
 }
 
-int board_eth_init(bd_t *bis)
+int board_eth_init(struct bd_info *bis)
 {
 	int ret;
 	struct eth_device *dev;
@@ -132,8 +135,8 @@ void get_board_serial(struct tag_serialnr *serialnr)
 #ifdef CONFIG_REVISION_TAG
 u32 get_board_rev(void)
 {
-	if (getenv("revision#") != NULL)
-		return simple_strtoul(getenv("revision#"), NULL, 10);
+	if (env_get("revision#") != NULL)
+		return simple_strtoul(env_get("revision#"), NULL, 10);
 	return 0;
 }
 #endif

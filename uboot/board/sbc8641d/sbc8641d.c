@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * Copyright 2007 Wind River Systemes, Inc. <www.windriver.com>
  * Copyright 2007 Embedded Specialties, Inc.
@@ -8,20 +9,23 @@
  * Srikanth Srinivasan (srikanth.srinivasan@freescale.com)
  *
  * (C) Copyright 2002 Scott McNutt <smcnutt@artesyncp.com>
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
 #include <command.h>
+#include <init.h>
+#include <log.h>
 #include <pci.h>
 #include <asm/processor.h>
 #include <asm/immap_86xx.h>
 #include <asm/fsl_pci.h>
 #include <fsl_ddr_sdram.h>
 #include <asm/fsl_serdes.h>
-#include <libfdt.h>
+#include <linux/delay.h>
+#include <linux/libfdt.h>
 #include <fdt_support.h>
+
+DECLARE_GLOBAL_DATA_PTR;
 
 long int fixed_sdram (void);
 
@@ -37,7 +41,7 @@ int checkboard (void)
 	return 0;
 }
 
-phys_size_t initdram (int board_type)
+int dram_init(void)
 {
 	long dram_size = 0;
 
@@ -47,12 +51,14 @@ phys_size_t initdram (int board_type)
 	dram_size = fixed_sdram ();
 #endif
 
-	debug ("    DDR: ");
-	return dram_size;
+	debug("    DDR: ");
+	gd->ram_size = dram_size;
+
+	return 0;
 }
 
 #if defined(CONFIG_SYS_DRAM_TEST)
-int testdram (void)
+int testdram(void)
 {
 	uint *pstart = (uint *) CONFIG_SYS_MEMTEST_START;
 	uint *pend = (uint *) CONFIG_SYS_MEMTEST_END;
@@ -118,12 +124,12 @@ long int fixed_sdram (void)
 
 	asm ("sync;isync");
 
-	udelay (500);
+	udelay(500);
 
 	ddr->sdram_cfg = CONFIG_SYS_DDR_CFG_1B;
 	asm ("sync; isync");
 
-	udelay (500);
+	udelay(500);
 	ddr = &immap->im_ddr2;
 
 	ddr->cs0_bnds = CONFIG_SYS_DDR2_CS0_BNDS;
@@ -149,12 +155,12 @@ long int fixed_sdram (void)
 
 	asm ("sync;isync");
 
-	udelay (500);
+	udelay(500);
 
 	ddr->sdram_cfg = CONFIG_SYS_DDR2_CFG_1B;
 	asm ("sync; isync");
 
-	udelay (500);
+	udelay(500);
 #endif
 	return CONFIG_SYS_SDRAM_SIZE * 1024 * 1024;
 }
@@ -173,7 +179,7 @@ void pci_init_board(void)
 
 
 #if defined(CONFIG_OF_BOARD_SETUP)
-int ft_board_setup(void *blob, bd_t *bd)
+int ft_board_setup(void *blob, struct bd_info *bd)
 {
 	ft_cpu_setup(blob, bd);
 

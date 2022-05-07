@@ -1,9 +1,9 @@
+/* SPDX-License-Identifier: GPL-2.0 */
 /*
  *	LiMon Monitor (LiMon) - Network.
  *
  *	Copyright 1994 - 2000 Neil Russell.
  *	(See License)
- *	SPDX-License-Identifier:	GPL-2.0
  *
  * History
  *	9/16/00	  bor  adapted to TQM823L/STK8xxL board, RARP/TFTP boot added
@@ -12,12 +12,18 @@
 #ifndef __NET_H__
 #define __NET_H__
 
-#if defined(CONFIG_8xx)
-#include <commproc.h>
-#endif	/* CONFIG_8xx */
-
+#include <linux/types.h>
 #include <asm/cache.h>
 #include <asm/byteorder.h>	/* for nton* / ntoh* stuff */
+#include <env.h>
+#include <log.h>
+#include <time.h>
+#include <linux/if_ether.h>
+#include <rand.h>
+
+struct bd_info;
+struct cmd_tbl;
+struct udevice;
 
 #define DEBUG_LL_STATE 0	/* Link local state machine changes */
 #define DEBUG_DEV_PKT 0		/* Packets or info directed to the device */
@@ -38,10 +44,32 @@
 
 #define PKTALIGN	ARCH_DMA_MINALIGN
 
+/* Number of packets processed together */
+#define ETH_PACKETS_BATCH_RECV	32
+
+/* ARP hardware address length */
+#define ARP_HLEN 6
+/*
+ * The size of a MAC address in string form, each digit requires two chars
+ * and five separator characters to form '00:00:00:00:00:00'.
+ */
+#define ARP_HLEN_ASCII (ARP_HLEN * 2) + (ARP_HLEN - 1)
+
 /* IPv4 addresses are always 32 bits in size */
 struct in_addr {
 	__be32 s_addr;
 };
+
+/**
+ * do_tftpb - Run the tftpboot command
+ *
+ * @cmdtp: Command information for tftpboot
+ * @flag: Command flags (CMD_FLAG_...)
+ * @argc: Number of arguments
+ * @argv: List of arguments
+ * @return result (see enum command_ret_t)
+ */
+int do_tftpb(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[]);
 
 /**
  * An incoming packet handler.
@@ -86,11 +114,15 @@ enum eth_state_t {
  * @iobase: The base address of the hardware registers
  * @enetaddr: The Ethernet MAC address that is loaded from EEPROM or env
  * @phy_interface: PHY interface to use - see PHY_INTERFACE_MODE_...
+ * @max_speed: Maximum speed of Ethernet connection supported by MAC
+ * @priv_pdata: device specific platdata
  */
 struct eth_pdata {
 	phys_addr_t iobase;
-	unsigned char enetaddr[6];
+	unsigned char enetaddr[ARP_HLEN];
 	int phy_interface;
+	int max_speed;
+	void *priv_pdata;
 };
 
 enum eth_recv_flags {
@@ -133,9 +165,7 @@ struct eth_ops {
 	int (*recv)(struct udevice *dev, int flags, uchar **packetp);
 	int (*free_pkt)(struct udevice *dev, uchar *packet, int length);
 	void (*stop)(struct udevice *dev);
-#ifdef CONFIG_MCAST_TFTP
 	int (*mcast)(struct udevice *dev, const u8 *enetaddr, int join);
-#endif
 	int (*write_hwaddr)(struct udevice *dev);
 	int (*read_rom_hwaddr)(struct udevice *dev);
 };
@@ -158,19 +188,18 @@ void eth_halt_state_only(void); /* Set passive state */
 
 #ifndef CONFIG_DM_ETH
 struct eth_device {
-	char name[16];
-	unsigned char enetaddr[6];
+#define ETH_NAME_LEN 20
+	char name[ETH_NAME_LEN];
+	unsigned char enetaddr[ARP_HLEN];
 	phys_addr_t iobase;
 	int state;
 
-	int (*init)(struct eth_device *, bd_t *);
+	int (*init)(struct eth_device *eth, struct bd_info *bd);
 	int (*send)(struct eth_device *, void *packet, int length);
 	int (*recv)(struct eth_device *);
 	void (*halt)(struct eth_device *);
-#ifdef CONFIG_MCAST_TFTP
-	int (*mcast)(struct eth_device *, const u8 *enetaddr, u8 set);
-#endif
-	int (*write_hwaddr)(struct eth_device *);
+	int (*mcast)(struct eth_device *, const u8 *enetaddr, int join);
+	int (*write_hwaddr)(struct eth_device *eth);
 	struct eth_device *next;
 	int index;
 	void *priv;
@@ -181,8 +210,7 @@ int eth_unregister(struct eth_device *dev);/* Remove network device */
 
 extern struct eth_device *eth_current;
 
-static inline __attribute__((always_inline))
-struct eth_device *eth_get_dev(void)
+static __always_inline struct eth_device *eth_get_dev(void)
 {
 	return eth_current;
 }
@@ -200,14 +228,14 @@ static inline unsigned char *eth_get_ethaddr(void)
 /* Used only when NetConsole is enabled */
 int eth_is_active(struct eth_device *dev); /* Test device for active state */
 /* Set active state */
-static inline __attribute__((always_inline)) int eth_init_state_only(void)
+static __always_inline int eth_init_state_only(void)
 {
 	eth_get_dev()->state = ETH_STATE_ACTIVE;
 
 	return 0;
 }
 /* Set passive state */
-static inline __attribute__((always_inline)) void eth_halt_state_only(void)
+static __always_inline void eth_halt_state_only(void)
 {
 	eth_get_dev()->state = ETH_STATE_PASSIVE;
 }
@@ -224,7 +252,7 @@ static inline __attribute__((always_inline)) void eth_halt_state_only(void)
 int eth_write_hwaddr(struct eth_device *dev, const char *base_name,
 		     int eth_number);
 
-int usb_eth_initialize(bd_t *bi);
+int usb_eth_initialize(struct bd_info *bi);
 #endif
 
 int eth_initialize(void);		/* Initialize network subsystem */
@@ -232,9 +260,30 @@ void eth_try_another(int first_restart);	/* Change the device */
 void eth_set_current(void);		/* set nterface to ethcur var */
 
 int eth_get_dev_index(void);		/* get the device index */
-void eth_parse_enetaddr(const char *addr, uchar *enetaddr);
-int eth_getenv_enetaddr(const char *name, uchar *enetaddr);
-int eth_setenv_enetaddr(const char *name, const uchar *enetaddr);
+
+/**
+ * eth_env_set_enetaddr_by_index() - set the MAC address environment variable
+ *
+ * This sets up an environment variable with the given MAC address (@enetaddr).
+ * The environment variable to be set is defined by <@base_name><@index>addr.
+ * If @index is 0 it is omitted. For common Ethernet this means ethaddr,
+ * eth1addr, etc.
+ *
+ * @base_name:  Base name for variable, typically "eth"
+ * @index:      Index of interface being updated (>=0)
+ * @enetaddr:   Pointer to MAC address to put into the variable
+ * @return 0 if OK, other value on error
+ */
+int eth_env_set_enetaddr_by_index(const char *base_name, int index,
+				 uchar *enetaddr);
+
+
+/*
+ * Initialize USB ethernet device with CONFIG_DM_ETH
+ * Returns:
+ *	0 is success, non-zero is error status.
+ */
+int usb_ether_init(void);
 
 /*
  * Get the hardware address for an ethernet interface .
@@ -245,25 +294,20 @@ int eth_setenv_enetaddr(const char *name, const uchar *enetaddr);
  * Returns:
  *	Return true if the address is valid.
  */
-int eth_getenv_enetaddr_by_index(const char *base_name, int index,
+int eth_env_get_enetaddr_by_index(const char *base_name, int index,
 				 uchar *enetaddr);
 
 int eth_init(void);			/* Initialize the device */
 int eth_send(void *packet, int length);	   /* Send a packet */
 
-#ifdef CONFIG_API
+#if defined(CONFIG_API) || defined(CONFIG_EFI_LOADER)
 int eth_receive(void *packet, int length); /* Receive a packet*/
 extern void (*push_packet)(void *packet, int length);
 #endif
 int eth_rx(void);			/* Check for received packets */
 void eth_halt(void);			/* stop SCC */
 const char *eth_get_name(void);		/* get name of current device */
-
-#ifdef CONFIG_MCAST_TFTP
 int eth_mcast_join(struct in_addr mcast_addr, int join);
-u32 ether_crc(size_t len, unsigned char const *p);
-#endif
-
 
 /**********************************************************************/
 /*
@@ -275,10 +319,10 @@ u32 ether_crc(size_t len, unsigned char const *p);
  */
 
 struct ethernet_hdr {
-	u8		et_dest[6];	/* Destination node		*/
-	u8		et_src[6];	/* Source node			*/
-	u16		et_protlen;	/* Protocol or length		*/
-};
+	u8		et_dest[ARP_HLEN];	/* Destination node	*/
+	u8		et_src[ARP_HLEN];	/* Source node		*/
+	u16		et_protlen;		/* Protocol or length	*/
+} __attribute__((packed));
 
 /* Ethernet header size */
 #define ETHER_HDR_SIZE	(sizeof(struct ethernet_hdr))
@@ -286,17 +330,17 @@ struct ethernet_hdr {
 #define ETH_FCS_LEN	4		/* Octets in the FCS		*/
 
 struct e802_hdr {
-	u8		et_dest[6];	/* Destination node		*/
-	u8		et_src[6];	/* Source node			*/
-	u16		et_protlen;	/* Protocol or length		*/
-	u8		et_dsap;	/* 802 DSAP			*/
-	u8		et_ssap;	/* 802 SSAP			*/
-	u8		et_ctl;		/* 802 control			*/
-	u8		et_snap1;	/* SNAP				*/
+	u8		et_dest[ARP_HLEN];	/* Destination node	*/
+	u8		et_src[ARP_HLEN];	/* Source node		*/
+	u16		et_protlen;		/* Protocol or length	*/
+	u8		et_dsap;		/* 802 DSAP		*/
+	u8		et_ssap;		/* 802 SSAP		*/
+	u8		et_ctl;			/* 802 control		*/
+	u8		et_snap1;		/* SNAP			*/
 	u8		et_snap2;
 	u8		et_snap3;
-	u16		et_prot;	/* 802 protocol			*/
-};
+	u16		et_prot;		/* 802 protocol		*/
+} __attribute__((packed));
 
 /* 802 + SNAP + ethernet header size */
 #define E802_HDR_SIZE	(sizeof(struct e802_hdr))
@@ -305,20 +349,24 @@ struct e802_hdr {
  *	Virtual LAN Ethernet header
  */
 struct vlan_ethernet_hdr {
-	u8		vet_dest[6];	/* Destination node		*/
-	u8		vet_src[6];	/* Source node			*/
-	u16		vet_vlan_type;	/* PROT_VLAN			*/
-	u16		vet_tag;	/* TAG of VLAN			*/
-	u16		vet_type;	/* protocol type		*/
-};
+	u8		vet_dest[ARP_HLEN];	/* Destination node	*/
+	u8		vet_src[ARP_HLEN];	/* Source node		*/
+	u16		vet_vlan_type;		/* PROT_VLAN		*/
+	u16		vet_tag;		/* TAG of VLAN		*/
+	u16		vet_type;		/* protocol type	*/
+} __attribute__((packed));
 
 /* VLAN Ethernet header size */
 #define VLAN_ETHER_HDR_SIZE	(sizeof(struct vlan_ethernet_hdr))
 
 #define PROT_IP		0x0800		/* IP protocol			*/
 #define PROT_ARP	0x0806		/* IP ARP protocol		*/
+#define PROT_WOL	0x0842		/* ether-wake WoL protocol	*/
 #define PROT_RARP	0x8035		/* IP ARP protocol		*/
 #define PROT_VLAN	0x8100		/* IEEE 802.1q protocol		*/
+#define PROT_IPV6	0x86dd		/* IPv6 over bluebook		*/
+#define PROT_PPP_SES	0x8864		/* PPPoE session messages	*/
+#define PROT_NCSI	0x88f8		/* NC-SI control packets        */
 
 #define IPPROTO_ICMP	 1	/* Internet Control Message Protocol	*/
 #define IPPROTO_UDP	17	/* User Datagram Protocol		*/
@@ -337,7 +385,7 @@ struct ip_hdr {
 	u16		ip_sum;		/* checksum			*/
 	struct in_addr	ip_src;		/* Source IP address		*/
 	struct in_addr	ip_dst;		/* Destination IP address	*/
-};
+} __attribute__((packed));
 
 #define IP_OFFS		0x1fff /* ip offset *= 8 */
 #define IP_FLAGS	0xe000 /* first 3 bits */
@@ -365,7 +413,7 @@ struct ip_udp_hdr {
 	u16		udp_dst;	/* UDP destination port		*/
 	u16		udp_len;	/* Length of UDP packet		*/
 	u16		udp_xsum;	/* Checksum			*/
-};
+} __attribute__((packed));
 
 #define IP_UDP_HDR_SIZE		(sizeof(struct ip_udp_hdr))
 #define UDP_HDR_SIZE		(IP_UDP_HDR_SIZE - IP_HDR_SIZE)
@@ -378,7 +426,6 @@ struct arp_hdr {
 #   define ARP_ETHER	    1		/* Ethernet  hardware address	*/
 	u16		ar_pro;		/* Format of protocol address	*/
 	u8		ar_hln;		/* Length of hardware address	*/
-#   define ARP_HLEN	6
 	u8		ar_pln;		/* Length of protocol address	*/
 #   define ARP_PLEN	4
 	u16		ar_op;		/* Operation			*/
@@ -404,7 +451,7 @@ struct arp_hdr {
 	u8		ar_tha[];	/* Target hardware address	*/
 	u8		ar_tpa[];	/* Target protocol address	*/
 #endif /* 0 */
-};
+} __attribute__((packed));
 
 #define ARP_HDR_SIZE	(8+20)		/* Size assuming ethernet	*/
 
@@ -439,26 +486,20 @@ struct icmp_hdr {
 		} frag;
 		u8 data[0];
 	} un;
-};
+} __attribute__((packed));
 
 #define ICMP_HDR_SIZE		(sizeof(struct icmp_hdr))
 #define IP_ICMP_HDR_SIZE	(IP_HDR_SIZE + ICMP_HDR_SIZE)
 
 /*
- * Maximum packet size; used to allocate packet storage.
- * TFTP packets can be 524 bytes + IP header + ethernet header.
- * Lets be conservative, and go for 38 * 16.  (Must also be
- * a multiple of 32 bytes).
- */
-/*
- * AS.HARNOIS : Better to set PKTSIZE to maximum size because
- * traffic type is not always controlled
- * maximum packet size =  1518
+ * Maximum packet size; used to allocate packet storage. Use
+ * the maxium Ethernet frame size as specified by the Ethernet
+ * standard including the 802.1Q tag (VLAN tagging).
+ * maximum packet size =  1522
  * maximum packet size and multiple of 32 bytes =  1536
  */
-#define PKTSIZE			1518
+#define PKTSIZE			1522
 #define PKTSIZE_ALIGN		1536
-/*#define PKTSIZE		608*/
 
 /*
  * Maximum receive ring size; that is, the number of packets
@@ -493,16 +534,16 @@ extern char	net_nis_domain[32];	/* Our IS domain */
 extern char	net_hostname[32];	/* Our hostname */
 extern char	net_root_path[64];	/* Our root path */
 /** END OF BOOTP EXTENTIONS **/
-extern u8		net_ethaddr[6];		/* Our ethernet address */
-extern u8		net_server_ethaddr[6];	/* Boot server enet address */
+extern u8		net_ethaddr[ARP_HLEN];		/* Our ethernet address */
+extern u8		net_server_ethaddr[ARP_HLEN];	/* Boot server enet address */
 extern struct in_addr	net_ip;		/* Our    IP addr (0 = unknown) */
 extern struct in_addr	net_server_ip;	/* Server IP addr (0 = unknown) */
 extern uchar		*net_tx_packet;		/* THE transmit packet */
 extern uchar		*net_rx_packets[PKTBUFSRX]; /* Receive packets */
 extern uchar		*net_rx_packet;		/* Current receive packet */
 extern int		net_rx_packet_len;	/* Current rx packet length */
-extern const u8		net_bcast_ethaddr[6];	/* Ethernet broadcast address */
-extern const u8		net_null_ethaddr[6];
+extern const u8		net_bcast_ethaddr[ARP_HLEN];	/* Ethernet broadcast address */
+extern const u8		net_null_ethaddr[ARP_HLEN];
 
 #define VLAN_NONE	4095			/* untagged */
 #define VLAN_IDMASK	0x0fff			/* mask of valid vlan id */
@@ -513,10 +554,12 @@ extern int		net_restart_wrap;	/* Tried all network devices */
 
 enum proto_t {
 	BOOTP, RARP, ARP, TFTPGET, DHCP, PING, DNS, NFS, CDP, NETCONS, SNTP,
-	TFTPSRV, TFTPPUT, LINKLOCAL
+	TFTPSRV, TFTPPUT, LINKLOCAL, FASTBOOT, WOL, UDP
 };
 
 extern char	net_boot_file_name[1024];/* Boot File name */
+/* Indicates whether the file name was specified on the command line */
+extern bool	net_boot_file_name_explicit;
 /* The actual transferred size of the bootfile (in bytes) */
 extern u32	net_boot_file_size;
 /* Boot file size in blocks as reported by the DHCP server */
@@ -541,9 +584,9 @@ extern ushort cdp_appliance_vlan;	/* CDP returned appliance VLAN */
  */
 static inline int is_cdp_packet(const uchar *ethaddr)
 {
-	extern const u8 net_cdp_ethaddr[6];
+	extern const u8 net_cdp_ethaddr[ARP_HLEN];
 
-	return memcmp(ethaddr, net_cdp_ethaddr, 6) == 0;
+	return memcmp(ethaddr, net_cdp_ethaddr, ARP_HLEN) == 0;
 }
 #endif
 
@@ -552,12 +595,8 @@ extern struct in_addr	net_ntp_server;		/* the ip address to NTP */
 extern int net_ntp_time_offset;			/* offset time from UTC */
 #endif
 
-#if defined(CONFIG_MCAST_TFTP)
-extern struct in_addr net_mcast_addr;
-#endif
-
 /* Initialize the network adapter */
-void net_init(void);
+int net_init(void);
 int net_loop(enum proto_t);
 
 /* Load failed.	 Start again. */
@@ -571,7 +610,8 @@ int net_set_ether(uchar *xet, const uchar *dest_ethaddr, uint prot);
 int net_update_ether(struct ethernet_hdr *et, uchar *addr, uint prot);
 
 /* Set IP header */
-void net_set_ip_header(uchar *pkt, struct in_addr dest, struct in_addr source);
+void net_set_ip_header(uchar *pkt, struct in_addr dest, struct in_addr source,
+		       u16 pkt_len, u8 proto);
 void net_set_udp_header(uchar *pkt, struct in_addr dest, int dport,
 				int sport, int len);
 
@@ -610,6 +650,7 @@ rxhand_f *net_get_udp_handler(void);	/* Get UDP RX packet handler */
 void net_set_udp_handler(rxhand_f *);	/* Set UDP RX packet handler */
 rxhand_f *net_get_arp_handler(void);	/* Get ARP RX packet handler */
 void net_set_arp_handler(rxhand_f *);	/* Set ARP RX packet handler */
+bool arp_is_waiting(void);		/* Waiting for ARP reply? */
 void net_set_icmp_handler(rxhand_icmp_f *f); /* Set ICMP RX handler */
 void net_set_timeout_handler(ulong, thand_f *);/* Set timeout handler */
 
@@ -628,6 +669,14 @@ static inline void net_set_state(enum net_loop_state state)
 	net_state = state;
 }
 
+/*
+ * net_get_async_tx_pkt_buf - Get a packet buffer that is not in use for
+ *			      sending an asynchronous reply
+ *
+ * returns - ptr to packet buffer
+ */
+uchar * net_get_async_tx_pkt_buf(void);
+
 /* Transmit a packet */
 static inline void net_send_packet(uchar *pkt, int len)
 {
@@ -645,21 +694,24 @@ static inline void net_send_packet(uchar *pkt, int len)
  * @param sport Source UDP port
  * @param payload_len Length of data after the UDP header
  */
+int net_send_ip_packet(uchar *ether, struct in_addr dest, int dport, int sport,
+		       int payload_len, int proto, u8 action, u32 tcp_seq_num,
+		       u32 tcp_ack_num);
 int net_send_udp_packet(uchar *ether, struct in_addr dest, int dport,
 			int sport, int payload_len);
 
 /* Processes a received packet */
 void net_process_received_packet(uchar *in_packet, int len);
 
-#ifdef CONFIG_NETCONSOLE
+#if defined(CONFIG_NETCONSOLE) && !defined(CONFIG_SPL_BUILD)
 void nc_start(void);
 int nc_input_packet(uchar *pkt, struct in_addr src_ip, unsigned dest_port,
 	unsigned src_port, unsigned len);
 #endif
 
-static inline __attribute__((always_inline)) int eth_is_on_demand_init(void)
+static __always_inline int eth_is_on_demand_init(void)
 {
-#ifdef CONFIG_NETCONSOLE
+#if defined(CONFIG_NETCONSOLE) && !defined(CONFIG_SPL_BUILD)
 	extern enum proto_t net_loop_last_protocol;
 
 	return net_loop_last_protocol != NETCONS;
@@ -670,7 +722,7 @@ static inline __attribute__((always_inline)) int eth_is_on_demand_init(void)
 
 static inline void eth_set_last_protocol(int protocol)
 {
-#ifdef CONFIG_NETCONSOLE
+#if defined(CONFIG_NETCONSOLE) && !defined(CONFIG_SPL_BUILD)
 	extern enum proto_t net_loop_last_protocol;
 
 	net_loop_last_protocol = protocol;
@@ -700,7 +752,7 @@ static inline struct in_addr net_read_ip(void *from)
 }
 
 /* return ulong *in network byteorder* */
-static inline u32 net_read_u32(u32 *from)
+static inline u32 net_read_u32(void *from)
 {
 	u32 l;
 
@@ -721,7 +773,7 @@ static inline void net_copy_ip(void *to, void *from)
 }
 
 /* copy ulong */
-static inline void net_copy_u32(u32 *to, u32 *from)
+static inline void net_copy_u32(void *to, void *from)
 {
 	memcpy((void *)to, (void *)from, sizeof(u32));
 }
@@ -787,7 +839,7 @@ static inline int is_valid_ethaddr(const u8 *addr)
 static inline void net_random_ethaddr(uchar *addr)
 {
 	int i;
-	unsigned int seed = get_timer(0);
+	unsigned int seed = get_ticks();
 
 	for (i = 0; i < 6; i++)
 		addr[i] = rand_r(&seed);
@@ -796,10 +848,30 @@ static inline void net_random_ethaddr(uchar *addr)
 	addr[0] |= 0x02;	/* set local assignment bit (IEEE802) */
 }
 
+/**
+ * string_to_enetaddr() - Parse a MAC address
+ *
+ * Convert a string MAC address
+ *
+ * Implemented in lib/net_utils.c (built unconditionally)
+ *
+ * @addr: MAC address in aa:bb:cc:dd:ee:ff format, where each part is a 2-digit
+ *	hex value
+ * @enetaddr: Place to put MAC address (6 bytes)
+ */
+void string_to_enetaddr(const char *addr, uint8_t *enetaddr);
+
 /* Convert an IP address to a string */
 void ip_to_string(struct in_addr x, char *s);
 
-/* Convert a string to ip address */
+/**
+ * string_to_ip() - Convert a string to ip address
+ *
+ * Implemented in lib/net_utils.c (built unconditionally)
+ *
+ * @s: Input string to parse
+ * @return: in_addr struct containing the parsed IP address
+ */
 struct in_addr string_to_ip(const char *s);
 
 /* Convert a VLAN id to a string */
@@ -809,13 +881,24 @@ void vlan_to_string(ushort x, char *s);
 ushort string_to_vlan(const char *s);
 
 /* read a VLAN id from an environment variable */
-ushort getenv_vlan(char *);
+ushort env_get_vlan(char *);
 
 /* copy a filename (allow for "..." notation, limit length) */
 void copy_filename(char *dst, const char *src, int size);
 
-/* get a random source port */
-unsigned int random_port(void);
+/* check if serverip is specified in filename from the command line */
+int is_serverip_in_cmd(void);
+
+/**
+ * net_parse_bootfile - Parse the bootfile env var / cmd line param
+ *
+ * @param ipaddr - a pointer to the ipaddr to populate if included in bootfile
+ * @param filename - a pointer to the string to save the filename part
+ * @param max_len - The longest - 1 that the filename part can be
+ *
+ * return 1 if parsed, 0 if bootfile is empty
+ */
+int net_parse_bootfile(struct in_addr *ipaddr, char *filename, int max_len);
 
 /**
  * update_tftp - Update firmware over TFTP (via DFU)
@@ -830,6 +913,24 @@ unsigned int random_port(void);
  */
 int update_tftp(ulong addr, char *interface, char *devstring);
 
-/**********************************************************************/
+/**
+ * env_get_ip() - Convert an environment value to to an ip address
+ *
+ * @var: Environment variable to convert. The value of this variable must be
+ *	in the format format a.b.c.d, where each value is a decimal number from
+ *	0 to 255
+ * @return IP address, or 0 if invalid
+ */
+static inline struct in_addr env_get_ip(char *var)
+{
+	return string_to_ip(env_get(var));
+}
+
+/**
+ * reset_phy() - Reset the Ethernet PHY
+ *
+ * This should be implemented by boards if CONFIG_RESET_PHY_R is enabled
+ */
+void reset_phy(void);
 
 #endif /* __NET_H__ */

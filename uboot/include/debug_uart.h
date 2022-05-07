@@ -1,10 +1,9 @@
+/* SPDX-License-Identifier: GPL-2.0+ */
 /*
  * Early debug UART support
  *
  * (C) Copyright 2014 Google, Inc
  * Writte by Simon Glass <sjg@chromium.org>
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #ifndef _DEBUG_UART_H
@@ -89,68 +88,106 @@ void printascii(const char *str);
  *
  * @value:	Value to output
  */
-void printhex2(uint value);
+void printhex2(unsigned int value);
 
 /**
  * printhex4() - Output a 4-digit hex value
  *
  * @value:	Value to output
  */
-void printhex4(uint value);
+void printhex4(unsigned int value);
 
 /**
  * printhex8() - Output a 8-digit hex value
  *
  * @value:	Value to output
  */
-void printhex8(uint value);
+void printhex8(unsigned int value);
+
+/**
+ * printdec() - Output a decimalism value
+ *
+ * @value:	Value to output
+ */
+void printdec(unsigned int value);
 
 #ifdef CONFIG_DEBUG_UART_ANNOUNCE
-#define _DEBUG_UART_ANNOUNCE	printascii("<debug_uart> ");
+#define _DEBUG_UART_ANNOUNCE	printascii("\n<debug_uart>\n");
 #else
 #define _DEBUG_UART_ANNOUNCE
 #endif
+
+#define serial_dout(reg, value)	\
+	serial_out_shift((char *)com_port + \
+		((char *)reg - (char *)com_port) * \
+			(1 << CONFIG_DEBUG_UART_SHIFT), \
+		CONFIG_DEBUG_UART_SHIFT, value)
+#define serial_din(reg) \
+	serial_in_shift((char *)com_port + \
+		((char *)reg - (char *)com_port) * \
+			(1 << CONFIG_DEBUG_UART_SHIFT), \
+		CONFIG_DEBUG_UART_SHIFT)
 
 /*
  * Now define some functions - this should be inserted into the serial driver
  */
 #define DEBUG_UART_FUNCS \
+\
+	static inline void _printch(int ch) \
+	{ \
+		if (ch == '\n') \
+			_debug_uart_putc('\r'); \
+		_debug_uart_putc(ch); \
+	} \
+\
 	void printch(int ch) \
 	{ \
-		_debug_uart_putc(ch); \
+		_printch(ch); \
 	} \
 \
 	void printascii(const char *str) \
 	{ \
 		while (*str) \
-			_debug_uart_putc(*str++); \
+			_printch(*str++); \
 	} \
 \
-	static inline void printhex1(uint digit) \
+	static inline void printhex1(unsigned int digit) \
 	{ \
 		digit &= 0xf; \
 		_debug_uart_putc(digit > 9 ? digit - 10 + 'a' : digit + '0'); \
 	} \
 \
-	static inline void printhex(uint value, int digits) \
+	static inline void printhex(unsigned int value, int digits) \
 	{ \
 		while (digits-- > 0) \
 			printhex1(value >> (4 * digits)); \
 	} \
 \
-	void printhex2(uint value) \
+	void printhex2(unsigned int value) \
 	{ \
 		printhex(value, 2); \
 	} \
 \
-	void printhex4(uint value) \
+	void printhex4(unsigned int value) \
 	{ \
 		printhex(value, 4); \
 	} \
 \
-	void printhex8(uint value) \
+	void printhex8(unsigned int value) \
 	{ \
 		printhex(value, 8); \
+	} \
+\
+	void printdec(unsigned int value) \
+	{ \
+		if (value > 10) { \
+			printdec(value / 10); \
+			value %= 10; \
+		} else if (value == 10) { \
+			_debug_uart_putc('1'); \
+			value = 0; \
+		} \
+		_debug_uart_putc('0' + value); \
 	} \
 \
 	void debug_uart_init(void) \

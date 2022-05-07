@@ -1,24 +1,27 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * USB armory MkI board initialization
  * http://inversepath.com/usbarmory
  *
  * Copyright (C) 2015, Inverse Path
  * Andrej Rosano <andrej@inversepath.com>
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
+#include <command.h>
+#include <fs.h>
+#include <init.h>
 #include <asm/io.h>
 #include <asm/arch/imx-regs.h>
 #include <asm/arch/sys_proto.h>
 #include <asm/arch/crm_regs.h>
 #include <asm/arch/clock.h>
 #include <asm/arch/iomux-mx53.h>
-#include <asm/errno.h>
+#include <linux/delay.h>
+#include <linux/errno.h>
 #include <i2c.h>
 #include <mmc.h>
-#include <fsl_esdhc.h>
+#include <fsl_esdhc_imx.h>
 #include <asm/gpio.h>
 
 DECLARE_GLOBAL_DATA_PTR;
@@ -45,7 +48,7 @@ int board_mmc_getcd(struct mmc *mmc)
 	return 1;
 }
 
-int board_mmc_init(bd_t *bis)
+int board_mmc_init(struct bd_info *bis)
 {
 	int ret = 0;
 
@@ -415,3 +418,34 @@ int checkboard(void)
 	puts("Board: Inverse Path USB armory MkI\n");
 	return 0;
 }
+
+#ifndef CONFIG_CMDLINE
+static char *ext2_argv[] = {
+	"ext2load",
+	"mmc",
+	"0:1",
+	USBARMORY_FIT_ADDR,
+	USBARMORY_FIT_PATH
+};
+
+static char *bootm_argv[] = {
+	"bootm",
+	USBARMORY_FIT_ADDR
+};
+
+int board_run_command(const char *cmdline)
+{
+	printf("%s %s %s %s %s\n", ext2_argv[0], ext2_argv[1], ext2_argv[2],
+	       ext2_argv[3], ext2_argv[4]);
+
+	if (do_ext2load(NULL, 0, 5, ext2_argv) != 0) {
+		udelay(5*1000*1000);
+		return 1;
+	}
+
+	printf("%s %s\n", bootm_argv[0], bootm_argv[1]);
+	do_bootm(NULL, 0, 2, bootm_argv);
+
+	return 1;
+}
+#endif

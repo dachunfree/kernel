@@ -1,11 +1,10 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * (C) Copyright 2000-2002
  * Wolfgang Denk, DENX Software Engineering, wd@denx.de.
  *
  * (C) Copyright 2004, Psyent Corporation <www.psyent.com>
  * Scott McNutt <smcnutt@psyent.com>
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
@@ -13,8 +12,7 @@
 #include <errno.h>
 #include <timer.h>
 #include <asm/io.h>
-
-DECLARE_GLOBAL_DATA_PTR;
+#include <linux/bitops.h>
 
 /* control register */
 #define ALTERA_TIMER_CONT	BIT(1)	/* Continuous mode */
@@ -34,7 +32,7 @@ struct altera_timer_platdata {
 	struct altera_timer_regs *regs;
 };
 
-static int altera_timer_get_count(struct udevice *dev, u64 *count)
+static u64 altera_timer_get_count(struct udevice *dev)
 {
 	struct altera_timer_platdata *plat = dev->platdata;
 	struct altera_timer_regs *const regs = plat->regs;
@@ -46,9 +44,7 @@ static int altera_timer_get_count(struct udevice *dev, u64 *count)
 	/* Read timer value */
 	val = readl(&regs->snapl) & 0xffff;
 	val |= (readl(&regs->snaph) & 0xffff) << 16;
-	*count = timer_conv_64(~val);
-
-	return 0;
+	return timer_conv_64(~val);
 }
 
 static int altera_timer_probe(struct udevice *dev)
@@ -71,7 +67,7 @@ static int altera_timer_ofdata_to_platdata(struct udevice *dev)
 {
 	struct altera_timer_platdata *plat = dev_get_platdata(dev);
 
-	plat->regs = map_physmem(dev_get_addr(dev),
+	plat->regs = map_physmem(dev_read_addr(dev),
 				 sizeof(struct altera_timer_regs),
 				 MAP_NOCACHE);
 
@@ -95,5 +91,4 @@ U_BOOT_DRIVER(altera_timer) = {
 	.platdata_auto_alloc_size = sizeof(struct altera_timer_platdata),
 	.probe = altera_timer_probe,
 	.ops	= &altera_timer_ops,
-	.flags = DM_FLAG_PRE_RELOC,
 };

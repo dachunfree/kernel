@@ -1,12 +1,13 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * Copyright (c) 2015 Google, Inc
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
 #include <dm.h>
 #include <errno.h>
+#include <log.h>
+#include <linux/delay.h>
 #include <power/pmic.h>
 #include <power/regulator.h>
 #include <power/tps65090.h>
@@ -23,7 +24,7 @@ static int tps65090_fet_probe(struct udevice *dev)
 	return 0;
 }
 
-static bool tps65090_fet_get_enable(struct udevice *dev)
+static int tps65090_fet_get_enable(struct udevice *dev)
 {
 	struct udevice *pmic = dev_get_parent(dev);
 	int ret, fet_id;

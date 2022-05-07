@@ -1,10 +1,9 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * Copyright (c) 2013 Google, Inc
  *
  * (C) Copyright 2012
  * Pavel Herrmann <morpheus.ibis@gmail.com>
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
@@ -12,6 +11,7 @@
 #include <dm-demo.h>
 #include <errno.h>
 #include <fdtdec.h>
+#include <log.h>
 #include <malloc.h>
 #include <asm/io.h>
 #include <linux/list.h>
@@ -66,7 +66,7 @@ int demo_set_light(struct udevice *dev, int light)
 int demo_parse_dt(struct udevice *dev)
 {
 	struct dm_demo_pdata *pdata = dev_get_platdata(dev);
-	int dn = dev->of_offset;
+	int dn = dev_of_offset(dev);
 
 	pdata->sides = fdtdec_get_int(gd->fdt_blob, dn, "sides", 0);
 	pdata->colour = fdt_getprop(gd->fdt_blob, dn, "colour", NULL);

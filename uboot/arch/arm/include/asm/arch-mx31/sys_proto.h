@@ -1,14 +1,13 @@
+/* SPDX-License-Identifier: GPL-2.0+ */
 /*
  * (C) Copyright 2011
  * Helmut Raiger, HALE electronic GmbH, helmut.raiger@hale.at
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #ifndef _MX31_SYS_PROTO_H_
 #define _MX31_SYS_PROTO_H_
 
-#include <asm/imx-common/sys_proto.h>
+#include <asm/mach-imx/sys_proto.h>
 
 struct mxc_weimcs {
 	u32 upper;
@@ -17,5 +16,5 @@ struct mxc_weimcs {
 };
 
 void mxc_setup_weimcs(int cs, const struct mxc_weimcs *weimcs);
-int mxc_mmc_init(bd_t *bis);
+int mxc_mmc_init(struct bd_info *bis);
 #endif

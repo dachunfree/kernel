@@ -7,8 +7,8 @@ F_TARGET=0
 function make_uboot()
 {
 	echo "Project Name       :    euht_uboot"
-	echo "U-Boot ver         :    U-Boot 2016.01"
-	echo "Crosscompile       :    arm-xilinx-linux-gnueabi-"
+	echo "U-Boot ver         :    U-Boot 2017.01"
+	echo "Crosscompile       :    aarch64-none-elf-"
 	echo "U-Boot def configs :    "$CONFIG_FILE
 
 	echo "start compile U-Boot"
@@ -17,7 +17,6 @@ function make_uboot()
 	make $CONFIG_FILE
 	make -j32
 
-	cp ./u-boot ./u-boot.elf
 	cp ./u-boot.elf  $SDK_OUT_DIR/$SDK_PRODUCT
 }
 
@@ -48,31 +47,11 @@ function make_main() {
 }
 
 function select_platform() {
-		if [ $1 = "highway-cap" ] ; then
-			CONFIG_FILE=zynq_zc702_highway-cap_defconfig
-		elif [ $1 = "subway-cap" ]; then
-			CONFIG_FILE=zynq_zc702_subway-cap_defconfig
-		elif [ $1 = "subway-cap_ant4" ]; then
-			CONFIG_FILE=zynq_zc702_subway-cap_ant4_defconfig
-		elif [ $1 = "subway-cap_ant4_1p8g" ]; then
-			CONFIG_FILE=zynq_zc702_subway-cap_ant4_1p8g_defconfig
-		elif [ $1 = "subway-cap_ant4_1p8g-bs02-nl6821" ]; then
-			CONFIG_FILE=zynq_zc702_subway-cap_ant4_1p8g-bs02-nl6821_defconfig
-		elif [ $1 = "highway-sta" ] ; then
-			CONFIG_FILE=zynq_zc702_highway-sta_defconfig
-		elif [ $1 = "subway-sta" ]; then
-			CONFIG_FILE=zynq_zc702_subway-sta_defconfig
-		elif [ $1 = "subway-sta-as01-v13" ]; then
-			CONFIG_FILE=zynq_zc702_subway-sta-as01-v13_defconfig
-		elif [ $1 = "subway-sta_ant4" ]; then
-			CONFIG_FILE=zynq_zc702_subway-sta_ant4_defconfig
-		elif [ $1 = "subway-sta_ant4_1p8g" ]; then
-			CONFIG_FILE=zynq_zc702_subway-sta_ant4_1p8g_defconfig
-		elif [ $1 = "subway-sta_ant4_1p8g-as02-vxa" ]; then
-			CONFIG_FILE=zynq_zc702_subway-sta_ant4_1p8g-as02-vxa_defconfig
+		if [ $1 = "zynqmp-mmWave" ] ; then
+			CONFIG_FILE=xilinx_zynqmp_mmWave_defconfig
 		else
-			echo "Unsupported device:$dev "
-			exit 1
+			echo "using default configx!"
+			CONFIG_FILE=xilinx_zynqmp_mini_defconfig
 		fi
 		echo "CONFIG_FILE:" $CONFIG_FILE
 }
@@ -82,20 +61,11 @@ function show_help() {
 	usage :
 	build.sh [-c] [-t <target>] [-h]
 
-		-h:            show uboot build help.
-		-c:            clear project.
-		-t <target>:   target type:
-					    highway-cap
-					    subway-cap
-					    subway-cap_ant4
-					    subway-cap_ant4_1p8g
-					    highway-sta
-					    subway-sta
-					    subway-sta_ant4
-					    subway-sta_ant4_1p8g
-					    subway-sta-as01-v13
-					    subway-sta_ant4_1p8g-as02-vxa
-					    subway-cap_ant4_1p8g-bs02-nl6821"
+		-h:		show uboot build help.
+		-c:		clear project.
+				sdk_zynqmp_platform        --->  xilinx_zynqmp_mmWave_config
+		-t <target>:    target type:
+				---> zynqmp-mmWave"
 }
 
 if [[ $# == 0 ]]; then

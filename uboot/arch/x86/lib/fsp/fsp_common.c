@@ -1,11 +1,18 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * Copyright (C) 2014, Bin Meng <bmeng.cn@gmail.com>
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
+#include <cpu_func.h>
+#include <dm.h>
 #include <errno.h>
+#include <init.h>
+#include <log.h>
+#include <rtc.h>
+#include <acpi/acpi_s3.h>
+#include <asm/cmos_layout.h>
+#include <asm/early_cmos.h>
 #include <asm/io.h>
 #include <asm/mrccache.h>
 #include <asm/post.h>
@@ -13,6 +20,11 @@
 #include <asm/fsp/fsp_support.h>
 
 DECLARE_GLOBAL_DATA_PTR;
+
+int checkcpu(void)
+{
+	return 0;
+}
 
 int print_cpuinfo(void)
 {
@@ -35,7 +47,7 @@ int fsp_init_phase_pci(void)
 	return status ? -EPERM : 0;
 }
 
-void board_final_cleanup(void)
+void board_final_init(void)
 {
 	u32 status;
 
@@ -46,54 +58,43 @@ void board_final_cleanup(void)
 		debug("fail, error code %x\n", status);
 	else
 		debug("OK\n");
-
-	return;
 }
 
-static __maybe_unused void *fsp_prepare_mrc_cache(void)
+void board_final_cleanup(void)
 {
-	struct mrc_data_container *cache;
-	struct mrc_region entry;
+	u32 status;
+
+	/* TODO(sjg@chromium.org): This causes Linux to crash */
+	return;
+
+	/* call into FspNotify */
+	debug("Calling into FSP (notify phase INIT_PHASE_END_FIRMWARE): ");
+	status = fsp_notify(NULL, INIT_PHASE_END_FIRMWARE);
+	if (status)
+		debug("fail, error code %x\n", status);
+	else
+		debug("OK\n");
+}
+
+int fsp_save_s3_stack(void)
+{
+	struct udevice *dev;
 	int ret;
 
-	ret = mrccache_get_region(NULL, &entry);
-	if (ret)
-		return NULL;
+	if (gd->arch.prev_sleep_state == ACPI_S3)
+		return 0;
 
-	cache = mrccache_find_current(&entry);
-	if (!cache)
-		return NULL;
+	ret = uclass_get_device(UCLASS_RTC, 0, &dev);
+	if (ret) {
+		debug("Cannot find RTC: err=%d\n", ret);
+		return -ENODEV;
+	}
 
-	debug("%s: mrc cache at %p, size %x checksum %04x\n", __func__,
-	      cache->data, cache->data_size, cache->checksum);
-
-	return cache->data;
-}
-
-int x86_fsp_init(void)
-{
-	void *nvs;
-
-	if (!gd->arch.hob_list) {
-#ifdef CONFIG_ENABLE_MRC_CACHE
-		nvs = fsp_prepare_mrc_cache();
-#else
-		nvs = NULL;
-#endif
-		/*
-		 * The first time we enter here, call fsp_init().
-		 * Note the execution does not return to this function,
-		 * instead it jumps to fsp_continue().
-		 */
-		fsp_init(CONFIG_FSP_TEMP_RAM_ADDR, BOOT_FULL_CONFIG, nvs);
-	} else {
-		/*
-		 * The second time we enter here, adjust the size of malloc()
-		 * pool before relocation. Given gd->malloc_base was adjusted
-		 * after the call to board_init_f_mem() in arch/x86/cpu/start.S,
-		 * we should fix up gd->malloc_limit here.
-		 */
-		gd->malloc_limit += CONFIG_FSP_SYS_MALLOC_F_LEN;
+	/* Save the stack address to CMOS */
+	ret = rtc_write32(dev, CMOS_FSP_STACK_ADDR, gd->start_addr_sp);
+	if (ret) {
+		debug("Save stack address to CMOS: err=%d\n", ret);
+		return -EIO;
 	}
 
 	return 0;

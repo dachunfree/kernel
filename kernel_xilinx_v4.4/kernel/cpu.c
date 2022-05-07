@@ -764,17 +764,20 @@ static DECLARE_BITMAP(cpu_possible_bits, CONFIG_NR_CPUS) __read_mostly
 #else
 static DECLARE_BITMAP(cpu_possible_bits, CONFIG_NR_CPUS) __read_mostly;
 #endif
+//cpu_possible_mask: 表示系统中有多少个可以运行的cpu核心
+
 const struct cpumask *const cpu_possible_mask = to_cpumask(cpu_possible_bits);
 EXPORT_SYMBOL(cpu_possible_mask);
 
+//cpu_online_mask: 表示系统中有多少个正在处于运行状态的cpu
 static DECLARE_BITMAP(cpu_online_bits, CONFIG_NR_CPUS) __read_mostly;
 const struct cpumask *const cpu_online_mask = to_cpumask(cpu_online_bits);
 EXPORT_SYMBOL(cpu_online_mask);
-
+//表示系统中有多少个具备online条件的cpu核心，他们不一定处于online状态，可能热插拔了。
 static DECLARE_BITMAP(cpu_present_bits, CONFIG_NR_CPUS) __read_mostly;
 const struct cpumask *const cpu_present_mask = to_cpumask(cpu_present_bits);
 EXPORT_SYMBOL(cpu_present_mask);
-
+//表示系统中有多少个活跃的cpu核心
 static DECLARE_BITMAP(cpu_active_bits, CONFIG_NR_CPUS) __read_mostly;
 const struct cpumask *const cpu_active_mask = to_cpumask(cpu_active_bits);
 EXPORT_SYMBOL(cpu_active_mask);

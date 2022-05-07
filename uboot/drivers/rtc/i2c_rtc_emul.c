@@ -1,10 +1,9 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * Simulate an I2C real time clock
  *
  * Copyright (c) 2015 Google, Inc
  * Written by Simon Glass <sjg@chromium.org>
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 /*
@@ -16,8 +15,8 @@
 
 #include <common.h>
 #include <dm.h>
-#include <fdtdec.h>
 #include <i2c.h>
+#include <log.h>
 #include <os.h>
 #include <rtc.h>
 #include <asm/rtc.h>
@@ -28,8 +27,6 @@
 #else
 #define debug_buffer(x, ...)
 #endif
-
-DECLARE_GLOBAL_DATA_PTR;
 
 /**
  * struct sandbox_i2c_rtc_plat_data - platform data for the RTC
@@ -100,7 +97,9 @@ static int sandbox_i2c_rtc_get(struct udevice *dev, struct rtc_time *time)
 		now = plat->base_time;
 	}
 
-	return rtc_to_tm(now + plat->offset, time);
+	rtc_to_tm(now + plat->offset, time);
+
+	return 0;
 }
 
 static int sandbox_i2c_rtc_set(struct udevice *dev, const struct rtc_time *time)
@@ -198,7 +197,8 @@ static int sandbox_i2c_rtc_xfer(struct udevice *emul, struct i2c_msg *msg,
 
 			/* Write the register */
 			memcpy(plat->reg + offset, ptr, len);
-			if (offset == REG_RESET)
+			/* If the reset register was written to, do reset. */
+			if (offset <= REG_RESET && REG_RESET < offset + len)
 				reset_time(emul);
 		}
 	}

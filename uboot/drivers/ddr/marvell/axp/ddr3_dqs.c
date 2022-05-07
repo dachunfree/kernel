@@ -1,11 +1,11 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  * Copyright (C) Marvell International Ltd. and its affiliates
- *
- * SPDX-License-Identifier:	GPL-2.0
  */
 
 #include <common.h>
 #include <i2c.h>
+#include <log.h>
 #include <spl.h>
 #include <asm/io.h>
 #include <asm/arch/cpu.h>
@@ -1268,7 +1268,7 @@ int ddr3_set_dqs_centralization_results(MV_DRAM_INFO *dram_info, u32 cs,
 
 	max_pup = (ecc + (1 - ecc) * dram_info->num_of_std_pups);
 
-	DEBUG_DQS_RESULTS_S("\n############ LOG LEVEL 2(Windows margins) ############\n");;
+	DEBUG_DQS_RESULTS_S("\n############ LOG LEVEL 2(Windows margins) ############\n");
 
 	if (is_tx) {
 		DEBUG_DQS_RESULTS_C("DDR3 - DQS TX - Set Dqs Centralization Results - CS: ",

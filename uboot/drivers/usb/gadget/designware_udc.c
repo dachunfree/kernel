@@ -1,16 +1,18 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * Based on drivers/usb/gadget/omap1510_udc.c
  * TI OMAP1510 USB bus interface driver
  *
  * (C) Copyright 2009
  * Vipin Kumar, ST Micoelectronics, vipin.kumar@st.com.
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
+#include <serial.h>
 #include <asm/io.h>
+#include <linux/delay.h>
 
+#include <env.h>
 #include <usbdevice.h>
 #include "ep0.h"
 #include <usb/designware_udc.h>
@@ -601,7 +603,7 @@ void udc_setup_ep(struct usb_device_instance *device,
 	if ((ep != 0) && (udc_device->device_state < STATE_ADDRESSED))
 		return;
 
-	tt = getenv("usbtty");
+	tt = env_get("usbtty");
 	if (!tt)
 		tt = "generic";
 

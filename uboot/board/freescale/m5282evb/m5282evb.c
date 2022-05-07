@@ -1,11 +1,11 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * (C) Copyright 2000-2003
  * Wolfgang Denk, DENX Software Engineering, wd@denx.de.
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
+#include <init.h>
 #include <asm/immap.h>
 
 DECLARE_GLOBAL_DATA_PTR;
@@ -16,7 +16,7 @@ int checkboard (void)
 	return 0;
 }
 
-phys_size_t initdram (int board_type)
+int dram_init(void)
 {
 	u32 dramsize, i, dramclk;
 
@@ -80,5 +80,7 @@ phys_size_t initdram (int board_type)
 		/* Write to the SDRAM Mode Register */
 		*(u32 *)(CONFIG_SYS_SDRAM_BASE + 0x400) = 0xA5A59696;
 	}
-	return dramsize;
+	gd->ram_size = dramsize;
+
+	return 0;
 }

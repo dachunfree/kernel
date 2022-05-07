@@ -1,16 +1,21 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * Copyright 2014 Freescale Semiconductor, Inc.
+ * Copyright 2019 Toradex AG
  *
  * FSL DCU Framebuffer driver
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
+#include <init.h>
+#include <asm/cache.h>
 #include <asm/io.h>
 #include <common.h>
+#include <dm.h>
+#include <fdt_support.h>
 #include <fsl_dcu_fb.h>
 #include <linux/fb.h>
 #include <malloc.h>
+#include <video.h>
 #include <video_fb.h>
 #include "videomodes.h"
 
@@ -40,7 +45,7 @@
 #define DCU_VSYN_PARA_BP(x)		((x) << 22)
 #define DCU_VSYN_PARA_PW(x)		((x) << 11)
 #define DCU_VSYN_PARA_FP(x)		(x)
-#define DCU_SYN_POL_INV_PXCK_FALL	(0 << 6)
+#define DCU_SYN_POL_INV_PXCK_FALL	(1 << 6)
 #define DCU_SYN_POL_NEG_REMAIN		(0 << 5)
 #define DCU_SYN_POL_INV_VS_LOW		(1 << 1)
 #define DCU_SYN_POL_INV_HS_LOW		(1)
@@ -79,6 +84,8 @@
 #define BPP_24_RGB888			5
 #define BPP_32_ARGB8888			6
 
+DECLARE_GLOBAL_DATA_PTR;
+
 /*
  * This setting is used for the TWR_LCD_RGB card
  */
@@ -101,7 +108,7 @@ static struct fb_videomode fsl_dcu_mode_480_272 = {
 /*
  * This setting is used for Siliconimage SiI9022A HDMI
  */
-static struct fb_videomode fsl_dcu_mode_640_480 = {
+static struct fb_videomode fsl_dcu_cea_mode_640_480 = {
 	.name		= "640x480-60",
 	.refresh	= 60,
 	.xres		= 640,
@@ -113,6 +120,54 @@ static struct fb_videomode fsl_dcu_mode_640_480 = {
 	.lower_margin	= 10,
 	.hsync_len	= 96,
 	.vsync_len	= 2,
+	.sync		= 0,
+	.vmode		= FB_VMODE_NONINTERLACED,
+};
+
+static struct fb_videomode fsl_dcu_mode_640_480 = {
+	.name		= "640x480-60",
+	.refresh	= 60,
+	.xres		= 640,
+	.yres		= 480,
+	.pixclock	= 25175,
+	.left_margin	= 40,
+	.right_margin	= 24,
+	.upper_margin	= 32,
+	.lower_margin	= 11,
+	.hsync_len	= 96,
+	.vsync_len	= 2,
+	.sync		= 0,
+	.vmode		= FB_VMODE_NONINTERLACED,
+};
+
+static struct fb_videomode fsl_dcu_mode_800_480 = {
+	.name		= "800x480-60",
+	.refresh	= 60,
+	.xres		= 800,
+	.yres		= 480,
+	.pixclock	= 33260,
+	.left_margin	= 216,
+	.right_margin	= 40,
+	.upper_margin	= 35,
+	.lower_margin	= 10,
+	.hsync_len	= 128,
+	.vsync_len	= 2,
+	.sync		= 0,
+	.vmode		= FB_VMODE_NONINTERLACED,
+};
+
+static struct fb_videomode fsl_dcu_mode_1024_600 = {
+	.name		= "1024x600-60",
+	.refresh	= 60,
+	.xres		= 1024,
+	.yres		= 600,
+	.pixclock	= 48000,
+	.left_margin	= 104,
+	.right_margin	= 43,
+	.upper_margin	= 24,
+	.lower_margin	= 20,
+	.hsync_len	= 5,
+	.vsync_len	= 5,
 	.sync		= 0,
 	.vmode		= FB_VMODE_NONINTERLACED,
 };
@@ -168,8 +223,6 @@ struct dcu_reg {
 	u32 ctrldescl[DCU_LAYER_MAX_NUM][16];
 };
 
-static struct fb_info info;
-
 static void reset_total_layers(void)
 {
 	struct dcu_reg *regs = (struct dcu_reg *)CONFIG_SYS_DCU_ADDR;
@@ -188,24 +241,24 @@ static void reset_total_layers(void)
 		dcu_write32(&regs->ctrldescl[i][9], 0);
 		dcu_write32(&regs->ctrldescl[i][10], 0);
 	}
-
-	dcu_write32(&regs->update_mode, DCU_UPDATE_MODE_READREG);
 }
 
-static int layer_ctrldesc_init(int index, u32 pixel_format)
+static int layer_ctrldesc_init(struct fb_info fbinfo,
+			       int index, u32 pixel_format)
 {
 	struct dcu_reg *regs = (struct dcu_reg *)CONFIG_SYS_DCU_ADDR;
 	unsigned int bpp = BPP_24_RGB888;
 
 	dcu_write32(&regs->ctrldescl[index][0],
-		    DCU_CTRLDESCLN_1_HEIGHT(info.var.yres) |
-		    DCU_CTRLDESCLN_1_WIDTH(info.var.xres));
+		    DCU_CTRLDESCLN_1_HEIGHT(fbinfo.var.yres) |
+		    DCU_CTRLDESCLN_1_WIDTH(fbinfo.var.xres));
 
 	dcu_write32(&regs->ctrldescl[index][1],
 		    DCU_CTRLDESCLN_2_POSY(0) |
 		    DCU_CTRLDESCLN_2_POSX(0));
 
-	dcu_write32(&regs->ctrldescl[index][2], (unsigned int)info.screen_base);
+	dcu_write32(&regs->ctrldescl[index][2],
+		    (unsigned int)fbinfo.screen_base);
 
 	switch (pixel_format) {
 	case 16:
@@ -243,41 +296,49 @@ static int layer_ctrldesc_init(int index, u32 pixel_format)
 	dcu_write32(&regs->ctrldescl[index][7], DCU_CTRLDESCLN_8_FG_FCOLOR(0));
 	dcu_write32(&regs->ctrldescl[index][8], DCU_CTRLDESCLN_9_BG_BCOLOR(0));
 
-	dcu_write32(&regs->update_mode, DCU_UPDATE_MODE_READREG);
-
 	return 0;
 }
 
-int fsl_dcu_init(unsigned int xres, unsigned int yres,
-		 unsigned int pixel_format)
+int fsl_dcu_init(struct fb_info *fbinfo, unsigned int xres,
+		 unsigned int yres, unsigned int pixel_format)
 {
 	struct dcu_reg *regs = (struct dcu_reg *)CONFIG_SYS_DCU_ADDR;
 	unsigned int div, mode;
+/*
+ * When DM_VIDEO is enabled reservation of framebuffer is done
+ * in advance during bind() call.
+ */
+#if !CONFIG_IS_ENABLED(DM_VIDEO)
+	fbinfo->screen_size = fbinfo->var.xres * fbinfo->var.yres *
+			     (fbinfo->var.bits_per_pixel / 8);
 
-	/* Memory allocation for framebuffer */
-	info.screen_size =
-		info.var.xres * info.var.yres * (info.var.bits_per_pixel / 8);
-	info.screen_base = (char *)memalign(ARCH_DMA_MINALIGN,
-			roundup(info.screen_size, ARCH_DMA_MINALIGN));
-	memset(info.screen_base, 0, info.screen_size);
+	if (fbinfo->screen_size > CONFIG_VIDEO_FSL_DCU_MAX_FB_SIZE_MB) {
+		fbinfo->screen_size = 0;
+		return -ENOMEM;
+	}
+	/* Reserve framebuffer at the end of memory */
+	gd->fb_base = gd->bd->bi_dram[0].start +
+			gd->bd->bi_dram[0].size - fbinfo->screen_size;
+	fbinfo->screen_base = (char *)gd->fb_base;
+
+	memset(fbinfo->screen_base, 0, fbinfo->screen_size);
+#endif
 
 	reset_total_layers();
-	div = dcu_set_pixel_clock(info.var.pixclock);
-	dcu_write32(&regs->div_ratio, (div - 1));
 
 	dcu_write32(&regs->disp_size,
-		    DCU_DISP_SIZE_DELTA_Y(info.var.yres) |
-		    DCU_DISP_SIZE_DELTA_X(info.var.xres / 16));
+		    DCU_DISP_SIZE_DELTA_Y(fbinfo->var.yres) |
+		    DCU_DISP_SIZE_DELTA_X(fbinfo->var.xres / 16));
 
 	dcu_write32(&regs->hsyn_para,
-		    DCU_HSYN_PARA_BP(info.var.left_margin) |
-		    DCU_HSYN_PARA_PW(info.var.hsync_len) |
-		    DCU_HSYN_PARA_FP(info.var.right_margin));
+		    DCU_HSYN_PARA_BP(fbinfo->var.left_margin) |
+		    DCU_HSYN_PARA_PW(fbinfo->var.hsync_len) |
+		    DCU_HSYN_PARA_FP(fbinfo->var.right_margin));
 
 	dcu_write32(&regs->vsyn_para,
-		    DCU_VSYN_PARA_BP(info.var.upper_margin) |
-		    DCU_VSYN_PARA_PW(info.var.vsync_len) |
-		    DCU_VSYN_PARA_FP(info.var.lower_margin));
+		    DCU_VSYN_PARA_BP(fbinfo->var.upper_margin) |
+		    DCU_VSYN_PARA_PW(fbinfo->var.vsync_len) |
+		    DCU_VSYN_PARA_FP(fbinfo->var.lower_margin));
 
 	dcu_write32(&regs->synpol,
 		    DCU_SYN_POL_INV_PXCK_FALL |
@@ -289,7 +350,7 @@ int fsl_dcu_init(unsigned int xres, unsigned int yres,
 		    DCU_BGND_R(0) | DCU_BGND_G(0) | DCU_BGND_B(0));
 
 	dcu_write32(&regs->mode,
-		    DCU_MODE_BLEND_ITER(DCU_LAYER_MAX_NUM) |
+		    DCU_MODE_BLEND_ITER(2) |
 		    DCU_MODE_RASTER_EN);
 
 	dcu_write32(&regs->threshold,
@@ -300,56 +361,111 @@ int fsl_dcu_init(unsigned int xres, unsigned int yres,
 	mode = dcu_read32(&regs->mode);
 	dcu_write32(&regs->mode, mode | DCU_MODE_NORMAL);
 
-	layer_ctrldesc_init(0, pixel_format);
+	layer_ctrldesc_init(*fbinfo, 0, pixel_format);
+
+	div = dcu_set_pixel_clock(fbinfo->var.pixclock);
+	dcu_write32(&regs->div_ratio, (div - 1));
+
+	dcu_write32(&regs->update_mode, DCU_UPDATE_MODE_READREG);
 
 	return 0;
 }
 
-void *video_hw_init(void)
+ulong board_get_usable_ram_top(ulong total_size)
 {
-	static GraphicDevice ctfb;
+	return gd->ram_top - CONFIG_VIDEO_FSL_DCU_MAX_FB_SIZE_MB;
+}
+
+int fsl_probe_common(struct fb_info *fbinfo, unsigned int *win_x,
+		     unsigned int *win_y)
+{
 	const char *options;
 	unsigned int depth = 0, freq = 0;
+
 	struct fb_videomode *fsl_dcu_mode_db = &fsl_dcu_mode_480_272;
 
-	if (!video_get_video_mode(&ctfb.winSizeX, &ctfb.winSizeY, &depth, &freq,
+	if (!video_get_video_mode(win_x, win_y, &depth, &freq,
 				  &options))
-		return NULL;
+		return -EINVAL;
 
 	/* Find the monitor port, which is a required option */
 	if (!options)
-		return NULL;
-	if (strncmp(options, "monitor=", 8) != 0)
-		return NULL;
+		return -EINVAL;
 
-	switch (RESOLUTION(ctfb.winSizeX, ctfb.winSizeY)) {
+	if (strncmp(options, "monitor=", 8) != 0)
+		return -EINVAL;
+
+	switch (RESOLUTION(*win_x, *win_y)) {
 	case RESOLUTION(480, 272):
 		fsl_dcu_mode_db = &fsl_dcu_mode_480_272;
 		break;
 	case RESOLUTION(640, 480):
-		fsl_dcu_mode_db = &fsl_dcu_mode_640_480;
+		if (!strncmp(options, "monitor=hdmi", 12))
+			fsl_dcu_mode_db = &fsl_dcu_cea_mode_640_480;
+		else
+			fsl_dcu_mode_db = &fsl_dcu_mode_640_480;
+		break;
+	case RESOLUTION(800, 480):
+		fsl_dcu_mode_db = &fsl_dcu_mode_800_480;
+		break;
+	case RESOLUTION(1024, 600):
+		fsl_dcu_mode_db = &fsl_dcu_mode_1024_600;
 		break;
 	default:
 		printf("unsupported resolution %ux%u\n",
-		       ctfb.winSizeX, ctfb.winSizeY);
+		       *win_x, *win_y);
 	}
 
-	info.var.xres = fsl_dcu_mode_db->xres;
-	info.var.yres = fsl_dcu_mode_db->yres;
-	info.var.bits_per_pixel = 32;
-	info.var.pixclock = fsl_dcu_mode_db->pixclock;
-	info.var.left_margin = fsl_dcu_mode_db->left_margin;
-	info.var.right_margin = fsl_dcu_mode_db->right_margin;
-	info.var.upper_margin = fsl_dcu_mode_db->upper_margin;
-	info.var.lower_margin = fsl_dcu_mode_db->lower_margin;
-	info.var.hsync_len = fsl_dcu_mode_db->hsync_len;
-	info.var.vsync_len = fsl_dcu_mode_db->vsync_len;
-	info.var.sync = fsl_dcu_mode_db->sync;
-	info.var.vmode = fsl_dcu_mode_db->vmode;
-	info.fix.line_length = info.var.xres * info.var.bits_per_pixel / 8;
+	fbinfo->var.xres = fsl_dcu_mode_db->xres;
+	fbinfo->var.yres = fsl_dcu_mode_db->yres;
+	fbinfo->var.bits_per_pixel = 32;
+	fbinfo->var.pixclock = fsl_dcu_mode_db->pixclock;
+	fbinfo->var.left_margin = fsl_dcu_mode_db->left_margin;
+	fbinfo->var.right_margin = fsl_dcu_mode_db->right_margin;
+	fbinfo->var.upper_margin = fsl_dcu_mode_db->upper_margin;
+	fbinfo->var.lower_margin = fsl_dcu_mode_db->lower_margin;
+	fbinfo->var.hsync_len = fsl_dcu_mode_db->hsync_len;
+	fbinfo->var.vsync_len = fsl_dcu_mode_db->vsync_len;
+	fbinfo->var.sync = fsl_dcu_mode_db->sync;
+	fbinfo->var.vmode = fsl_dcu_mode_db->vmode;
+	fbinfo->fix.line_length = fbinfo->var.xres *
+				  fbinfo->var.bits_per_pixel / 8;
 
-	if (platform_dcu_init(ctfb.winSizeX, ctfb.winSizeY,
-			      options + 8, fsl_dcu_mode_db) < 0)
+	return platform_dcu_init(fbinfo, *win_x, *win_y,
+				 options + 8, fsl_dcu_mode_db);
+}
+
+#ifndef CONFIG_DM_VIDEO
+static struct fb_info info;
+
+#if defined(CONFIG_OF_BOARD_SETUP)
+int fsl_dcu_fixedfb_setup(void *blob)
+{
+	u64 start, size;
+	int ret;
+
+	start = gd->bd->bi_dram[0].start;
+	size = gd->bd->bi_dram[0].size - info.screen_size;
+
+	/*
+	 * Align size on section size (1 MiB).
+	 */
+	size &= 0xfff00000;
+	ret = fdt_fixup_memory_banks(blob, &start, &size, 1);
+	if (ret) {
+		eprintf("Cannot setup fb: Error reserving memory\n");
+		return ret;
+	}
+
+	return 0;
+}
+#endif
+
+void *video_hw_init(void)
+{
+	static GraphicDevice ctfb;
+
+	if (fsl_probe_common(&info, &ctfb.winSizeX, &ctfb.winSizeY) < 0)
 		return NULL;
 
 	ctfb.frameAdrs = (unsigned int)info.screen_base;
@@ -363,3 +479,70 @@ void *video_hw_init(void)
 
 	return &ctfb;
 }
+
+#else /* ifndef CONFIG_DM_VIDEO */
+
+static int fsl_dcu_video_probe(struct udevice *dev)
+{
+	struct video_uc_platdata *plat = dev_get_uclass_platdata(dev);
+	struct video_priv *uc_priv = dev_get_uclass_priv(dev);
+	struct fb_info fbinfo = { 0 };
+	unsigned int win_x;
+	unsigned int win_y;
+	u32 fb_start, fb_end;
+	int ret = 0;
+
+	fb_start = plat->base & ~(MMU_SECTION_SIZE - 1);
+	fb_end = plat->base + plat->size;
+	fb_end = ALIGN(fb_end, 1 << MMU_SECTION_SHIFT);
+
+	fbinfo.screen_base = (char *)fb_start;
+	fbinfo.screen_size = plat->size;
+
+	ret = fsl_probe_common(&fbinfo, &win_x, &win_y);
+	if (ret < 0)
+		return ret;
+
+	uc_priv->bpix = VIDEO_BPP32;
+	uc_priv->xsize = win_x;
+	uc_priv->ysize = win_y;
+
+	/* Enable dcache for the frame buffer */
+	mmu_set_region_dcache_behaviour(fb_start, fb_end - fb_start,
+					DCACHE_WRITEBACK);
+	video_set_flush_dcache(dev, true);
+	return ret;
+}
+
+static int fsl_dcu_video_bind(struct udevice *dev)
+{
+	struct video_uc_platdata *plat = dev_get_uclass_platdata(dev);
+	unsigned int win_x;
+	unsigned int win_y;
+	unsigned int depth = 0, freq = 0;
+	const char *options;
+	int ret = 0;
+
+	ret = video_get_video_mode(&win_x, &win_y, &depth, &freq, &options);
+	if (ret < 0)
+		return ret;
+
+	plat->size = win_x * win_y * 32;
+
+	return 0;
+}
+
+static const struct udevice_id fsl_dcu_video_ids[] = {
+	{ .compatible = "fsl,vf610-dcu" },
+	{ /* sentinel */ }
+};
+
+U_BOOT_DRIVER(fsl_dcu_video) = {
+	.name	= "fsl_dcu_video",
+	.id	= UCLASS_VIDEO,
+	.of_match = fsl_dcu_video_ids,
+	.bind	= fsl_dcu_video_bind,
+	.probe	= fsl_dcu_video_probe,
+	.flags	= DM_FLAG_PRE_RELOC,
+};
+#endif /* ifndef CONFIG_DM_VIDEO */

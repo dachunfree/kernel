@@ -1,0 +1,26 @@
+
+文档参考：
+https://biscuitos.github.io/blog/CRASH/
+arm64:
+https://blog.csdn.net/weixin_44810385/article/details/117993046
+
+1.make menuconfig设置：
+kernel features: kexec systemcall / build kdump crash kernel / kexec file based system call
+kernel hacking:  compile-time checks and compile options-->compile the kernel with debug info
+
+2.kexec编译：
+
+tools:
+LDFLAGS=-static ./configure ARCH=arm64 --build=x86_64-linux-gnu --host=aarch64-linux-gnu --target=aarch64-linux-gnu --without-xen
+
+make 
+输出路径：在build目录下
+
+3.crash 下载
+https://github.com/crash-utility/crash/releases
+
+make target=arm64
+
+sudo apt-get install texinfo （安装失败就重启下）
+
+

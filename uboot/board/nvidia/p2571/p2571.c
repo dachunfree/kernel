@@ -1,17 +1,16 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
- * (C) Copyright 2013-2015
+ * (C) Copyright 2013-2019
  * NVIDIA Corporation <www.nvidia.com>
- *
- * SPDX-License-Identifier:     GPL-2.0+
  */
 
 #include <common.h>
 #include <i2c.h>
+#include <log.h>
 #include <asm/arch/gpio.h>
 #include <asm/arch/pinmux.h>
 #include <asm/gpio.h>
 #include "max77620_init.h"
-#include "pinmux-config-p2571.h"
 
 void pin_mux_mmc(void)
 {
@@ -34,30 +33,12 @@ void pin_mux_mmc(void)
 }
 
 /*
- * Routine: pinmux_init
- * Description: Do individual peripheral pinmux configs
- */
-void pinmux_init(void)
-{
-	pinmux_clear_tristate_input_clamping();
-
-	gpio_config_table(p2571_gpio_inits,
-			  ARRAY_SIZE(p2571_gpio_inits));
-
-	pinmux_config_pingrp_table(p2571_pingrps,
-				   ARRAY_SIZE(p2571_pingrps));
-
-	pinmux_config_drvgrp_table(p2571_drvgrps,
-				   ARRAY_SIZE(p2571_drvgrps));
-}
-
-/*
  * Routine: start_cpu_fan
  * Description: Enable/start PWM CPU fan on P2571
  */
 void start_cpu_fan(void)
 {
 	/* GPIO_PE4 is PS_VDD_FAN_ENABLE */
-	gpio_request(GPIO_PE4, "FAN_VDD");
-	gpio_direction_output(GPIO_PE4, 1);
+	gpio_request(TEGRA_GPIO(E, 4), "FAN_VDD");
+	gpio_direction_output(TEGRA_GPIO(E, 4), 1);
 }

@@ -1,10 +1,9 @@
+/* SPDX-License-Identifier: GPL-2.0+ */
 /*******************************************************************************
 
 
   Copyright(c) 1999 - 2002 Intel Corporation. All rights reserved.
   Copyright 2011 Freescale Semiconductor, Inc.
-
- * SPDX-License-Identifier:	GPL-2.0+
 
   Contact Information:
   Linux NICS <linux.nics@intel.com>
@@ -75,8 +74,8 @@ void e1000_lower_ee_clk(struct e1000_hw *hw, uint32_t *eecd);
 #endif
 
 #ifdef CONFIG_E1000_SPI
-int do_e1000_spi(cmd_tbl_t *cmdtp, struct e1000_hw *hw,
-		int argc, char * const argv[]);
+int do_e1000_spi(struct cmd_tbl *cmdtp, struct e1000_hw *hw,
+		 int argc, char *const argv[]);
 #endif
 
 /* Enumerated types specific to the e1000 hardware */
@@ -736,6 +735,7 @@ struct e1000_ffvt_entry {
 #define E1000_ERT      0x02008  /* Early Rx Threshold - RW */
 #define E1000_FCRTL    0x02160	/* Flow Control Receive Threshold Low - RW */
 #define E1000_FCRTH    0x02168	/* Flow Control Receive Threshold High - RW */
+#define E1000_RXPBS    0x02404  /* Rx Packet Buffer Size - RW */
 #define E1000_RDBAL    0x02800	/* RX Descriptor Base Address Low - RW */
 #define E1000_RDBAH    0x02804	/* RX Descriptor Base Address High - RW */
 #define E1000_RDLEN    0x02808	/* RX Descriptor Length - RW */
@@ -746,6 +746,7 @@ struct e1000_ffvt_entry {
 #define E1000_RADV     0x0282C	/* RX Interrupt Absolute Delay Timer - RW */
 #define E1000_RSRPD    0x02C00	/* RX Small Packet Detect - RW */
 #define E1000_TXDMAC   0x03000	/* TX DMA Control - RW */
+#define E1000_TXPBS	   0x03404  /* Tx Packet Buffer Size - RW */
 #define E1000_TDFH     0x03410  /* TX Data FIFO Head - RW */
 #define E1000_TDFT     0x03418  /* TX Data FIFO Tail - RW */
 #define E1000_TDFHS    0x03420  /* TX Data FIFO Head Saved - RW */
@@ -1084,7 +1085,11 @@ struct e1000_hw {
 #endif
 	unsigned int cardnum;
 
+#ifdef CONFIG_DM_ETH
+	struct udevice *pdev;
+#else
 	pci_dev_t pdev;
+#endif
 	uint8_t *hw_addr;
 	e1000_mac_type mac_type;
 	e1000_phy_type phy_type;
@@ -1093,11 +1098,6 @@ struct e1000_hw {
 	e1000_media_type media_type;
 	e1000_fc_type fc;
 	e1000_bus_type bus_type;
-#if 0
-	e1000_bus_speed bus_speed;
-	e1000_bus_width bus_width;
-	uint32_t io_base;
-#endif
 	uint32_t		asf_firmware_present;
 #ifndef CONFIG_E1000_NO_NVM
 	uint32_t		eeprom_semaphore_present;
@@ -1116,29 +1116,11 @@ struct e1000_hw {
 	uint32_t original_fc;
 	uint32_t txcw;
 	uint32_t autoneg_failed;
-#if 0
-	uint32_t max_frame_size;
-	uint32_t min_frame_size;
-	uint32_t mc_filter_type;
-	uint32_t num_mc_addrs;
-	uint32_t collision_delta;
-	uint32_t tx_packet_delta;
-	uint32_t ledctl_default;
-	uint32_t ledctl_mode1;
-	uint32_t ledctl_mode2;
-#endif
 	uint16_t autoneg_advertised;
 	uint16_t pci_cmd_word;
 	uint16_t fc_high_water;
 	uint16_t fc_low_water;
 	uint16_t fc_pause_time;
-#if 0
-	uint16_t current_ifs_val;
-	uint16_t ifs_min_val;
-	uint16_t ifs_max_val;
-	uint16_t ifs_step_size;
-	uint16_t ifs_ratio;
-#endif
 	uint16_t device_id;
 	uint16_t vendor_id;
 	uint16_t subsystem_id;
@@ -1149,9 +1131,6 @@ struct e1000_hw {
 	uint8_t forced_speed_duplex;
 	uint8_t wait_autoneg_complete;
 	uint8_t dma_fairness;
-#if 0
-	uint8_t perm_mac_addr[NODE_ADDRESS_SIZE];
-#endif
 	bool disable_polarity_correction;
 	bool		speed_downgraded;
 	bool get_link_status;
@@ -1162,11 +1141,6 @@ struct e1000_hw {
 	bool report_tx_early;
 	bool phy_reset_disable;
 	bool		initialize_hw_bits_disable;
-#if 0
-	bool adaptive_ifs;
-	bool ifs_params_forced;
-	bool in_ifs_mode;
-#endif
 	e1000_smart_speed	smart_speed;
 	e1000_dsp_config	dsp_config_state;
 };
@@ -1269,6 +1243,9 @@ struct e1000_hw {
 #define E1000_EECD_SELSHAD   0x00020000 /* Select Shadow RAM */
 #define E1000_EECD_INITSRAM  0x00040000 /* Initialize Shadow RAM */
 #define E1000_EECD_FLUPD     0x00080000 /* Update FLASH */
+#define E1000_EECD_FLUPD_I210       0x00800000 /* Update FLASH */
+#define E1000_EECD_FLUDONE_I210     0x04000000 /* Update FLASH done*/
+#define E1000_FLUDONE_ATTEMPTS      20000
 #define E1000_EECD_AUPDEN    0x00100000 /* Enable Autonomous FLASH update */
 #define E1000_EECD_SHADV     0x00200000 /* Shadow RAM Data Valid */
 #define E1000_EECD_SEC1VAL   0x00400000 /* Sector One Valid */
@@ -2614,4 +2591,8 @@ struct e1000_hw {
 
 #define E1000_CTRL_EXT_INT_TIMER_CLR  0x20000000 /* Clear Interrupt timers
 							after IMS clear */
+
+#define I210_RXPBSIZE_DEFAULT          0x000000A2 /* RXPBSIZE default */
+#define I210_TXPBSIZE_DEFAULT          0x04000014 /* TXPBSIZE default */
+
 #endif	/* _E1000_HW_H_ */

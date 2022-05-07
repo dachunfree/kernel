@@ -1,10 +1,11 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * Copyright (C) 2013 Stefan Roese <sr@denx.de>
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
+#include <init.h>
+#include <net.h>
 #include <asm/io.h>
 #include <asm/arch/clock.h>
 #include <asm/arch/imx-regs.h>
@@ -13,14 +14,15 @@
 #include <asm/arch/crm_regs.h>
 #include <asm/arch/sys_proto.h>
 #include <asm/gpio.h>
-#include <asm/imx-common/iomux-v3.h>
-#include <asm/imx-common/mxc_i2c.h>
-#include <asm/imx-common/boot_mode.h>
+#include <asm/mach-imx/iomux-v3.h>
+#include <asm/mach-imx/mxc_i2c.h>
+#include <asm/mach-imx/boot_mode.h>
 #include <mmc.h>
-#include <fsl_esdhc.h>
+#include <fsl_esdhc_imx.h>
 #include <micrel.h>
 #include <miiphy.h>
 #include <netdev.h>
+#include <linux/delay.h>
 
 DECLARE_GLOBAL_DATA_PTR;
 
@@ -216,7 +218,7 @@ int board_ehci_hcd_init(int port)
 
 #endif
 
-#ifdef CONFIG_FSL_ESDHC
+#ifdef CONFIG_FSL_ESDHC_IMX
 struct fsl_esdhc_cfg usdhc_cfg[1] = {
 	{ USDHC3_BASE_ADDR },
 };
@@ -233,7 +235,7 @@ int board_mmc_getcd(struct mmc *mmc)
 	return 0;
 }
 
-int board_mmc_init(bd_t *bis)
+int board_mmc_init(struct bd_info *bis)
 {
 	/*
 	 * Only one USDHC controller on titianium
@@ -262,7 +264,7 @@ int board_phy_config(struct phy_device *phydev)
 	return 0;
 }
 
-int board_eth_init(bd_t *bis)
+int board_eth_init(struct bd_info *bis)
 {
 	setup_iomux_enet();
 

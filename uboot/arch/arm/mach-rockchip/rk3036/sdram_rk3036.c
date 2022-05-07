@@ -1,17 +1,17 @@
+// SPDX-License-Identifier: GPL-2.0+ OR BSD-3-Clause
 /*
- * (C) Copyright 2015 Google, Inc
- *
- * SPDX-License-Identifier:     GPL-2.0+
+ * (C) Copyright 2015 Rockchip Electronics Co., Ltd
  */
 #include <common.h>
+#include <init.h>
 #include <asm/io.h>
 #include <asm/types.h>
-#include <asm/arch/cru_rk3036.h>
-#include <asm/arch/grf_rk3036.h>
-#include <asm/arch/hardware.h>
-#include <asm/arch/sdram_rk3036.h>
-#include <asm/arch/timer.h>
-#include <asm/arch/uart.h>
+#include <asm/arch-rockchip/cru_rk3036.h>
+#include <asm/arch-rockchip/grf_rk3036.h>
+#include <asm/arch-rockchip/hardware.h>
+#include <asm/arch-rockchip/sdram_rk3036.h>
+#include <asm/arch-rockchip/uart.h>
+#include <linux/delay.h>
 
 /*
  * we can not fit the code to access the device tree in SPL
@@ -34,10 +34,11 @@ struct rk3036_sdram_priv {
 	struct rk3036_ddr_config ddr_config;
 };
 
-/* use integer mode, 396MHz dpll setting
+/*
+ * use integer mode, dpll output 792MHz and ddr get 396MHz
  * refdiv, fbdiv, postdiv1, postdiv2
  */
-const struct pll_div dpll_init_cfg = {1, 66, 4, 1};
+const struct pll_div dpll_init_cfg = {1, 66, 2, 1};
 
 /* 396Mhz ddr timing */
 const struct rk3036_ddr_timing ddr_timing = {0x18c,
@@ -329,29 +330,26 @@ static void rkdclk_init(struct rk3036_sdram_priv *priv)
 	struct rk3036_pll *pll = &priv->cru->pll[1];
 
 	/* pll enter slow-mode */
-	rk_clrsetreg(&priv->cru->cru_mode_con,
-		     DPLL_MODE_MASK << DPLL_MODE_SHIFT,
+	rk_clrsetreg(&priv->cru->cru_mode_con, DPLL_MODE_MASK,
 		     DPLL_MODE_SLOW << DPLL_MODE_SHIFT);
 
 	/* use integer mode */
-	rk_clrreg(&pll->con1, 1 << PLL_DSMPD_SHIFT);
+	rk_setreg(&pll->con1, 1 << PLL_DSMPD_SHIFT);
 
 	rk_clrsetreg(&pll->con0,
-		     PLL_POSTDIV1_MASK << PLL_POSTDIV1_SHIFT | PLL_FBDIV_MASK,
+		     PLL_POSTDIV1_MASK | PLL_FBDIV_MASK,
 		     (dpll_init_cfg.postdiv1 << PLL_POSTDIV1_SHIFT) |
 			dpll_init_cfg.fbdiv);
-	rk_clrsetreg(&pll->con1, PLL_POSTDIV2_MASK << PLL_POSTDIV2_SHIFT |
-			PLL_REFDIV_MASK << PLL_REFDIV_SHIFT,
-			(dpll_init_cfg.postdiv2 << PLL_POSTDIV2_SHIFT |
-			 dpll_init_cfg.refdiv << PLL_REFDIV_SHIFT));
+	rk_clrsetreg(&pll->con1, PLL_POSTDIV2_MASK | PLL_REFDIV_MASK,
+		     (dpll_init_cfg.postdiv2 << PLL_POSTDIV2_SHIFT |
+		      dpll_init_cfg.refdiv << PLL_REFDIV_SHIFT));
 
 	/* waiting for pll lock */
 	while (readl(&pll->con1) & (1 << PLL_LOCK_STATUS_SHIFT))
-		rockchip_udelay(1);
+		udelay(1);
 
 	/* PLL enter normal-mode */
-	rk_clrsetreg(&priv->cru->cru_mode_con,
-		     DPLL_MODE_MASK << DPLL_MODE_SHIFT,
+	rk_clrsetreg(&priv->cru->cru_mode_con, DPLL_MODE_MASK,
 		     DPLL_MODE_NORM << DPLL_MODE_SHIFT);
 }
 
@@ -376,25 +374,25 @@ void phy_pctrl_reset(struct rk3036_sdram_priv *priv)
 			1 << DDRCTRL_PSRST_SHIFT | 1 << DDRCTRL_SRST_SHIFT |
 			1 << DDRPHY_PSRST_SHIFT | 1 << DDRPHY_SRST_SHIFT);
 
-	rockchip_udelay(10);
+	udelay(10);
 
 	rk_clrreg(&priv->cru->cru_softrst_con[5], 1 << DDRPHY_PSRST_SHIFT |
 						  1 << DDRPHY_SRST_SHIFT);
-	rockchip_udelay(10);
+	udelay(10);
 
 	rk_clrreg(&priv->cru->cru_softrst_con[5], 1 << DDRCTRL_PSRST_SHIFT |
 						  1 << DDRCTRL_SRST_SHIFT);
-	rockchip_udelay(10);
+	udelay(10);
 
 	clrsetbits_le32(&ddr_phy->ddrphy_reg1,
 			SOFT_RESET_MASK << SOFT_RESET_SHIFT,
 			0 << SOFT_RESET_SHIFT);
-	rockchip_udelay(10);
+	udelay(10);
 	clrsetbits_le32(&ddr_phy->ddrphy_reg1,
 			SOFT_RESET_MASK << SOFT_RESET_SHIFT,
 			3 << SOFT_RESET_SHIFT);
 
-	rockchip_udelay(1);
+	udelay(1);
 }
 
 void phy_dll_bypass_set(struct rk3036_sdram_priv *priv, unsigned int freq)
@@ -447,7 +445,7 @@ static void send_command(struct rk3036_ddr_pctl *pctl,
 			 u32 rank, u32 cmd, u32 arg)
 {
 	writel((START_CMD | (rank << 20) | arg | cmd), &pctl->mcmd);
-	rockchip_udelay(1);
+	udelay(1);
 	while (readl(&pctl->mcmd) & START_CMD)
 		;
 }
@@ -457,7 +455,7 @@ static void memory_init(struct rk3036_sdram_priv *priv)
 	struct rk3036_ddr_pctl *pctl = priv->pctl;
 
 	send_command(pctl, 3, DESELECT_CMD, 0);
-	rockchip_udelay(1);
+	udelay(1);
 	send_command(pctl, 3, PREA_CMD, 0);
 	send_command(pctl, 3, MRS_CMD,
 		     (0x02 & BANK_ADDR_MASK) << BANK_ADDR_SHIFT |
@@ -495,7 +493,7 @@ static void data_training(struct rk3036_sdram_priv *priv)
 	clrsetbits_le32(&ddr_phy->ddrphy_reg2, 0x03,
 			DQS_SQU_CAL_NORMAL_MODE | DQS_SQU_CAL_START);
 
-	rockchip_udelay(1);
+	udelay(1);
 	while ((readl(&ddr_phy->ddrphy_reg62) & CAL_DONE_MASK) !=
 		(HIGH_8BIT_CAL_DONE | LOW_8BIT_CAL_DONE)) {
 		;
@@ -710,11 +708,12 @@ static void sdram_all_config(struct rk3036_sdram_priv *priv)
 	os_reg = config.ddr_type << DDR_TYPE_SHIFT |
 			0 << DDR_CHN_CNT_SHIFT |
 			(config.rank - 1) << DDR_RANK_CNT_SHIFT |
-			(config.col - 1) << DDR_COL_SHIFT |
+			(config.col - 9) << DDR_COL_SHIFT |
 			(config.bank == 3 ? 0 : 1) << DDR_BANK_SHIFT |
 			(config.cs0_row - 13) << DDR_CS0_ROW_SHIFT |
 			cs1_row << DDR_CS1_ROW_SHIFT |
-			1 << DDR_BW_SHIFT | config.bw << DDR_DIE_BW_SHIFT;
+			1 << DDR_BW_SHIFT |
+			(2 >> config.bw) << DDR_DIE_BW_SHIFT;
 	writel(os_reg, &priv->grf->os_reg[1]);
 }
 

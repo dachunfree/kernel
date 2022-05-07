@@ -1,14 +1,15 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * Copyright (C) 2014, Barco (www.barco.com)
  * Copyright (C) 2014 Stefan Roese <sr@denx.de>
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
+#include <init.h>
 #include <mmc.h>
-#include <fsl_esdhc.h>
+#include <fsl_esdhc_imx.h>
 #include <miiphy.h>
+#include <net.h>
 #include <netdev.h>
 #include <asm/io.h>
 #include <asm/arch/clock.h>
@@ -18,8 +19,8 @@
 #include <asm/arch/crm_regs.h>
 #include <asm/arch/sys_proto.h>
 #include <asm/gpio.h>
-#include <asm/imx-common/iomux-v3.h>
-#include <asm/imx-common/boot_mode.h>
+#include <asm/mach-imx/iomux-v3.h>
+#include <asm/mach-imx/boot_mode.h>
 
 #include "platinum.h"
 
@@ -114,7 +115,7 @@ int board_mmc_getcd(struct mmc *mmc)
 	return 0;
 }
 
-int board_mmc_init(bd_t *bis)
+int board_mmc_init(struct bd_info *bis)
 {
 	imx_iomux_v3_setup_multiple_pads(usdhc3_pads, ARRAY_SIZE(usdhc3_pads));
 	usdhc_cfg[0].sdhc_clk = mxc_get_clock(MXC_ESDHC3_CLK);
@@ -162,7 +163,7 @@ int board_phy_config(struct phy_device *phydev)
 	return platinum_phy_config(phydev);
 }
 
-int board_eth_init(bd_t *bis)
+int board_eth_init(struct bd_info *bis)
 {
 	return cpu_eth_init(bis);
 }

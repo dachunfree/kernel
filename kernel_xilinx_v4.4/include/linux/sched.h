@@ -1256,7 +1256,7 @@ struct sched_entity {
 	struct load_weight	load;		/* for load-balancing 用来记录权重信息，权重信息，在计算虚拟时间的时候会用到inv_weight成员*/
 	struct rb_node		run_node; /*CFS调度器的每个就绪队列维护了一颗红黑树，上面挂满了就绪等待执行的task，run_node就是挂载点*/
 	struct list_head	group_node;
-	unsigned int		on_rq;/*调度实体se加入就绪队列后，on_rq置1。从就绪队列删除后，on_rq置0*/
+	unsigned int		on_rq;/*调度实体se加入就绪队列后 enqueue_entity，on_rq置1。从就绪队列删除后，on_rq置0*/
 
 	u64			exec_start; //前进程最近一次执行的时间点
 	u64			sum_exec_runtime; /*调度实体已经运行实际时间总合*/

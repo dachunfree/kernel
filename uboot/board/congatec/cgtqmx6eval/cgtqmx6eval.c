@@ -1,29 +1,33 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * Copyright (C) 2010-2011 Freescale Semiconductor, Inc.
  * Based on mx6qsabrelite.c file
  * Copyright (C) 2013, Adeneo Embedded <www.adeneo-embedded.com>
  * Leo Sartre, <lsartre@adeneo-embedded.com>
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
+#include <init.h>
+#include <net.h>
 #include <asm/io.h>
 #include <asm/arch/clock.h>
 #include <asm/arch/imx-regs.h>
 #include <asm/arch/iomux.h>
 #include <asm/arch/mx6-pins.h>
 #include <asm/gpio.h>
-#include <asm/imx-common/iomux-v3.h>
-#include <asm/imx-common/sata.h>
-#include <asm/imx-common/boot_mode.h>
-#include <asm/imx-common/mxc_i2c.h>
+#include <asm/mach-imx/iomux-v3.h>
+#include <asm/mach-imx/sata.h>
+#include <asm/mach-imx/boot_mode.h>
+#include <asm/mach-imx/mxc_i2c.h>
 #include <asm/arch/sys_proto.h>
 #include <asm/arch/mxc_hdmi.h>
 #include <asm/arch/crm_regs.h>
+#include <env.h>
 #include <mmc.h>
-#include <fsl_esdhc.h>
+#include <fsl_esdhc_imx.h>
 #include <i2c.h>
+#include <input.h>
+#include <linux/delay.h>
 #include <power/pmic.h>
 #include <power/pfuze100_pmic.h>
 #include <linux/fb.h>
@@ -71,6 +75,7 @@ static iomux_v3_cfg_t const uart2_pads[] = {
 	IOMUX_PADS(PAD_EIM_D27__UART2_RX_DATA | MUX_PAD_CTRL(UART_PAD_CTRL)),
 };
 
+#ifndef CONFIG_SPL_BUILD
 static iomux_v3_cfg_t const usdhc2_pads[] = {
 	IOMUX_PADS(PAD_SD2_CLK__SD2_CLK   | MUX_PAD_CTRL(USDHC_PAD_CTRL)),
 	IOMUX_PADS(PAD_SD2_CMD__SD2_CMD   | MUX_PAD_CTRL(USDHC_PAD_CTRL)),
@@ -94,6 +99,7 @@ static iomux_v3_cfg_t const usdhc3_pads[] = {
 	IOMUX_PADS(PAD_SD3_DAT7__SD3_DATA7 | MUX_PAD_CTRL(USDHC_PAD_CTRL)),
 	IOMUX_PADS(PAD_SD3_RST__SD3_RESET | MUX_PAD_CTRL(USDHC_PAD_CTRL)),
 };
+#endif
 
 static iomux_v3_cfg_t const usdhc4_pads[] = {
 	IOMUX_PADS(PAD_SD4_CLK__SD4_CLK   | MUX_PAD_CTRL(USDHC_PAD_CTRL)),
@@ -233,7 +239,7 @@ int power_init_board(void)
 		return 0;
 
 	/* set level of MIPI if specified */
-	lv_mipi = getenv("lv_mipi");
+	lv_mipi = env_get("lv_mipi");
 	if (lv_mipi)
 		return 0;
 
@@ -250,7 +256,7 @@ int power_init_board(void)
 	return 0;
 }
 
-int board_eth_init(bd_t *bis)
+int board_eth_init(struct bd_info *bis)
 {
 	struct phy_device *phydev;
 	struct mii_dev *bus;
@@ -409,7 +415,7 @@ static void setup_spi(void)
 }
 #endif
 
-#ifdef CONFIG_FSL_ESDHC
+#ifdef CONFIG_FSL_ESDHC_IMX
 static struct fsl_esdhc_cfg usdhc_cfg[] = {
 	{USDHC2_BASE_ADDR},
 	{USDHC3_BASE_ADDR},
@@ -440,7 +446,7 @@ int board_mmc_getcd(struct mmc *mmc)
 	return ret;
 }
 
-int board_mmc_init(bd_t *bis)
+int board_mmc_init(struct bd_info *bis)
 {
 #ifndef CONFIG_SPL_BUILD
 	s32 status = 0;
@@ -581,7 +587,7 @@ int board_video_skip(void)
 {
 	int i;
 	int ret;
-	char const *panel = getenv("panel");
+	char const *panel = env_get("panel");
 	if (!panel) {
 		for (i = 0; i < ARRAY_SIZE(displays); i++) {
 			struct display_info_t const *dev = displays + i;
@@ -619,6 +625,11 @@ int board_video_skip(void)
 	}
 
 	return 0;
+}
+
+int ipu_displays_init(void)
+{
+	return board_video_skip();
 }
 
 static void setup_display(void)
@@ -678,19 +689,9 @@ int overwrite_console(void)
 	return 1;
 }
 
-static bool is_mx6q(void)
-{
-	if (is_cpu_type(MXC_CPU_MX6Q) || is_cpu_type(MXC_CPU_MX6D))
-		return true;
-	else
-		return false;
-}
-
 int board_early_init_f(void)
 {
 	setup_iomux_uart();
-	setup_display();
-
 #ifdef CONFIG_MXC_SPI
 	setup_spi();
 #endif
@@ -703,12 +704,14 @@ int board_init(void)
 	gd->bd->bi_boot_params = PHYS_SDRAM + 0x100;
 
 
-	if (is_mx6q())
+	if (is_mx6dq())
 		setup_i2c(1, CONFIG_SYS_I2C_SPEED, 0x7f, &mx6q_i2c_pad_info1);
 	else
 		setup_i2c(1, CONFIG_SYS_I2C_SPEED, 0x7f, &mx6dl_i2c_pad_info1);
 
-#ifdef CONFIG_CMD_SATA
+	setup_display();
+
+#ifdef CONFIG_SATA
 	setup_sata();
 #endif
 
@@ -760,10 +763,10 @@ int misc_init_r(void)
 int board_late_init(void)
 {
 #ifdef CONFIG_ENV_VARS_UBOOT_RUNTIME_CONFIG
-	if (is_mx6q())
-		setenv("board_rev", "MX6Q");
+	if (is_mx6dq())
+		env_set("board_rev", "MX6Q");
 	else
-		setenv("board_rev", "MX6DL");
+		env_set("board_rev", "MX6DL");
 #endif
 
 	return 0;
@@ -772,7 +775,7 @@ int board_late_init(void)
 #ifdef CONFIG_SPL_BUILD
 #include <asm/arch/mx6-ddr.h>
 #include <spl.h>
-#include <libfdt.h>
+#include <linux/libfdt.h>
 #include <spi_flash.h>
 #include <spi.h>
 
@@ -961,17 +964,6 @@ static void ccgr_init(void)
 	writel(0x000003FF, &ccm->CCGR6);
 }
 
-static void gpr_init(void)
-{
-	struct iomuxc *iomux = (struct iomuxc *)IOMUXC_BASE_ADDR;
-
-	/* enable AXI cache for VDOA/VPU/IPU */
-	writel(0xF00000CF, &iomux->gpr[4]);
-	/* set IPU AXI-id0 Qos=0xf(bypass) AXI-id1 Qos=0x7 */
-	writel(0x007F007F, &iomux->gpr[6]);
-	writel(0x007F007F, &iomux->gpr[7]);
-}
-
 /* Define a minimal structure so that the part number can be read via SPL */
 struct mfgdata {
 	unsigned char tsize;
@@ -1045,6 +1037,8 @@ static void spl_dram_init(int width)
 		.bi_on = 1,
 		.sde_to_rst = 0x0d,
 		.rst_to_cke = 0x20,
+		.refsel = 1,	/* Refresh cycles at 32KHz */
+		.refr = 7,	/* 8 refresh commands per refresh cycle */
 	};
 
 	if (is_cpu_type(MXC_CPU_MX6Q) && is_2gb()) {
@@ -1053,7 +1047,7 @@ static void spl_dram_init(int width)
 		return;
 	}
 
-	if (is_mx6q()) {
+	if (is_mx6dq()) {
 		mx6dq_dram_iocfg(width, &mx6q_ddr_ioregs, &mx6q_grp_ioregs);
 		mx6_dram_cfg(&sysinfo, &mx6q_mmcd_calib, &mem_ddr_2g);
 	} else if (is_cpu_type(MXC_CPU_MX6SOLO)) {

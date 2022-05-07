@@ -13,6 +13,11 @@
 		};
 	};
 
+	chosen {
+		stdout-path = &uart0;
+		tick-timer = &timer2;
+	};
+
 	memory {
 		device_type = "memory";
 		reg = <0x80000000 0x10000000>; /* 256 MB */
@@ -355,16 +360,12 @@
 };
 
 &cpsw_emac0 {
-	phy_id = <&davinci_mdio>, <0>;
-	phy-mode = "mii";
-};
-
-&cpsw_emac1 {
-	phy_id = <&davinci_mdio>, <1>;
+	phy-handle = <&ethphy0>;
 	phy-mode = "mii";
 };
 
 &mac {
+	slaves = <1>;
 	pinctrl-names = "default", "sleep";
 	pinctrl-0 = <&cpsw_default>;
 	pinctrl-1 = <&cpsw_sleep>;
@@ -376,6 +377,10 @@
 	pinctrl-0 = <&davinci_mdio_default>;
 	pinctrl-1 = <&davinci_mdio_sleep>;
 	status = "okay";
+
+	ethphy0: ethernet-phy@0 {
+		reg = <0>;
+	};
 };
 
 &mmc1 {
@@ -383,8 +388,7 @@
 	bus-width = <0x4>;
 	pinctrl-names = "default";
 	pinctrl-0 = <&mmc1_pins>;
-	cd-gpios = <&gpio0 6 GPIO_ACTIVE_HIGH>;
-	cd-inverted;
+	cd-gpios = <&gpio0 6 GPIO_ACTIVE_LOW>;
 };
 
 &aes {

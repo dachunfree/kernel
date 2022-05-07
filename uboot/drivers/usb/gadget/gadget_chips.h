@@ -11,7 +11,7 @@
  * Some are available on 2.4 kernels; several are available, but not
  * yet pushed in the 2.6 mainline tree.
  *
- * Ported to U-boot by: Thomas Smits <ts.smits@gmail.com> and
+ * Ported to U-Boot by: Thomas Smits <ts.smits@gmail.com> and
  *                      Remy Bohmer <linux@bohmer.net>
  */
 #ifdef CONFIG_USB_GADGET_NET2280
@@ -91,12 +91,6 @@
 #define gadget_is_atmel_usba(g)	0
 #endif
 
-#ifdef CONFIG_USB_GADGET_S3C2410
-#define gadget_is_s3c2410(g)    (!strcmp("s3c2410_udc", (g)->name))
-#else
-#define gadget_is_s3c2410(g)    0
-#endif
-
 #ifdef CONFIG_USB_GADGET_AT91
 #define gadget_is_at91(g)	(!strcmp("at91_udc", (g)->name))
 #else
@@ -131,13 +125,6 @@
 #define gadget_is_musbhdrc(g)	0
 #endif
 
-/* from Montavista kernel (?) */
-#ifdef CONFIG_USB_GADGET_MPC8272
-#define gadget_is_mpc8272(g)	(!strcmp("mpc8272_udc", (g)->name))
-#else
-#define gadget_is_mpc8272(g)	0
-#endif
-
 #ifdef CONFIG_USB_GADGET_M66592
 #define	gadget_is_m66592(g)	(!strcmp("m66592_udc", (g)->name))
 #else
@@ -162,13 +149,23 @@
 #define gadget_is_dwc3(g)        0
 #endif
 
+#ifdef CONFIG_USB_CDNS3_GADGET
+#define gadget_is_cdns3(g)        (!strcmp("cdns3-gadget", (g)->name))
+#else
+#define gadget_is_cdns3(g)        0
+#endif
 
+#ifdef CONFIG_USB_GADGET_MAX3420
+#define gadget_is_max3420(g)        (!strcmp("max3420-udc", (g)->name))
+#else
+#define gadget_is_max3420(g)        0
+#endif
 
-/*
- * CONFIG_USB_GADGET_SX2
- * CONFIG_USB_GADGET_AU1X00
- * ...
- */
+#ifdef CONFIG_USB_MTU3_GADGET
+#define gadget_is_mtu3(g)        (!strcmp("mtu3-gadget", (g)->name))
+#else
+#define gadget_is_mtu3(g)        0
+#endif
 
 /**
  * usb_gadget_controller_number - support bcdDevice id convention
@@ -207,8 +204,6 @@ static inline int usb_gadget_controller_number(struct usb_gadget *gadget)
 		return 0x09;
 	else if (gadget_is_pxa27x(gadget))
 		return 0x10;
-	else if (gadget_is_s3c2410(gadget))
-		return 0x11;
 	else if (gadget_is_at91(gadget))
 		return 0x12;
 	else if (gadget_is_imx(gadget))
@@ -217,8 +212,6 @@ static inline int usb_gadget_controller_number(struct usb_gadget *gadget)
 		return 0x14;
 	else if (gadget_is_musbhdrc(gadget))
 		return 0x15;
-	else if (gadget_is_mpc8272(gadget))
-		return 0x16;
 	else if (gadget_is_atmel_usba(gadget))
 		return 0x17;
 	else if (gadget_is_fsl_usb2(gadget))
@@ -231,5 +224,13 @@ static inline int usb_gadget_controller_number(struct usb_gadget *gadget)
 		return 0x21;
 	else if (gadget_is_fotg210(gadget))
 		return 0x22;
+	else if (gadget_is_dwc3(gadget))
+		return 0x23;
+	else if (gadget_is_cdns3(gadget))
+		return 0x24;
+	else if (gadget_is_max3420(gadget))
+		return 0x25;
+	else if (gadget_is_mtu3(gadget))
+		return 0x26;
 	return -ENOENT;
 }

@@ -1,24 +1,29 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * Copyright (C) 2007,2010 Freescale Semiconductor, Inc.
  * Dave Liu <daveliu@freescale.com>
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
 #include <hwconfig.h>
 #include <i2c.h>
+#include <init.h>
+#include <net.h>
+#include <asm/bitops.h>
 #include <asm/io.h>
 #include <asm/fsl_mpc83xx_serdes.h>
 #include <spd_sdram.h>
 #include <tsec.h>
-#include <libfdt.h>
+#include <linux/delay.h>
+#include <linux/libfdt.h>
 #include <fdt_support.h>
 #include <fsl_esdhc.h>
 #include <fsl_mdio.h>
 #include <phy.h>
 #include "pci.h"
 #include "../common/pq-mds-pib.h"
+
+DECLARE_GLOBAL_DATA_PTR;
 
 int board_early_init_f(void)
 {
@@ -59,7 +64,7 @@ int board_early_init_f(void)
 }
 
 #ifdef CONFIG_FSL_ESDHC
-int board_mmc_init(bd_t *bd)
+int board_mmc_init(struct bd_info *bd)
 {
 	struct immap __iomem *im = (struct immap __iomem *)CONFIG_SYS_IMMR;
 	u8 *bcsr = (u8 *)CONFIG_SYS_BCSR;
@@ -80,7 +85,7 @@ int board_mmc_init(bd_t *bd)
 #endif
 
 #if defined(CONFIG_TSEC1) || defined(CONFIG_TSEC2)
-int board_eth_init(bd_t *bd)
+int board_eth_init(struct bd_info *bd)
 {
 	struct fsl_pq_mdio_info mdio_info;
 	struct tsec_info_struct tsec_info[2];
@@ -136,7 +141,7 @@ int board_eth_init(bd_t *bd)
 	return tsec_eth_init(bd, tsec_info, num);
 }
 
-static void __ft_tsec_fixup(void *blob, bd_t *bd, const char *alias,
+static void __ft_tsec_fixup(void *blob, struct bd_info *bd, const char *alias,
 			    int phy_addr)
 {
 	const u32 *ph;
@@ -181,7 +186,7 @@ static void __ft_tsec_fixup(void *blob, bd_t *bd, const char *alias,
 	}
 }
 
-static void ft_tsec_fixup(void *blob, bd_t *bd)
+static void ft_tsec_fixup(void *blob, struct bd_info *bd)
 {
 	struct immap __iomem *im = (struct immap __iomem *)CONFIG_SYS_IMMR;
 	u32 rcwh = in_be32(&im->reset.rcwh);
@@ -200,7 +205,7 @@ static void ft_tsec_fixup(void *blob, bd_t *bd)
 #endif
 }
 #else
-static inline void ft_tsec_fixup(void *blob, bd_t *bd) {}
+static inline void ft_tsec_fixup(void *blob, struct bd_info *bd) {}
 #endif /* defined(CONFIG_TSEC1) || defined(CONFIG_TSEC2) */
 
 int board_early_init_r(void)
@@ -216,13 +221,13 @@ extern void ddr_enable_ecc(unsigned int dram_size);
 #endif
 int fixed_sdram(void);
 
-phys_size_t initdram(int board_type)
+int dram_init(void)
 {
 	volatile immap_t *im = (immap_t *) CONFIG_SYS_IMMR;
 	u32 msize = 0;
 
 	if ((im->sysconf.immrbar & IMMRBAR_BASE_ADDR) != (u32) im)
-		return -1;
+		return -ENXIO;
 
 #if defined(CONFIG_SPD_EEPROM)
 	msize = spd_sdram();
@@ -236,7 +241,9 @@ phys_size_t initdram(int board_type)
 #endif
 
 	/* return total bus DDR size(bytes) */
-	return (msize * 1024 * 1024);
+	gd->ram_size = msize * 1024 * 1024;
+
+	return 0;
 }
 
 #if !defined(CONFIG_SPD_EEPROM)
@@ -249,7 +256,7 @@ int fixed_sdram(void)
 	u32 msize = CONFIG_SYS_DDR_SIZE * 1024 * 1024;
 	u32 msize_log2 = __ilog2(msize);
 
-	im->sysconf.ddrlaw[0].bar = CONFIG_SYS_DDR_SDRAM_BASE & 0xfffff000;
+	im->sysconf.ddrlaw[0].bar = CONFIG_SYS_SDRAM_BASE & 0xfffff000;
 	im->sysconf.ddrlaw[0].ar = LBLAWAR_EN | (msize_log2 - 1);
 
 #if (CONFIG_SYS_DDR_SIZE != 512)
@@ -305,7 +312,7 @@ int board_pci_host_broken(void)
 	return 0;
 }
 
-static void ft_pci_fixup(void *blob, bd_t *bd)
+static void ft_pci_fixup(void *blob, struct bd_info *bd)
 {
 	const char *status = "broken (no arbiter)";
 	int off;
@@ -328,11 +335,11 @@ static void ft_pci_fixup(void *blob, bd_t *bd)
 #endif
 
 #if defined(CONFIG_OF_BOARD_SETUP)
-int ft_board_setup(void *blob, bd_t *bd)
+int ft_board_setup(void *blob, struct bd_info *bd)
 {
 	ft_cpu_setup(blob, bd);
 	ft_tsec_fixup(blob, bd);
-	fdt_fixup_dr_usb(blob, bd);
+	fsl_fdt_fixup_dr_usb(blob, bd);
 	fdt_fixup_esdhc(blob, bd);
 #ifdef CONFIG_PCI
 	ft_pci_setup(blob, bd);

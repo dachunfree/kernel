@@ -88,7 +88,7 @@ SECTIONS
 		*(.discard)
 		*(.discard.*)
 	}
-
+	//	TEXT_OFFSET := 0x00080000 Makefile 里面控制的
 	. = PAGE_OFFSET + TEXT_OFFSET; //PAGE_OFFSET:(UL(0xffffffffffffffff) << (VA_BITS - 1)).
 
 	.head.text : {
@@ -141,7 +141,7 @@ SECTIONS
 		ARM_EXIT_KEEP(EXIT_DATA)
 	}
 
-	PERCPU_SECTION(L1_CACHE_BYTES)
+	PERCPU_SECTION(L1_CACHE_BYTES) //存放per-cpu变量
 
 	. = ALIGN(PAGE_SIZE);
 	__init_end = .;

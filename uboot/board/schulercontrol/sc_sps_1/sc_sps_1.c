@@ -1,13 +1,14 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * SchulerControl GmbH, SC_SPS_1 module
  *
  * Copyright (C) 2012 Marek Vasut <marex@denx.de>
  * on behalf of DENX Software Engineering GmbH
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
+#include <init.h>
+#include <net.h>
 #include <asm/gpio.h>
 #include <asm/io.h>
 #include <asm/arch/imx-regs.h>
@@ -60,14 +61,14 @@ int dram_init(void)
 }
 
 #ifdef	CONFIG_CMD_MMC
-int board_mmc_init(bd_t *bis)
+int board_mmc_init(struct bd_info *bis)
 {
 	return mxsmmc_initialize(bis, 0, NULL, NULL);
 }
 #endif
 
 #ifdef	CONFIG_CMD_NET
-int board_eth_init(bd_t *bis)
+int board_eth_init(struct bd_info *bis)
 {
 	struct mxs_clkctrl_regs *clkctrl_regs =
 		(struct mxs_clkctrl_regs *)MXS_CLKCTRL_BASE;

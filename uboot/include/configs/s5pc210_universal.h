@@ -1,10 +1,9 @@
+/* SPDX-License-Identifier: GPL-2.0+ */
 /*
  * Copyright (C) 2010 Samsung Electronics
  * Minkyu Kang <mk7.kang@samsung.com>
  *
  * Configuation settings for the SAMSUNG Universal (EXYNOS4210) board.
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #ifndef __CONFIG_UNIVERSAL_H
@@ -18,23 +17,12 @@
 #define CONFIG_SYS_L2CACHE_OFF		1
 
 /* Universal has 2 banks of DRAM */
-#define CONFIG_NR_DRAM_BANKS		2
 #define CONFIG_SYS_SDRAM_BASE		0x40000000
 #define PHYS_SDRAM_1			CONFIG_SYS_SDRAM_BASE
 
 #define SDRAM_BANK_SIZE			(256 << 20)	/* 256 MB */
 
-/* select serial console configuration */
-#define CONFIG_SERIAL2
-#define CONFIG_BAUDRATE			115200
-
-/* Console configuration */
-#define CONFIG_SYS_CONSOLE_INFO_QUIET
-#define CONFIG_SYS_CONSOLE_IS_IN_ENV
-
-#define CONFIG_BOOTARGS			"Please use defined boot"
 #define CONFIG_BOOTCOMMAND		"run mmcboot"
-#define CONFIG_DEFAULT_CONSOLE		"console=ttySAC1,115200n8\0"
 
 #define CONFIG_SYS_INIT_SP_ADDR	(CONFIG_SYS_LOAD_ADDR \
 					- GENERATED_GBL_DATA_SIZE)
@@ -44,31 +32,11 @@
 #define CONFIG_SYS_MONITOR_BASE	0x00000000
 
 /* memtest works on */
-#define CONFIG_SYS_MEMTEST_START	CONFIG_SYS_SDRAM_BASE
-#define CONFIG_SYS_MEMTEST_END		(CONFIG_SYS_SDRAM_BASE + 0x5000000)
 #define CONFIG_SYS_LOAD_ADDR		(CONFIG_SYS_SDRAM_BASE + 0x4800000)
 
-#define CONFIG_SYS_TEXT_BASE		0x44800000
-
-#define CONFIG_MTD_DEVICE
-#define CONFIG_MTD_PARTITIONS
-
 /* Actual modem binary size is 16MiB. Add 2MiB for bad block handling */
-#define MTDIDS_DEFAULT		"onenand0=samsung-onenand"
 
-#define MTDPARTS_DEFAULT	"mtdparts=samsung-onenand:"\
-				"128k(s-boot)"\
-				",896k(bootloader)"\
-				",256k(params)"\
-				",2816k(config)"\
-				",8m(csa)"\
-				",7m(kernel)"\
-				",1m(log)"\
-				",12m(modem)"\
-				",60m(qboot)"\
-				",-(UBI)\0"
-
-#define NORMAL_MTDPARTS_DEFAULT MTDPARTS_DEFAULT
+#define NORMAL_MTDPARTS_DEFAULT CONFIG_MTDPARTS_DEFAULT
 
 #define MBRPARTS_DEFAULT	"20M(permanent)"\
 				",20M(boot)"\
@@ -80,19 +48,11 @@
 #define CONFIG_BOOTBLOCK	"10"
 #define CONFIG_UBIBLOCK		"9"
 
-#define CONFIG_ENV_IS_IN_MMC
-#define CONFIG_SYS_MMC_ENV_DEV		CONFIG_MMC_DEFAULT_DEV
-#define CONFIG_ENV_SIZE			4096
-#define CONFIG_ENV_OFFSET		((32 - 4) << 10) /* 32KiB - 4KiB */
-
 #define CONFIG_ENV_UBIFS_OPTION	" rootflags=bulk_read,no_chk_data_crc "
 #define CONFIG_ENV_FLASHBOOT	CONFIG_ENV_UBI_MTD CONFIG_ENV_UBIFS_OPTION \
 				"${mtdparts}"
 
 #define CONFIG_ENV_COMMON_BOOT	"${console} ${meminfo}"
-
-#define CONFIG_ENV_VARS_UBOOT_CONFIG
-#define CONFIG_ENV_VARS_UBOOT_RUNTIME_CONFIG
 
 #define CONFIG_EXTRA_ENV_SETTINGS					\
 	"updateb=" \
@@ -137,8 +97,8 @@
 	"mmcoops=mmc read 0 0x40000000 0x40 8; md 0x40000000 0x400\0" \
 	"verify=n\0" \
 	"rootfstype=ext4\0" \
-	"console=" CONFIG_DEFAULT_CONSOLE \
-	"mtdparts=" MTDPARTS_DEFAULT \
+	"console=console=ttySAC1,115200n8\0" \
+	"mtdparts=" CONFIG_MTDPARTS_DEFAULT \
 	"mbrparts=" MBRPARTS_DEFAULT \
 	"meminfo=crashkernel=32M@0x50000000\0" \
 	"nfsroot=/nfsroot/arm\0" \
@@ -155,31 +115,7 @@
 #define CONFIG_SAMSUNG_ONENAND
 #define CONFIG_SYS_ONENAND_BASE		0x0C000000
 
-#include <asm/arch/gpio.h>
-/*
- * I2C Settings
- */
-#define CONFIG_SOFT_I2C_GPIO_SCL EXYNOS4_GPIO_B7
-#define CONFIG_SOFT_I2C_GPIO_SDA EXYNOS4_GPIO_B6
-
-#define CONFIG_CMD_I2C
-
-#define CONFIG_SYS_I2C
-#define CONFIG_SYS_I2C_SOFT		/* I2C bit-banged */
-#define CONFIG_SYS_I2C_SOFT_SPEED	50000
-#define CONFIG_SYS_I2C_SOFT_SLAVE	0
-#define CONFIG_SOFT_I2C_READ_REPEATED_START
-#define CONFIG_I2C_MULTI_BUS
-#define CONFIG_SYS_MAX_I2C_BUS	7
-
-#define CONFIG_POWER
-#define CONFIG_POWER_I2C
-#define CONFIG_POWER_MAX8998
-
-#define CONFIG_USB_GADGET
-#define CONFIG_USB_GADGET_DWC2_OTG
 #define CONFIG_USB_GADGET_DWC2_OTG_PHY
-#define CONFIG_USB_GADGET_DUALSPEED
 
 /*
  * SPI Settings
@@ -195,15 +131,11 @@ int universal_spi_read(void);
 /* Common misc for Samsung */
 #define CONFIG_MISC_COMMON
 
-#define CONFIG_MISC_INIT_R
-
 /* Download menu - Samsung common */
 #define CONFIG_LCD_MENU
-#define CONFIG_LCD_MENU_BOARD
 
 /* Download menu - definitions for check keys */
 #ifndef __ASSEMBLY__
-#include <power/max8998_pmic.h>
 
 #define KEY_PWR_PMIC_NAME		"MAX8998_PMIC"
 #define KEY_PWR_STATUS_REG		MAX8998_REG_STATUS1
@@ -217,17 +149,11 @@ int universal_spi_read(void);
 
 /* LCD console */
 #define LCD_BPP			LCD_COLOR16
-#define CONFIG_SYS_WHITE_ON_BLACK
 
 /*
  * LCD Settings
  */
-#define CONFIG_EXYNOS_FB
-#define CONFIG_LCD
-#define CONFIG_CMD_BMP
-#define CONFIG_BMP_16BPP
 #define CONFIG_LD9040
-#define CONFIG_VIDEO_BMP_GZIP
 #define CONFIG_SYS_VIDEO_LOGO_MAX_SIZE ((500 * 160 * 4) + 54)
 
 #endif	/* __CONFIG_H */

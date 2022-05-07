@@ -1,7 +1,6 @@
+# SPDX-License-Identifier: GPL-2.0
 # Copyright (c) 2015 Stephen Warren
 # Copyright (c) 2015-2016, NVIDIA CORPORATION. All rights reserved.
-#
-# SPDX-License-Identifier: GPL-2.0
 
 # Common logic to interact with U-Boot via the console. This class provides
 # the interface that tests use to execute U-Boot shell commands and wait for
@@ -14,21 +13,37 @@ import os
 import pytest
 import re
 import sys
+import u_boot_spawn
 
 # Regexes for text we expect U-Boot to send to the console.
-pattern_u_boot_spl_signon = re.compile('(U-Boot SPL \\d{4}\\.\\d{2}-[^\r\n]*)')
-pattern_u_boot_main_signon = re.compile('(U-Boot \\d{4}\\.\\d{2}-[^\r\n]*)')
+pattern_u_boot_spl_signon = re.compile('(U-Boot SPL \\d{4}\\.\\d{2}[^\r\n]*\\))')
+pattern_u_boot_spl2_signon = re.compile('(U-Boot SPL \\d{4}\\.\\d{2}[^\r\n]*\\))')
+pattern_u_boot_main_signon = re.compile('(U-Boot \\d{4}\\.\\d{2}[^\r\n]*\\))')
 pattern_stop_autoboot_prompt = re.compile('Hit any key to stop autoboot: ')
 pattern_unknown_command = re.compile('Unknown command \'.*\' - try \'help\'')
 pattern_error_notification = re.compile('## Error: ')
+pattern_error_please_reset = re.compile('### ERROR ### Please RESET the board ###')
+
+PAT_ID = 0
+PAT_RE = 1
+
+bad_pattern_defs = (
+    ('spl_signon', pattern_u_boot_spl_signon),
+    ('spl2_signon', pattern_u_boot_spl2_signon),
+    ('main_signon', pattern_u_boot_main_signon),
+    ('stop_autoboot_prompt', pattern_stop_autoboot_prompt),
+    ('unknown_command', pattern_unknown_command),
+    ('error_notification', pattern_error_notification),
+    ('error_please_reset', pattern_error_please_reset),
+)
 
 class ConsoleDisableCheck(object):
-    '''Context manager (for Python's with statement) that temporarily disables
+    """Context manager (for Python's with statement) that temporarily disables
     the specified console output error check. This is useful when deliberately
     executing a command that is known to trigger one of the error checks, in
     order to test that the error condition is actually raised. This class is
     used internally by ConsoleBase::disable_check(); it is not intended for
-    direct usage.'''
+    direct usage."""
 
     def __init__(self, console, check_type):
         self.console = console
@@ -36,18 +51,36 @@ class ConsoleDisableCheck(object):
 
     def __enter__(self):
         self.console.disable_check_count[self.check_type] += 1
+        self.console.eval_bad_patterns()
 
     def __exit__(self, extype, value, traceback):
         self.console.disable_check_count[self.check_type] -= 1
+        self.console.eval_bad_patterns()
+
+class ConsoleSetupTimeout(object):
+    """Context manager (for Python's with statement) that temporarily sets up
+    timeout for specific command. This is useful when execution time is greater
+    then default 30s."""
+
+    def __init__(self, console, timeout):
+        self.p = console.p
+        self.orig_timeout = self.p.timeout
+        self.p.timeout = timeout
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, extype, value, traceback):
+        self.p.timeout = self.orig_timeout
 
 class ConsoleBase(object):
-    '''The interface through which test functions interact with the U-Boot
+    """The interface through which test functions interact with the U-Boot
     console. This primarily involves executing shell commands, capturing their
     results, and checking for common error conditions. Some common utilities
-    are also provided too.'''
+    are also provided too."""
 
     def __init__(self, log, config, max_fifo_fill):
-        '''Initialize a U-Boot console connection.
+        """Initialize a U-Boot console connection.
 
         Can only usefully be called by sub-classes.
 
@@ -64,7 +97,7 @@ class ConsoleBase(object):
 
         Returns:
             Nothing.
-        '''
+        """
 
         self.log = log
         self.config = config
@@ -74,21 +107,22 @@ class ConsoleBase(object):
 
         # Array slice removes leading/trailing quotes
         self.prompt = self.config.buildconfig['config_sys_prompt'][1:-1]
-        self.prompt_escaped = re.escape(self.prompt)
+        self.prompt_compiled = re.compile('^' + re.escape(self.prompt), re.MULTILINE)
         self.p = None
-        self.disable_check_count = {
-            'spl_signon': 0,
-            'main_signon': 0,
-            'unknown_command': 0,
-            'error_notification': 0,
-        }
+        self.disable_check_count = {pat[PAT_ID]: 0 for pat in bad_pattern_defs}
+        self.eval_bad_patterns()
 
         self.at_prompt = False
         self.at_prompt_logevt = None
-        self.ram_base = None
+
+    def eval_bad_patterns(self):
+        self.bad_patterns = [pat[PAT_RE] for pat in bad_pattern_defs \
+            if self.disable_check_count[pat[PAT_ID]] == 0]
+        self.bad_pattern_ids = [pat[PAT_ID] for pat in bad_pattern_defs \
+            if self.disable_check_count[pat[PAT_ID]] == 0]
 
     def close(self):
-        '''Terminate the connection to the U-Boot console.
+        """Terminate the connection to the U-Boot console.
 
         This function is only useful once all interaction with U-Boot is
         complete. Once this function is called, data cannot be sent to or
@@ -99,7 +133,7 @@ class ConsoleBase(object):
 
         Returns:
             Nothing.
-        '''
+        """
 
         if self.p:
             self.p.close()
@@ -107,7 +141,7 @@ class ConsoleBase(object):
 
     def run_command(self, cmd, wait_for_echo=True, send_nl=True,
             wait_for_prompt=True):
-        '''Execute a command via the U-Boot console.
+        """Execute a command via the U-Boot console.
 
         The command is always sent to U-Boot.
 
@@ -127,7 +161,7 @@ class ConsoleBase(object):
 
         Args:
             cmd: The command to send.
-            wait_for_each: Boolean indicating whether to wait for U-Boot to
+            wait_for_echo: Boolean indicating whether to wait for U-Boot to
                 echo the command text back to its output.
             send_nl: Boolean indicating whether to send a newline character
                 after the command string.
@@ -142,29 +176,12 @@ class ConsoleBase(object):
                 The output from U-Boot during command execution. In other
                 words, the text U-Boot emitted between the point it echod the
                 command string and emitted the subsequent command prompts.
-        '''
-
-        self.ensure_spawned()
+        """
 
         if self.at_prompt and \
                 self.at_prompt_logevt != self.logstream.logfile.cur_evt:
             self.logstream.write(self.prompt, implicit=True)
 
-        bad_patterns = []
-        bad_pattern_ids = []
-        if (self.disable_check_count['spl_signon'] == 0 and
-                self.u_boot_spl_signon):
-            bad_patterns.append(self.u_boot_spl_signon_escaped)
-            bad_pattern_ids.append('SPL signon')
-        if self.disable_check_count['main_signon'] == 0:
-            bad_patterns.append(self.u_boot_main_signon_escaped)
-            bad_pattern_ids.append('U-Boot main signon')
-        if self.disable_check_count['unknown_command'] == 0:
-            bad_patterns.append(pattern_unknown_command)
-            bad_pattern_ids.append('Unknown command')
-        if self.disable_check_count['error_notification'] == 0:
-            bad_patterns.append(pattern_error_notification)
-            bad_pattern_ids.append('Error notification')
         try:
             self.at_prompt = False
             if send_nl:
@@ -178,18 +195,18 @@ class ConsoleBase(object):
                     continue
                 chunk = re.escape(chunk)
                 chunk = chunk.replace('\\\n', '[\r\n]')
-                m = self.p.expect([chunk] + bad_patterns)
+                m = self.p.expect([chunk] + self.bad_patterns)
                 if m != 0:
                     self.at_prompt = False
                     raise Exception('Bad pattern found on console: ' +
-                                    bad_pattern_ids[m - 1])
+                                    self.bad_pattern_ids[m - 1])
             if not wait_for_prompt:
                 return
-            m = self.p.expect([self.prompt_escaped] + bad_patterns)
+            m = self.p.expect([self.prompt_compiled] + self.bad_patterns)
             if m != 0:
                 self.at_prompt = False
                 raise Exception('Bad pattern found on console: ' +
-                                bad_pattern_ids[m - 1])
+                                self.bad_pattern_ids[m - 1])
             self.at_prompt = True
             self.at_prompt_logevt = self.logstream.logfile.cur_evt
             # Only strip \r\n; space/TAB might be significant if testing
@@ -199,9 +216,28 @@ class ConsoleBase(object):
             self.log.error(str(ex))
             self.cleanup_spawn()
             raise
+        finally:
+            self.log.timestamp()
+
+    def run_command_list(self, cmds):
+        """Run a list of commands.
+
+        This is a helper function to call run_command() with default arguments
+        for each command in a list.
+
+        Args:
+            cmd: List of commands (each a string).
+        Returns:
+            A list of output strings from each command, one element for each
+            command.
+        """
+        output = []
+        for cmd in cmds:
+            output.append(self.run_command(cmd))
+        return output
 
     def ctrlc(self):
-        '''Send a CTRL-C character to U-Boot.
+        """Send a CTRL-C character to U-Boot.
 
         This is useful in order to stop execution of long-running synchronous
         commands such as "ums".
@@ -211,12 +247,82 @@ class ConsoleBase(object):
 
         Returns:
             Nothing.
-        '''
+        """
 
+        self.log.action('Sending Ctrl-C')
         self.run_command(chr(3), wait_for_echo=False, send_nl=False)
 
+    def wait_for(self, text):
+        """Wait for a pattern to be emitted by U-Boot.
+
+        This is useful when a long-running command such as "dfu" is executing,
+        and it periodically emits some text that should show up at a specific
+        location in the log file.
+
+        Args:
+            text: The text to wait for; either a string (containing raw text,
+                not a regular expression) or an re object.
+
+        Returns:
+            Nothing.
+        """
+
+        if type(text) == type(''):
+            text = re.escape(text)
+        m = self.p.expect([text] + self.bad_patterns)
+        if m != 0:
+            raise Exception('Bad pattern found on console: ' +
+                            self.bad_pattern_ids[m - 1])
+
+    def drain_console(self):
+        """Read from and log the U-Boot console for a short time.
+
+        U-Boot's console output is only logged when the test code actively
+        waits for U-Boot to emit specific data. There are cases where tests
+        can fail without doing this. For example, if a test asks U-Boot to
+        enable USB device mode, then polls until a host-side device node
+        exists. In such a case, it is useful to log U-Boot's console output
+        in case U-Boot printed clues as to why the host-side even did not
+        occur. This function will do that.
+
+        Args:
+            None.
+
+        Returns:
+            Nothing.
+        """
+
+        # If we are already not connected to U-Boot, there's nothing to drain.
+        # This should only happen when a previous call to run_command() or
+        # wait_for() failed (and hence the output has already been logged), or
+        # the system is shutting down.
+        if not self.p:
+            return
+
+        orig_timeout = self.p.timeout
+        try:
+            # Drain the log for a relatively short time.
+            self.p.timeout = 1000
+            # Wait for something U-Boot will likely never send. This will
+            # cause the console output to be read and logged.
+            self.p.expect(['This should never match U-Boot output'])
+        except:
+            # We expect a timeout, since U-Boot won't print what we waited
+            # for. Squash it when it happens.
+            #
+            # Squash any other exception too. This function is only used to
+            # drain (and log) the U-Boot console output after a failed test.
+            # The U-Boot process will be restarted, or target board reset, once
+            # this function returns. So, we don't care about detecting any
+            # additional errors, so they're squashed so that the rest of the
+            # post-test-failure cleanup code can continue operation, and
+            # correctly terminate any log sections, etc.
+            pass
+        finally:
+            self.p.timeout = orig_timeout
+
     def ensure_spawned(self):
-        '''Ensure a connection to a correctly running U-Boot instance.
+        """Ensure a connection to a correctly running U-Boot instance.
 
         This may require spawning a new Sandbox process or resetting target
         hardware, as defined by the implementation sub-class.
@@ -228,50 +334,68 @@ class ConsoleBase(object):
 
         Returns:
             Nothing.
-        '''
+        """
 
         if self.p:
             return
         try:
+            self.log.start_section('Starting U-Boot')
             self.at_prompt = False
-            self.log.action('Starting U-Boot')
             self.p = self.get_spawn()
             # Real targets can take a long time to scroll large amounts of
             # text if LCD is enabled. This value may need tweaking in the
             # future, possibly per-test to be optimal. This works for 'help'
             # on board 'seaboard'.
-            self.p.timeout = 30000
+            if not self.config.gdbserver:
+                self.p.timeout = 30000
             self.p.logfile_read = self.logstream
-            if self.config.buildconfig.get('CONFIG_SPL', False) == 'y':
-                self.p.expect([pattern_u_boot_spl_signon])
-                self.u_boot_spl_signon = self.p.after
-                self.u_boot_spl_signon_escaped = re.escape(self.p.after)
-            else:
-                self.u_boot_spl_signon = None
-            self.p.expect([pattern_u_boot_main_signon])
-            self.u_boot_main_signon = self.p.after
-            self.u_boot_main_signon_escaped = re.escape(self.p.after)
-            build_idx = self.u_boot_main_signon.find(', Build:')
-            if build_idx == -1:
-                self.u_boot_version_string = self.u_boot_main_signon
-            else:
-                self.u_boot_version_string = self.u_boot_main_signon[:build_idx]
+            bcfg = self.config.buildconfig
+            config_spl = bcfg.get('config_spl', 'n') == 'y'
+            config_spl_serial_support = bcfg.get('config_spl_serial_support',
+                                                 'n') == 'y'
+            env_spl_skipped = self.config.env.get('env__spl_skipped',
+                                                  False)
+            env_spl2_skipped = self.config.env.get('env__spl2_skipped',
+                                                  True)
+            if config_spl and config_spl_serial_support and not env_spl_skipped:
+                m = self.p.expect([pattern_u_boot_spl_signon] +
+                                  self.bad_patterns)
+                if m != 0:
+                    raise Exception('Bad pattern found on SPL console: ' +
+                                    self.bad_pattern_ids[m - 1])
+            if not env_spl2_skipped:
+                m = self.p.expect([pattern_u_boot_spl2_signon] +
+                                  self.bad_patterns)
+                if m != 0:
+                    raise Exception('Bad pattern found on SPL2 console: ' +
+                                    self.bad_pattern_ids[m - 1])
+            m = self.p.expect([pattern_u_boot_main_signon] + self.bad_patterns)
+            if m != 0:
+                raise Exception('Bad pattern found on console: ' +
+                                self.bad_pattern_ids[m - 1])
+            self.u_boot_version_string = self.p.after
             while True:
-                match = self.p.expect([self.prompt_escaped,
-                                       pattern_stop_autoboot_prompt])
-                if match == 1:
-                    self.p.send(chr(3)) # CTRL-C
+                m = self.p.expect([self.prompt_compiled,
+                    pattern_stop_autoboot_prompt] + self.bad_patterns)
+                if m == 0:
+                    break
+                if m == 1:
+                    self.p.send(' ')
                     continue
-                break
+                raise Exception('Bad pattern found on console: ' +
+                                self.bad_pattern_ids[m - 2])
             self.at_prompt = True
             self.at_prompt_logevt = self.logstream.logfile.cur_evt
         except Exception as ex:
             self.log.error(str(ex))
             self.cleanup_spawn()
             raise
+        finally:
+            self.log.timestamp()
+            self.log.end_section('Starting U-Boot')
 
     def cleanup_spawn(self):
-        '''Shut down all interaction with the U-Boot instance.
+        """Shut down all interaction with the U-Boot instance.
 
         This is used when an error is detected prior to re-establishing a
         connection with a fresh U-Boot instance.
@@ -283,7 +407,7 @@ class ConsoleBase(object):
 
         Returns:
             Nothing.
-        '''
+        """
 
         try:
             if self.p:
@@ -292,8 +416,23 @@ class ConsoleBase(object):
             pass
         self.p = None
 
+    def restart_uboot(self):
+        """Shut down and restart U-Boot."""
+        self.cleanup_spawn()
+        self.ensure_spawned()
+
+    def get_spawn_output(self):
+        """Return the start-up output from U-Boot
+
+        Returns:
+            The output produced by ensure_spawed(), as a string.
+        """
+        if self.p:
+            return self.p.get_expect_output()
+        return None
+
     def validate_version_string_in_text(self, text):
-        '''Assert that a command's output includes the U-Boot signon message.
+        """Assert that a command's output includes the U-Boot signon message.
 
         This is primarily useful for validating the "version" command without
         duplicating the signon text regex in a test function.
@@ -303,12 +442,12 @@ class ConsoleBase(object):
 
         Returns:
             Nothing. An exception is raised if the validation fails.
-        '''
+        """
 
         assert(self.u_boot_version_string in text)
 
     def disable_check(self, check_type):
-        '''Temporarily disable an error check of U-Boot's output.
+        """Temporarily disable an error check of U-Boot's output.
 
         Create a new context manager (for use with the "with" statement) which
         temporarily disables a particular console output error check.
@@ -319,42 +458,21 @@ class ConsoleBase(object):
 
         Returns:
             A context manager object.
-        '''
+        """
 
         return ConsoleDisableCheck(self, check_type)
 
-    def find_ram_base(self):
-        '''Find the running U-Boot's RAM location.
+    def temporary_timeout(self, timeout):
+        """Temporarily set up different timeout for commands.
 
-        Probe the running U-Boot to determine the address of the first bank
-        of RAM. This is useful for tests that test reading/writing RAM, or
-        load/save files that aren't associated with some standard address
-        typically represented in an environment variable such as
-        ${kernel_addr_r}. The value is cached so that it only needs to be
-        actively read once.
+        Create a new context manager (for use with the "with" statement) which
+        temporarily change timeout.
 
         Args:
-            None.
+            timeout: Time in milliseconds.
 
         Returns:
-            The address of U-Boot's first RAM bank, as an integer.
-        '''
+            A context manager object.
+        """
 
-        if self.config.buildconfig.get('config_cmd_bdi', 'n') != 'y':
-            pytest.skip('bdinfo command not supported')
-        if self.ram_base == -1:
-            pytest.skip('Previously failed to find RAM bank start')
-        if self.ram_base is not None:
-            return self.ram_base
-
-        with self.log.section('find_ram_base'):
-            response = self.run_command('bdinfo')
-            for l in response.split('\n'):
-                if '-> start' in l:
-                    self.ram_base = int(l.split('=')[1].strip(), 16)
-                    break
-            if self.ram_base is None:
-                self.ram_base = -1
-                raise Exception('Failed to find RAM bank start in `bdinfo`')
-
-        return self.ram_base
+        return ConsoleSetupTimeout(self, timeout)

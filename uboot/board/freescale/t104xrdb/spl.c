@@ -1,10 +1,12 @@
+// SPDX-License-Identifier: GPL-2.0+
 /* Copyright 2013 Freescale Semiconductor, Inc.
- *
- * SPDX-License-Identifier:    GPL-2.0+
  */
 
 #include <common.h>
+#include <clock_legacy.h>
 #include <console.h>
+#include <env_internal.h>
+#include <init.h>
 #include <malloc.h>
 #include <ns16550.h>
 #include <nand.h>
@@ -13,6 +15,7 @@
 #include <fsl_esdhc.h>
 #include <spi_flash.h>
 #include "../common/sleep.h"
+#include "../common/spl.h"
 
 DECLARE_GLOBAL_DATA_PTR;
 
@@ -86,49 +89,51 @@ void board_init_f(ulong bootflag)
 
 void board_init_r(gd_t *gd, ulong dest_addr)
 {
-	bd_t *bd;
+	struct bd_info *bd;
 
-	bd = (bd_t *)(gd + sizeof(gd_t));
-	memset(bd, 0, sizeof(bd_t));
+	bd = (struct bd_info *)(gd + sizeof(gd_t));
+	memset(bd, 0, sizeof(struct bd_info));
 	gd->bd = bd;
-	bd->bi_memstart = CONFIG_SYS_INIT_L3_ADDR;
-	bd->bi_memsize = CONFIG_SYS_L3_SIZE;
 
-	probecpu();
+	arch_cpu_init();
 	get_clocks();
 	mem_malloc_init(CONFIG_SPL_RELOC_MALLOC_ADDR,
 			CONFIG_SPL_RELOC_MALLOC_SIZE);
+	gd->flags |= GD_FLG_FULL_MALLOC_INIT;
 
 #ifdef CONFIG_SPL_MMC_BOOT
 	mmc_initialize(bd);
 #endif
 
 	/* relocate environment function pointers etc. */
+#if defined(CONFIG_ENV_IS_IN_NAND) || defined(CONFIG_ENV_IS_IN_MMC) || \
+	defined(CONFIG_ENV_IS_IN_SPI_FLASH)
 #ifdef CONFIG_SPL_NAND_BOOT
 	nand_spl_load_image(CONFIG_ENV_OFFSET, CONFIG_ENV_SIZE,
-			    (uchar *)CONFIG_ENV_ADDR);
+			    (uchar *)SPL_ENV_ADDR);
 #endif
 #ifdef CONFIG_SPL_MMC_BOOT
 	mmc_spl_load_image(CONFIG_ENV_OFFSET, CONFIG_ENV_SIZE,
-			   (uchar *)CONFIG_ENV_ADDR);
+			   (uchar *)SPL_ENV_ADDR);
 #endif
 #ifdef CONFIG_SPL_SPI_BOOT
-	spi_spl_load_image(CONFIG_ENV_OFFSET, CONFIG_ENV_SIZE,
-			   (uchar *)CONFIG_ENV_ADDR);
+	fsl_spi_spl_load_image(CONFIG_ENV_OFFSET, CONFIG_ENV_SIZE,
+			       (uchar *)SPL_ENV_ADDR);
 #endif
-	gd->env_addr  = (ulong)(CONFIG_ENV_ADDR);
-	gd->env_valid = 1;
+	gd->env_addr  = (ulong)(SPL_ENV_ADDR);
+	gd->env_valid = ENV_VALID;
+#endif
 
 	i2c_init_all();
 
 	puts("\n\n");
 
-	gd->ram_size = initdram(0);
+	dram_init();
 
 #ifdef CONFIG_SPL_MMC_BOOT
 	mmc_boot();
 #elif defined(CONFIG_SPL_SPI_BOOT)
-	spi_boot();
+	fsl_spi_boot();
 #elif defined(CONFIG_SPL_NAND_BOOT)
 	nand_boot();
 #endif

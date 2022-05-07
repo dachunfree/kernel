@@ -1778,6 +1778,7 @@ static struct pcpu_alloc_info * __init pcpu_build_alloc_info(
 {
 	static int group_map[NR_CPUS] __initdata;
 	static int group_cnt[NR_CPUS] __initdata;
+	/* ¾²Ì¬percpuÊýÁ¿ */
 	const size_t static_size = __per_cpu_end - __per_cpu_start;
 	int nr_groups = 1, nr_units = 0;
 	size_t size_sum, min_unit_size, alloc_size;
@@ -2200,6 +2201,11 @@ void __init setup_per_cpu_areas(void)
 	 * Always reserve area for module percpu variables.  That's
 	 * what the legacy allocator did.
 	 */
+	 /*
+	 PERCPU_MODULE_RESERVE:  8  KB
+	 PERCPU_DYNAMIC_RESERVE: 28 KB
+
+	*/
 	rc = pcpu_embed_first_chunk(PERCPU_MODULE_RESERVE,
 				    PERCPU_DYNAMIC_RESERVE, PAGE_SIZE, NULL,
 				    pcpu_dfl_fc_alloc, pcpu_dfl_fc_free);

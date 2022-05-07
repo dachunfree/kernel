@@ -1,16 +1,13 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
- * Xilinx ZC706 board DTS
- *
  *  Copyright (C) 2011 - 2015 Xilinx
  *  Copyright (C) 2012 National Instruments Corp.
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 /dts-v1/;
 #include "zynq-7000.dtsi"
 
 / {
-	model = "Zynq ZC706 Development Board";
+	model = "Xilinx ZC706 board";
 	compatible = "xlnx,zynq-zc706", "xlnx,zynq-7000";
 
 	aliases {
@@ -21,19 +18,22 @@
 		mmc0 = &sdhci0;
 	};
 
-	memory {
+	memory@0 {
 		device_type = "memory";
 		reg = <0x0 0x40000000>;
 	};
 
 	chosen {
-		bootargs = "earlyprintk";
+		bootargs = "";
 		stdout-path = "serial0:115200n8";
 	};
 
-	usb_phy0: phy0 {
-		compatible = "usb-nop-xceiv";
+	usb_phy0: phy0@e0002000 {
+		compatible = "ulpi-phy";
 		#phy-cells = <0>;
+		reg = <0xe0002000 0x1000>;
+		view-port = <0x0170>;
+		drv-vbus;
 	};
 };
 
@@ -50,6 +50,7 @@
 
 	ethernet_phy: ethernet-phy@7 {
 		reg = <7>;
+		device_type = "ethernet-phy";
 	};
 };
 
@@ -64,7 +65,7 @@
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_i2c0_default>;
 
-	i2cswitch@74 {
+	i2c-mux@74 {
 		compatible = "nxp,pca9548";
 		#address-cells = <1>;
 		#size-cells = <0>;
@@ -84,12 +85,27 @@
 			};
 		};
 
+		i2c@1 {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			reg = <1>;
+			adv7511: hdmi-tx@39 {
+				compatible = "adi,adv7511";
+				reg = <0x39>;
+				adi,input-depth = <8>;
+				adi,input-colorspace = "yuv422";
+				adi,input-clock = "1x";
+				adi,input-style = <3>;
+				adi,input-justification = "evenly";
+			};
+		};
+
 		i2c@2 {
 			#address-cells = <1>;
 			#size-cells = <0>;
 			reg = <2>;
 			eeprom@54 {
-				compatible = "at,24c08";
+				compatible = "atmel,24c08";
 				reg = <0x54>;
 			};
 		};
@@ -138,7 +154,7 @@
 		conf {
 			groups = "ethernet0_0_grp";
 			slew-rate = <0>;
-			io-standard = <4>;
+			power-source = <4>;
 		};
 
 		conf-rx {
@@ -161,7 +177,7 @@
 		conf-mdio {
 			groups = "mdio0_0_grp";
 			slew-rate = <0>;
-			io-standard = <1>;
+			power-source = <1>;
 			bias-disable;
 		};
 	};
@@ -175,7 +191,7 @@
 		conf {
 			groups = "gpio0_7_grp", "gpio0_46_grp", "gpio0_47_grp";
 			slew-rate = <0>;
-			io-standard = <1>;
+			power-source = <1>;
 		};
 
 		conf-pull-up {
@@ -199,7 +215,7 @@
 			groups = "i2c0_10_grp";
 			bias-pull-up;
 			slew-rate = <0>;
-			io-standard = <1>;
+			power-source = <1>;
 		};
 	};
 
@@ -212,7 +228,7 @@
 		conf {
 			groups = "sdio0_2_grp";
 			slew-rate = <0>;
-			io-standard = <1>;
+			power-source = <1>;
 			bias-disable;
 		};
 
@@ -226,7 +242,7 @@
 			bias-high-impedance;
 			bias-pull-up;
 			slew-rate = <0>;
-			io-standard = <1>;
+			power-source = <1>;
 		};
 
 		mux-wp {
@@ -239,7 +255,7 @@
 			bias-high-impedance;
 			bias-pull-up;
 			slew-rate = <0>;
-			io-standard = <1>;
+			power-source = <1>;
 		};
 	};
 
@@ -252,7 +268,7 @@
 		conf {
 			groups = "uart1_10_grp";
 			slew-rate = <0>;
-			io-standard = <1>;
+			power-source = <1>;
 		};
 
 		conf-rx {
@@ -275,7 +291,7 @@
 		conf {
 			groups = "usb0_0_grp";
 			slew-rate = <0>;
-			io-standard = <1>;
+			power-source = <1>;
 		};
 
 		conf-rx {
@@ -292,34 +308,35 @@
 };
 
 &qspi {
+	u-boot,dm-pre-reloc;
 	status = "okay";
 	is-dual = <1>;
 	num-cs = <1>;
 	flash@0 {
-		compatible = "n25q128a11";
+		compatible = "n25q128a11", "jedec,spi-nor";
 		reg = <0x0>;
 		spi-tx-bus-width = <1>;
 		spi-rx-bus-width = <4>;
 		spi-max-frequency = <50000000>;
 		#address-cells = <1>;
 		#size-cells = <1>;
-		partition@qspi-fsbl-uboot {
+		partition@0 {
 			label = "qspi-fsbl-uboot";
 			reg = <0x0 0x100000>;
 		};
-		partition@qspi-linux {
+		partition@100000 {
 			label = "qspi-linux";
 			reg = <0x100000 0x500000>;
 		};
-		partition@qspi-device-tree {
+		partition@600000 {
 			label = "qspi-device-tree";
 			reg = <0x600000 0x20000>;
 		};
-		partition@qspi-rootfs {
+		partition@620000 {
 			label = "qspi-rootfs";
 			reg = <0x620000 0x5E0000>;
 		};
-		partition@qspi-bitstream {
+		partition@c00000 {
 			label = "qspi-bitstream";
 			reg = <0xC00000 0x400000>;
 		};
@@ -340,14 +357,14 @@
 	pinctrl-0 = <&pinctrl_uart1_default>;
 };
 
-&qspi {
-	status = "okay";
-};
-
 &usb0 {
 	status = "okay";
 	dr_mode = "host";
 	usb-phy = <&usb_phy0>;
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_usb0_default>;
+};
+
+&watchdog0 {
+	reset-on-timeout;
 };

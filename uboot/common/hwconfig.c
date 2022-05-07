@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * An inteface for configuring a hardware via u-boot environment.
  *
@@ -5,15 +6,15 @@
  * Copyright 2011 Freescale Semiconductor, Inc.
  *
  * Author: Anton Vorontsov <avorontsov@ru.mvista.com>
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #ifndef HWCONFIG_TEST
 #include <config.h>
 #include <common.h>
+#include <env.h>
 #include <exports.h>
 #include <hwconfig.h>
+#include <log.h>
 #include <linux/types.h>
 #include <linux/string.h>
 #else
@@ -81,7 +82,7 @@ static const char *__hwconfig(const char *opt, size_t *arglen,
 					"and before environment is ready\n");
 			return NULL;
 		}
-		env_hwconfig = getenv("hwconfig");
+		env_hwconfig = env_get("hwconfig");
 	}
 
 	if (env_hwconfig) {
@@ -243,7 +244,7 @@ int main()
 	const char *ret;
 	size_t len;
 
-	setenv("hwconfig", "key1:subkey1=value1,subkey2=value2;key2:value3;;;;"
+	env_set("hwconfig", "key1:subkey1=value1,subkey2=value2;key2:value3;;;;"
 			   "key3;:,:=;key4", 1);
 
 	ret = hwconfig_arg("key1", &len);
@@ -274,7 +275,7 @@ int main()
 	assert(hwconfig_arg("key4", &len) == NULL);
 	assert(hwconfig_arg("bogus", &len) == NULL);
 
-	unsetenv("hwconfig");
+	unenv_set("hwconfig");
 
 	assert(hwconfig(NULL) == 0);
 	assert(hwconfig("") == 0);

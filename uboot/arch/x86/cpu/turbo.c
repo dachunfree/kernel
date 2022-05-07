@@ -1,18 +1,20 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  * From Coreboot file of the same name
  *
  * Copyright (C) 2011 The Chromium Authors.
- *
- * SPDX-License-Identifier:	GPL-2.0
  */
 
 #include <common.h>
+#include <log.h>
 #include <asm/cpu.h>
 #include <asm/msr.h>
 #include <asm/processor.h>
 #include <asm/turbo.h>
 
-#if CONFIG_CPU_INTEL_TURBO_NOT_PACKAGE_SCOPED
+DECLARE_GLOBAL_DATA_PTR;
+
+#ifdef CONFIG_CPU_INTEL_TURBO_NOT_PACKAGE_SCOPED
 static inline int get_global_turbo_state(void)
 {
 	return TURBO_UNKNOWN;
@@ -22,16 +24,14 @@ static inline void set_global_turbo_state(int state)
 {
 }
 #else
-static int g_turbo_state = TURBO_UNKNOWN;
-
 static inline int get_global_turbo_state(void)
 {
-	return g_turbo_state;
+	return gd->arch.turbo_state;
 }
 
 static inline void set_global_turbo_state(int state)
 {
-	g_turbo_state = state;
+	gd->arch.turbo_state = state;
 }
 #endif
 
@@ -61,8 +61,8 @@ int turbo_get_state(void)
 	cpuid_regs = cpuid(CPUID_LEAF_PM);
 	turbo_cap = !!(cpuid_regs.eax & PM_CAP_TURBO_MODE);
 
-	msr = msr_read(MSR_IA32_MISC_ENABLES);
-	turbo_en = !(msr.hi & H_MISC_DISABLE_TURBO);
+	msr = msr_read(MSR_IA32_MISC_ENABLE);
+	turbo_en = !(msr.hi & MISC_DISABLE_TURBO);
 
 	if (!turbo_cap && turbo_en) {
 		/* Unavailable */
@@ -87,9 +87,9 @@ void turbo_enable(void)
 	/* Only possible if turbo is available but hidden */
 	if (turbo_get_state() == TURBO_DISABLED) {
 		/* Clear Turbo Disable bit in Misc Enables */
-		msr = msr_read(MSR_IA32_MISC_ENABLES);
-		msr.hi &= ~H_MISC_DISABLE_TURBO;
-		msr_write(MSR_IA32_MISC_ENABLES, msr);
+		msr = msr_read(MSR_IA32_MISC_ENABLE);
+		msr.hi &= ~MISC_DISABLE_TURBO;
+		msr_write(MSR_IA32_MISC_ENABLE, msr);
 
 		/* Update cached turbo state */
 		set_global_turbo_state(TURBO_ENABLED);

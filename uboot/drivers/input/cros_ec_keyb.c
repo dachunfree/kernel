@@ -1,22 +1,19 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * Chromium OS Matrix Keyboard
  *
  * Copyright (c) 2012 The Chromium OS Authors.
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
 #include <cros_ec.h>
 #include <dm.h>
 #include <errno.h>
-#include <fdtdec.h>
 #include <input.h>
 #include <keyboard.h>
 #include <key_matrix.h>
+#include <log.h>
 #include <stdio_dev.h>
-
-DECLARE_GLOBAL_DATA_PTR;
 
 enum {
 	KBC_MAX_KEYS		= 8,	/* Maximum keys held down at once */
@@ -50,15 +47,35 @@ static int check_for_keys(struct udevice *dev, struct key_matrix_key *keys,
 	struct key_matrix_key *key;
 	static struct mbkp_keyscan last_scan;
 	static bool last_scan_valid;
-	struct mbkp_keyscan scan;
+	struct ec_response_get_next_event event;
+	struct mbkp_keyscan *scan = (struct mbkp_keyscan *)
+				    &event.data.key_matrix;
 	unsigned int row, col, bit, data;
 	int num_keys;
+	int ret;
 
-	if (cros_ec_scan_keyboard(dev->parent, &scan)) {
-		debug("%s: keyboard scan failed\n", __func__);
+	/* Get pending MKBP event. It may not be a key matrix event. */
+	do {
+		ret = cros_ec_get_next_event(dev->parent, &event);
+		/* The EC has no events for us at this time. */
+		if (ret == -EC_RES_UNAVAILABLE)
+			return -EIO;
+		else if (ret)
+			break;
+	} while (event.event_type != EC_MKBP_EVENT_KEY_MATRIX);
+
+	/* Try the old command if the EC doesn't support the above. */
+	if (ret == -EC_RES_INVALID_COMMAND) {
+		if (cros_ec_scan_keyboard(dev->parent, scan)) {
+			debug("%s: keyboard scan failed\n", __func__);
+			return -EIO;
+		}
+	} else if (ret) {
+		debug("%s: Error getting next MKBP event. (%d)\n",
+		      __func__, ret);
 		return -EIO;
 	}
-	*samep = last_scan_valid && !memcmp(&last_scan, &scan, sizeof(scan));
+	*samep = last_scan_valid && !memcmp(&last_scan, scan, sizeof(*scan));
 
 	/*
 	 * This is a bit odd. The EC has no way to tell us that it has run
@@ -67,14 +84,14 @@ static int check_for_keys(struct udevice *dev, struct key_matrix_key *keys,
 	 * that this scan is the same as the last.
 	 */
 	last_scan_valid = true;
-	memcpy(&last_scan, &scan, sizeof(last_scan));
+	memcpy(&last_scan, scan, sizeof(last_scan));
 
 	for (col = num_keys = bit = 0; col < priv->matrix.num_cols;
 			col++) {
 		for (row = 0; row < priv->matrix.num_rows; row++) {
 			unsigned int mask = 1 << (bit & 7);
 
-			data = scan.data[bit / 8];
+			data = scan->data[bit / 8];
 			if ((data & mask) && num_keys < max_count) {
 				key = keys + num_keys++;
 				key->row = row;
@@ -161,15 +178,15 @@ int cros_ec_kbc_check(struct input_config *input)
  * @param config	Configuration data read from fdt
  * @return 0 if ok, -1 on error
  */
-static int cros_ec_keyb_decode_fdt(const void *blob, int node,
-				struct cros_ec_keyb_priv *config)
+static int cros_ec_keyb_decode_fdt(struct udevice *dev,
+				   struct cros_ec_keyb_priv *config)
 {
 	/*
 	 * Get keyboard rows and columns - at present we are limited to
 	 * 8 columns by the protocol (one byte per row scan)
 	 */
-	config->key_rows = fdtdec_get_int(blob, node, "keypad,num-rows", 0);
-	config->key_cols = fdtdec_get_int(blob, node, "keypad,num-columns", 0);
+	config->key_rows = dev_read_u32_default(dev, "keypad,num-rows", 0);
+	config->key_cols = dev_read_u32_default(dev, "keypad,num-columns", 0);
 	if (!config->key_rows || !config->key_cols ||
 			config->key_rows * config->key_cols / 8
 				> CROS_EC_KEYSCAN_COLS) {
@@ -177,8 +194,8 @@ static int cros_ec_keyb_decode_fdt(const void *blob, int node,
 		      config->key_rows, config->key_cols);
 		return -1;
 	}
-	config->ghost_filter = fdtdec_get_bool(blob, node,
-					       "google,needs-ghost-filter");
+	config->ghost_filter = dev_read_bool(dev, "google,needs-ghost-filter");
+
 	return 0;
 }
 
@@ -188,12 +205,13 @@ static int cros_ec_kbd_probe(struct udevice *dev)
 	struct keyboard_priv *uc_priv = dev_get_uclass_priv(dev);
 	struct stdio_dev *sdev = &uc_priv->sdev;
 	struct input_config *input = &uc_priv->input;
-	const void *blob = gd->fdt_blob;
-	int node = dev->of_offset;
 	int ret;
 
-	if (cros_ec_keyb_decode_fdt(blob, node, priv))
-		return -1;
+	ret = cros_ec_keyb_decode_fdt(dev, priv);
+	if (ret) {
+		debug("%s: Cannot decode node (ret=%d)\n", __func__, ret);
+		return -EINVAL;
+	}
 	input_set_delays(input, KBC_REPEAT_DELAY_MS, KBC_REPEAT_RATE_MS);
 	ret = key_matrix_init(&priv->matrix, priv->key_rows, priv->key_cols,
 			      priv->ghost_filter);
@@ -201,7 +219,7 @@ static int cros_ec_kbd_probe(struct udevice *dev)
 		debug("%s: cannot init key matrix\n", __func__);
 		return ret;
 	}
-	ret = key_matrix_decode_fdt(&priv->matrix, gd->fdt_blob, node);
+	ret = key_matrix_decode_fdt(dev, &priv->matrix);
 	if (ret) {
 		debug("%s: Could not decode key matrix from fdt\n", __func__);
 		return ret;
@@ -227,8 +245,8 @@ static const struct udevice_id cros_ec_kbd_ids[] = {
 	{ }
 };
 
-U_BOOT_DRIVER(cros_ec_kbd) = {
-	.name	= "cros_ec_kbd",
+U_BOOT_DRIVER(google_cros_ec_keyb) = {
+	.name	= "google_cros_ec_keyb",
 	.id	= UCLASS_KEYBOARD,
 	.of_match = cros_ec_kbd_ids,
 	.probe = cros_ec_kbd_probe,

@@ -1,16 +1,17 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * Translate key codes into ASCII
  *
  * Copyright (c) 2011 The Chromium OS Authors.
  * (C) Copyright 2004 DENX Software Engineering, Wolfgang Denk, wd@denx.de
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
 #include <console.h>
 #include <dm.h>
+#include <env.h>
 #include <errno.h>
+#include <log.h>
 #include <stdio_dev.h>
 #include <input.h>
 #ifdef CONFIG_DM_KEYBOARD
@@ -83,6 +84,9 @@ static unsigned char kbd_ctrl_xlate[] = {
 	'\r', 0xff, '/',  '*',
 };
 
+/*
+ * German keymap. Special letters are mapped according to code page 437.
+ */
 static const uchar kbd_plain_xlate_german[] = {
 	0xff, 0x1b,  '1',  '2',  '3',  '4',  '5',  '6', /* scan 00-07 */
 	 '7',  '8',  '9',  '0', 0xe1, '\'', 0x08, '\t', /* scan 08-0F */
@@ -124,7 +128,7 @@ static unsigned char kbd_shift_xlate_german[] = {
 };
 
 static unsigned char kbd_right_alt_xlate_german[] = {
-	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, /* scan 00-07 */
+	0xff, 0xff, 0xff, 0xfd, 0xff, 0xff, 0xff, 0xff, /* scan 00-07 */
 	 '{',  '[',  ']',  '}', '\\', 0xff, 0xff, 0xff, /* scan 08-0F */
 	 '@', 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, /* scan 10-17 */
 	0xff, 0xff, 0xff,  '~', 0xff, 0xff, 0xff, 0xff, /* scan 18-1F */
@@ -166,21 +170,35 @@ static struct kbd_entry {
 };
 
 /*
- * Scan key code to ANSI 3.64 escape sequence table.  This table is
- * incomplete in that it does not include all possible extra keys.
+ * The table contains conversions from scan key codes to ECMA-48 escape
+ * sequences. The same sequences exist in the withdrawn ANSI 3.64 standard.
+ *
+ * As all escape sequences start with 0x1b this byte has been removed.
+ *
+ * This table is incomplete in that it does not include all possible extra keys.
  */
 static struct {
 	int kbd_scan_code;
 	char *escape;
 } kbd_to_ansi364[] = {
-	{ KEY_UP, "\033[A"},
-	{ KEY_DOWN, "\033[B"},
-	{ KEY_RIGHT, "\033[C"},
-	{ KEY_LEFT, "\033[D"},
+	{ KEY_UP, "[A"},
+	{ KEY_LEFT, "[D"},
+	{ KEY_RIGHT, "[C"},
+	{ KEY_DOWN, "[B"},
+	{ KEY_F1, "OP"},
+	{ KEY_F2, "OQ"},
+	{ KEY_F3, "OR"},
+	{ KEY_F4, "OS"},
+	{ KEY_F5, "[15~"},
+	{ KEY_F6, "[17~"},
+	{ KEY_F7, "[18~"},
+	{ KEY_F8, "[19~"},
+	{ KEY_F9, "[20~"},
+	{ KEY_F10, "[21~"},
 };
 
 /* Maximum number of output characters that an ANSI sequence expands to */
-#define ANSI_CHAR_MAX	3
+#define ANSI_CHAR_MAX	5
 
 static int input_queue_ascii(struct input_config *config, int ch)
 {
@@ -413,6 +431,7 @@ static int input_keycode_to_ansi364(struct input_config *config,
 	for (i = ch_count = 0; i < ARRAY_SIZE(kbd_to_ansi364); i++) {
 		if (keycode != kbd_to_ansi364[i].kbd_scan_code)
 			continue;
+		output_ch[ch_count++] = 0x1b;
 		for (escape = kbd_to_ansi364[i].escape; *escape; escape++) {
 			if (ch_count < max_chars)
 				output_ch[ch_count] = *escape;
@@ -469,7 +488,7 @@ static int input_keycodes_to_ascii(struct input_config *config,
 	/* Start conversion by looking for the first new keycode (by same). */
 	for (i = same; i < num_keycodes; i++) {
 		int key = keycode[i];
-		int ch;
+		int ch = 0xff;
 
 		/*
 		 * For a normal key (with an ASCII value), add it; otherwise
@@ -488,10 +507,10 @@ static int input_keycodes_to_ascii(struct input_config *config,
 			}
 			if (ch_count < max_chars && ch != 0xff)
 				output_ch[ch_count++] = (uchar)ch;
-		} else {
+		}
+		if (ch == 0xff)
 			ch_count += input_keycode_to_ansi364(config, key,
 						output_ch, max_chars);
-		}
 	}
 
 	if (ch_count > max_chars) {
@@ -650,14 +669,17 @@ int input_stdio_register(struct stdio_dev *dev)
 	int error;
 
 	error = stdio_register(dev);
-
+#if !defined(CONFIG_SPL_BUILD) || CONFIG_IS_ENABLED(ENV_SUPPORT)
 	/* check if this is the standard input device */
-	if (!error && strcmp(getenv("stdin"), dev->name) == 0) {
+	if (!error && strcmp(env_get("stdin"), dev->name) == 0) {
 		/* reassign the console */
 		if (OVERWRITE_CONSOLE ||
 				console_assign(stdin, dev->name))
 			return -1;
 	}
+#else
+	error = error;
+#endif
 
 	return 0;
 }

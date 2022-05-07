@@ -1,14 +1,14 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * (C) Copyright 2008
  * Heiko Schocher, DENX Software Engineering, hs@denx.de.
  *
  * (C) Copyright 2011
  * Holger Brunck, Keymile GmbH Hannover, holger.brunck@keymile.com
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
+#include <env.h>
 #include <ioports.h>
 #include <command.h>
 #include <malloc.h>
@@ -17,6 +17,7 @@
 #include <netdev.h>
 #include <asm/io.h>
 #include <linux/ctype.h>
+#include <linux/delay.h>
 
 #if defined(CONFIG_POST)
 #include "post.h"
@@ -51,24 +52,24 @@ int set_km_env(void)
 	pnvramaddr = gd->ram_size - CONFIG_KM_RESERVED_PRAM - CONFIG_KM_PHRAM
 			- CONFIG_KM_PNVRAM;
 	sprintf((char *)buf, "0x%x", pnvramaddr);
-	setenv("pnvramaddr", (char *)buf);
+	env_set("pnvramaddr", (char *)buf);
 
-	/* try to read rootfssize (ram image) from envrionment */
-	p = getenv("rootfssize");
+	/* try to read rootfssize (ram image) from environment */
+	p = env_get("rootfssize");
 	if (p != NULL)
 		strict_strtoul(p, 16, &rootfssize);
 	pram = (rootfssize + CONFIG_KM_RESERVED_PRAM + CONFIG_KM_PHRAM +
 		CONFIG_KM_PNVRAM) / 0x400;
 	sprintf((char *)buf, "0x%x", pram);
-	setenv("pram", (char *)buf);
+	env_set("pram", (char *)buf);
 
 	varaddr = gd->ram_size - CONFIG_KM_RESERVED_PRAM - CONFIG_KM_PHRAM;
 	sprintf((char *)buf, "0x%x", varaddr);
-	setenv("varaddr", (char *)buf);
+	env_set("varaddr", (char *)buf);
 
 	kernelmem = gd->ram_size - 0x400 * pram;
 	sprintf((char *)buf, "0x%x", kernelmem);
-	setenv("kernelmem", (char *)buf);
+	env_set("kernelmem", (char *)buf);
 
 	return 0;
 }
@@ -143,7 +144,7 @@ void i2c_init_board(void)
 #endif
 
 #if defined(CONFIG_KM_COMMON_ETH_INIT)
-int board_eth_init(bd_t *bis)
+int board_eth_init(struct bd_info *bis)
 {
 	if (ethernet_present())
 		return cpu_eth_init(bis);
@@ -157,8 +158,8 @@ int board_eth_init(bd_t *bis)
  * read out the board id and the hw key from the intventory EEPROM and set
  * this values as environment variables.
  */
-static int do_setboardid(cmd_tbl_t *cmdtp, int flag, int argc,
-				char *const argv[])
+static int do_setboardid(struct cmd_tbl *cmdtp, int flag, int argc,
+			 char *const argv[])
 {
 	unsigned char buf[32];
 	char *p;
@@ -168,8 +169,8 @@ static int do_setboardid(cmd_tbl_t *cmdtp, int flag, int argc,
 		printf("can't get the IVM_Boardid\n");
 		return 1;
 	}
-	sprintf((char *)buf, "%s", p);
-	setenv("boardid", (char *)buf);
+	strcpy((char *)buf, p);
+	env_set("boardid", (char *)buf);
 	printf("set boardid=%s\n", buf);
 
 	p = get_local_var("IVM_HWKey");
@@ -177,8 +178,8 @@ static int do_setboardid(cmd_tbl_t *cmdtp, int flag, int argc,
 		printf("can't get the IVM_HWKey\n");
 		return 1;
 	}
-	sprintf((char *)buf, "%s", p);
-	setenv("hwkey", (char *)buf);
+	strcpy((char *)buf, p);
+	env_set("hwkey", (char *)buf);
 	printf("set hwkey=%s\n", buf);
 	printf("Execute manually saveenv for persistent storage.\n");
 
@@ -203,8 +204,8 @@ U_BOOT_CMD(km_setboardid, 1, 0, do_setboardid, "setboardid", "read out bid and "
  *				application and in the init scripts (?)
  *	return 0 in case of match, 1 if not match or error
  */
-static int do_checkboardidhwk(cmd_tbl_t *cmdtp, int flag, int argc,
-			char *const argv[])
+static int do_checkboardidhwk(struct cmd_tbl *cmdtp, int flag, int argc,
+			      char *const argv[])
 {
 	unsigned long ivmbid = 0, ivmhwkey = 0;
 	unsigned long envbid = 0, envhwkey = 0;
@@ -236,10 +237,10 @@ static int do_checkboardidhwk(cmd_tbl_t *cmdtp, int flag, int argc,
 	}
 
 	/* now try to read values from environment if available */
-	p = getenv("boardid");
+	p = env_get("boardid");
 	if (p != NULL)
 		rc = strict_strtoul(p, 16, &envbid);
-	p = getenv("hwkey");
+	p = env_get("hwkey");
 	if (p != NULL)
 		rc = strict_strtoul(p, 16, &envhwkey);
 
@@ -253,7 +254,7 @@ static int do_checkboardidhwk(cmd_tbl_t *cmdtp, int flag, int argc,
 		 * BoardId/HWkey not available in the environment, so try the
 		 * environment variable for BoardId/HWkey list
 		 */
-		char *bidhwklist = getenv("boardIdListHex");
+		char *bidhwklist = env_get("boardIdListHex");
 
 		if (bidhwklist) {
 			int found = 0;
@@ -311,9 +312,9 @@ static int do_checkboardidhwk(cmd_tbl_t *cmdtp, int flag, int argc,
 					envbid   = bid;
 					envhwkey = hwkey;
 					sprintf(buf, "%lx", bid);
-					setenv("boardid", buf);
+					env_set("boardid", buf);
 					sprintf(buf, "%lx", hwkey);
-					setenv("hwkey", buf);
+					env_set("hwkey", buf);
 				}
 			} /* end while( ! found ) */
 		}
@@ -344,8 +345,8 @@ U_BOOT_CMD(km_checkbidhwk, 2, 0, do_checkboardidhwk,
  *  if the testpin of the board is asserted, return 1
  *  *	else return 0
  */
-static int do_checktestboot(cmd_tbl_t *cmdtp, int flag, int argc,
-			char *const argv[])
+static int do_checktestboot(struct cmd_tbl *cmdtp, int flag, int argc,
+			    char *const argv[])
 {
 	int testpin = 0;
 	char *s = NULL;
@@ -355,10 +356,7 @@ static int do_checktestboot(cmd_tbl_t *cmdtp, int flag, int argc,
 #if defined(CONFIG_POST)
 	testpin = post_hotkeys_pressed();
 #endif
-#if defined(CONFIG_MGCOGE3NE)
-	testpin = get_testpin();
-#endif
-	s = getenv("test_bank");
+	s = env_get("test_bank");
 	/* when test_bank is not set, act as if testpin is not asserted */
 	testboot = (testpin != 0) && (s);
 	if (verbose) {

@@ -1,11 +1,15 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * Copyright (c) 2011 The Chromium OS Authors.
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
+#include <cpu_func.h>
 #include <cros_ec.h>
 #include <dm.h>
+#include <env_internal.h>
+#include <init.h>
+#include <led.h>
 #include <os.h>
 #include <asm/test.h>
 #include <asm/u-boot-sandbox.h>
@@ -17,10 +21,12 @@
  */
 gd_t *gd;
 
+#if !CONFIG_IS_ENABLED(OF_PLATDATA)
 /* Add a simple GPIO device */
 U_BOOT_DEVICE(gpio_sandbox) = {
-	.name = "gpio_sandbox",
+	.name = "sandbox_gpio",
 };
+#endif
 
 void flush_cache(unsigned long start, unsigned long size)
 {
@@ -30,7 +36,7 @@ void flush_cache(unsigned long start, unsigned long size)
 /* system timer offset in ms */
 static unsigned long sandbox_timer_offset;
 
-void sandbox_timer_add_offset(unsigned long offset)
+void timer_test_add_offset(unsigned long offset)
 {
 	sandbox_timer_offset += offset;
 }
@@ -41,38 +47,52 @@ unsigned long timer_read_counter(void)
 }
 #endif
 
+/* specific order for sandbox: nowhere is the first value, used by default */
+static enum env_location env_locations[] = {
+	ENVL_NOWHERE,
+	ENVL_EXT4,
+};
+
+enum env_location env_get_location(enum env_operation op, int prio)
+{
+	if (prio >= ARRAY_SIZE(env_locations))
+		return ENVL_UNKNOWN;
+
+	return env_locations[prio];
+}
+
 int dram_init(void)
 {
 	gd->ram_size = CONFIG_SYS_SDRAM_SIZE;
 	return 0;
 }
 
-#ifdef CONFIG_BOARD_EARLY_INIT_F
-int board_early_init_f(void)
+int board_init(void)
 {
-#ifdef CONFIG_VIDEO_SANDBOX_SDL
-	int ret;
-
-	ret = sandbox_lcd_sdl_early_init();
-	if (ret) {
-		puts("Could not init sandbox LCD emulation\n");
-		return ret;
-	}
-#endif
+	if (IS_ENABLED(CONFIG_LED))
+		led_default_state();
 
 	return 0;
 }
-#endif
+
+int ft_board_setup(void *fdt, struct bd_info *bd)
+{
+	/* Create an arbitrary reservation to allow testing OF_BOARD_SETUP.*/
+	return fdt_add_mem_rsv(fdt, 0x00d02000, 0x4000);
+}
 
 #ifdef CONFIG_BOARD_LATE_INIT
 int board_late_init(void)
 {
-	if (cros_ec_get_error()) {
+	struct udevice *dev;
+	int ret;
+
+	ret = uclass_first_device_err(UCLASS_CROS_EC, &dev);
+	if (ret && ret != -ENODEV) {
 		/* Force console on */
 		gd->flags &= ~GD_FLG_SILENT;
 
-		printf("cros-ec communications failure %d\n",
-		       cros_ec_get_error());
+		printf("cros-ec communications failure %d\n", ret);
 		puts("\nPlease reset with Power+Refresh\n\n");
 		panic("Cannot init cros-ec device");
 		return -1;

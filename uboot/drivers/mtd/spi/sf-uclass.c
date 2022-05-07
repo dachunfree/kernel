@@ -1,11 +1,12 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * Copyright (c) 2014 Google, Inc
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
 #include <dm.h>
+#include <log.h>
+#include <malloc.h>
 #include <spi.h>
 #include <spi_flash.h>
 #include <dm/device-internal.h>
@@ -15,18 +16,18 @@ DECLARE_GLOBAL_DATA_PTR;
 
 int spi_flash_read_dm(struct udevice *dev, u32 offset, size_t len, void *buf)
 {
-	return sf_get_ops(dev)->read(dev, offset, len, buf);
+	return log_ret(sf_get_ops(dev)->read(dev, offset, len, buf));
 }
 
 int spi_flash_write_dm(struct udevice *dev, u32 offset, size_t len,
 		       const void *buf)
 {
-	return sf_get_ops(dev)->write(dev, offset, len, buf);
+	return log_ret(sf_get_ops(dev)->write(dev, offset, len, buf));
 }
 
 int spi_flash_erase_dm(struct udevice *dev, u32 offset, size_t len)
 {
-	return sf_get_ops(dev)->erase(dev, offset, len);
+	return log_ret(sf_get_ops(dev)->erase(dev, offset, len));
 }
 
 /*
@@ -46,7 +47,7 @@ struct spi_flash *spi_flash_probe(unsigned int bus, unsigned int cs,
 
 void spi_flash_free(struct spi_flash *flash)
 {
-	spi_flash_remove(flash->spi->dev);
+	device_remove(flash->spi->dev, DM_REMOVE_NORMAL);
 }
 
 int spi_flash_probe_bus_cs(unsigned int busnum, unsigned int cs,
@@ -55,23 +56,24 @@ int spi_flash_probe_bus_cs(unsigned int busnum, unsigned int cs,
 {
 	struct spi_slave *slave;
 	struct udevice *bus;
-	char name[30], *str;
+	char *str;
 	int ret;
+
+#if defined(CONFIG_SPL_BUILD) && CONFIG_IS_ENABLED(USE_TINY_PRINTF)
+	str = "spi_flash";
+#else
+	char name[30];
 
 	snprintf(name, sizeof(name), "spi_flash@%d:%d", busnum, cs);
 	str = strdup(name);
+#endif
 	ret = spi_get_bus_and_cs(busnum, cs, max_hz, spi_mode,
-				  "spi_flash_std", str, &bus, &slave);
+				  "jedec_spi_nor", str, &bus, &slave);
 	if (ret)
 		return ret;
 
 	*devp = slave->dev;
 	return 0;
-}
-
-int spi_flash_remove(struct udevice *dev)
-{
-	return device_remove(dev);
 }
 
 static int spi_flash_post_bind(struct udevice *dev)

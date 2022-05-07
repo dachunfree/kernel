@@ -1,10 +1,10 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * Copyright 2014 Freescale Semiconductor, Inc.
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
+#include <net.h>
 #include <netdev.h>
 #include <asm/fsl_serdes.h>
 #include <asm/immap_85xx.h>
@@ -16,7 +16,7 @@
 
 #include "../common/fman.h"
 
-int board_eth_init(bd_t *bis)
+int board_eth_init(struct bd_info *bis)
 {
 #ifdef CONFIG_FMAN_ENET
 	struct memac_mdio_info memac_mdio_info;
@@ -43,7 +43,7 @@ int board_eth_init(bd_t *bis)
 		int idx = i - FM1_DTSEC1;
 
 		switch (fm_info_get_enet_if(i)) {
-#if defined(CONFIG_T1040RDB) || defined(CONFIG_T1040D4RDB)
+#if defined(CONFIG_TARGET_T1040RDB) || defined(CONFIG_TARGET_T1040D4RDB)
 		case PHY_INTERFACE_MODE_SGMII:
 			/* T1040RDB & T1040D4RDB only supports SGMII on
 			 * DTSEC3
@@ -52,7 +52,7 @@ int board_eth_init(bd_t *bis)
 						CONFIG_SYS_SGMII1_PHY_ADDR);
 			break;
 #endif
-#ifdef CONFIG_T1042RDB
+#ifdef CONFIG_TARGET_T1042RDB
 		case PHY_INTERFACE_MODE_SGMII:
 			/* T1042RDB doesn't supports SGMII on DTSEC1 & DTSEC2 */
 			if ((FM1_DTSEC1 == i) || (FM1_DTSEC2 == i))
@@ -62,7 +62,7 @@ int board_eth_init(bd_t *bis)
 						CONFIG_SYS_SGMII1_PHY_ADDR);
 			break;
 #endif
-#ifdef CONFIG_T1042D4RDB
+#ifdef CONFIG_TARGET_T1042D4RDB
 		case PHY_INTERFACE_MODE_SGMII:
 			/* T1042D4RDB supports SGMII on DTSEC1, DTSEC2
 			 *  & DTSEC3
@@ -77,6 +77,9 @@ int board_eth_init(bd_t *bis)
 			break;
 #endif
 		case PHY_INTERFACE_MODE_RGMII:
+		case PHY_INTERFACE_MODE_RGMII_TXID:
+		case PHY_INTERFACE_MODE_RGMII_RXID:
+		case PHY_INTERFACE_MODE_RGMII_ID:
 			if (FM1_DTSEC4 == i)
 				phy_addr = CONFIG_SYS_RGMII1_PHY_ADDR;
 			if (FM1_DTSEC5 == i)

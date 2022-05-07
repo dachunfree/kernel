@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * PCI auto-configuration library
  *
@@ -8,13 +9,12 @@
  * Modifications for driver model:
  * Copyright 2015 Google, Inc
  * Written by Simon Glass <sjg@chromium.org>
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
 #include <dm.h>
 #include <errno.h>
+#include <log.h>
 #include <pci.h>
 
 void pciauto_region_init(struct pci_region *res)
@@ -22,9 +22,10 @@ void pciauto_region_init(struct pci_region *res)
 	/*
 	 * Avoid allocating PCI resources from address 0 -- this is illegal
 	 * according to PCI 2.1 and moreover, this is known to cause Linux IDE
-	 * drivers to fail. Use a reasonable starting value of 0x1000 instead.
+	 * drivers to fail. Use a reasonable starting value of 0x1000 instead
+	 * if the bus start address is below 0x1000.
 	 */
-	res->bus_lower = res->bus_start ? res->bus_start : 0x1000;
+	res->bus_lower = res->bus_start < 0x1000 ? 0x1000 : res->bus_start;
 }
 
 void pciauto_region_align(struct pci_region *res, pci_size_t size)
@@ -33,25 +34,32 @@ void pciauto_region_align(struct pci_region *res, pci_size_t size)
 }
 
 int pciauto_region_allocate(struct pci_region *res, pci_size_t size,
-	pci_addr_t *bar)
+	pci_addr_t *bar, bool supports_64bit)
 {
 	pci_addr_t addr;
 
 	if (!res) {
-		debug("No resource");
+		debug("No resource\n");
 		goto error;
 	}
 
 	addr = ((res->bus_lower - 1) | (size - 1)) + 1;
 
 	if (addr - res->bus_start + size > res->size) {
-		debug("No room in resource");
+		debug("No room in resource, avail start=%llx / size=%llx, "
+		      "need=%llx\n", (unsigned long long)res->bus_lower,
+		      (unsigned long long)res->size, (unsigned long long)size);
+		goto error;
+	}
+
+	if (upper_32_bits(addr) && !supports_64bit) {
+		debug("Cannot assign 64-bit address to 32-bit-only resource\n");
 		goto error;
 	}
 
 	res->bus_lower = addr + size;
 
-	debug("address=0x%llx bus_lower=0x%llx", (unsigned long long)addr,
+	debug("address=0x%llx bus_lower=0x%llx\n", (unsigned long long)addr,
 	      (unsigned long long)res->bus_lower);
 
 	*bar = addr;
@@ -60,6 +68,17 @@ int pciauto_region_allocate(struct pci_region *res, pci_size_t size,
  error:
 	*bar = (pci_addr_t)-1;
 	return -1;
+}
+
+static void pciauto_show_region(const char *name, struct pci_region *region)
+{
+	pciauto_region_init(region);
+	debug("PCI Autoconfig: Bus %s region: [%llx-%llx],\n"
+	      "\t\tPhysical Memory [%llx-%llxx]\n", name,
+	      (unsigned long long)region->bus_start,
+	      (unsigned long long)(region->bus_start + region->size - 1),
+	      (unsigned long long)region->phys_start,
+	      (unsigned long long)(region->phys_start + region->size - 1));
 }
 
 void pciauto_config_init(struct pci_controller *hose)
@@ -91,38 +110,10 @@ void pciauto_config_init(struct pci_controller *hose)
 	}
 
 
-	if (hose->pci_mem) {
-		pciauto_region_init(hose->pci_mem);
-
-		debug("PCI Autoconfig: Bus Memory region: [0x%llx-0x%llx],\n"
-		       "\t\tPhysical Memory [%llx-%llxx]\n",
-		    (u64)hose->pci_mem->bus_start,
-		    (u64)(hose->pci_mem->bus_start + hose->pci_mem->size - 1),
-		    (u64)hose->pci_mem->phys_start,
-		    (u64)(hose->pci_mem->phys_start + hose->pci_mem->size - 1));
-	}
-
-	if (hose->pci_prefetch) {
-		pciauto_region_init(hose->pci_prefetch);
-
-		debug("PCI Autoconfig: Bus Prefetchable Mem: [0x%llx-0x%llx],\n"
-		       "\t\tPhysical Memory [%llx-%llx]\n",
-		    (u64)hose->pci_prefetch->bus_start,
-		    (u64)(hose->pci_prefetch->bus_start +
-			    hose->pci_prefetch->size - 1),
-		    (u64)hose->pci_prefetch->phys_start,
-		    (u64)(hose->pci_prefetch->phys_start +
-			    hose->pci_prefetch->size - 1));
-	}
-
-	if (hose->pci_io) {
-		pciauto_region_init(hose->pci_io);
-
-		debug("PCI Autoconfig: Bus I/O region: [0x%llx-0x%llx],\n"
-		       "\t\tPhysical Memory: [%llx-%llx]\n",
-		    (u64)hose->pci_io->bus_start,
-		    (u64)(hose->pci_io->bus_start + hose->pci_io->size - 1),
-		    (u64)hose->pci_io->phys_start,
-		    (u64)(hose->pci_io->phys_start + hose->pci_io->size - 1));
-	}
+	if (hose->pci_mem)
+		pciauto_show_region("Memory", hose->pci_mem);
+	if (hose->pci_prefetch)
+		pciauto_show_region("Prefetchable Mem", hose->pci_prefetch);
+	if (hose->pci_io)
+		pciauto_show_region("I/O", hose->pci_io);
 }

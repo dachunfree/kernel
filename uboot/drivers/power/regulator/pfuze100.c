@@ -1,8 +1,16 @@
+// SPDX-License-Identifier: GPL-2.0+
+/*
+ * Copyright 2017 NXP
+ *
+ * Peng Fan <peng.fan@nxp.com>
+ */
+
 #include <common.h>
 #include <fdtdec.h>
 #include <errno.h>
 #include <dm.h>
 #include <i2c.h>
+#include <log.h>
 #include <power/pmic.h>
 #include <power/regulator.h>
 #include <power/pfuze100_pmic.h>
@@ -306,7 +314,7 @@ static int pfuze100_regulator_probe(struct udevice *dev)
 
 static int pfuze100_regulator_mode(struct udevice *dev, int op, int *opmode)
 {
-	unsigned char val;
+	int val;
 	struct pfuze100_regulator_platdata *plat = dev_get_platdata(dev);
 	struct pfuze100_regulator_desc *desc = plat->desc;
 
@@ -376,7 +384,7 @@ static int pfuze100_regulator_mode(struct udevice *dev, int op, int *opmode)
 
 static int pfuze100_regulator_enable(struct udevice *dev, int op, bool *enable)
 {
-	unsigned char val;
+	int val;
 	int ret, on_off;
 	struct dm_regulator_uclass_platdata *uc_pdata =
 		dev_get_uclass_platdata(dev);
@@ -440,7 +448,7 @@ static int pfuze100_regulator_enable(struct udevice *dev, int op, bool *enable)
 static int pfuze100_regulator_val(struct udevice *dev, int op, int *uV)
 {
 	int i;
-	unsigned char val;
+	int val;
 	struct pfuze100_regulator_platdata *plat = dev_get_platdata(dev);
 	struct pfuze100_regulator_desc *desc = plat->desc;
 	struct dm_regulator_uclass_platdata *uc_pdata =
@@ -475,11 +483,11 @@ static int pfuze100_regulator_val(struct udevice *dev, int op, int *uV)
 		debug("Set voltage for REGULATOR_TYPE_FIXED regulator\n");
 		return -EINVAL;
 	} else if (desc->volt_table) {
-		for (i = 0; i < desc->vsel_mask; i++) {
+		for (i = 0; i <= desc->vsel_mask; i++) {
 			if (*uV == desc->volt_table[i])
 				break;
 		}
-		if (i == desc->vsel_mask) {
+		if (i == desc->vsel_mask + 1) {
 			debug("Unsupported voltage %u\n", *uV);
 			return -EINVAL;
 		}
@@ -516,7 +524,7 @@ static int pfuze100_regulator_set_value(struct udevice *dev, int uV)
 	return pfuze100_regulator_val(dev, PMIC_OP_SET, &uV);
 }
 
-static bool pfuze100_regulator_get_enable(struct udevice *dev)
+static int pfuze100_regulator_get_enable(struct udevice *dev)
 {
 	int ret;
 	bool enable = false;
