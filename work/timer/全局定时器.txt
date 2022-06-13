@@ -1,0 +1,185 @@
+
+
+全局定时器解释：
+全局定时器是一个 64 位的具有自动递增功能的计数器。全局定时器是内存映射在与私有定时器相同的地址空间。
+每个 Cortex-A9 处理器都有一个 64 位比较器，用于在全局定时器达到比较器值时产生私有中断。
+
+1寄存器相关：
+1.1 Global_Timer_Counter_Register0  Global_Timer_Counter_Register1
+这是2个32位计数寄存器，最终合成一个64位寄存器。
+使用方法：
+1.清除寄存器的使能bit位。
+2.写低32bit。
+3.写高32bit。
+4.设置使能位。
+
+1.2 Global_Timer_Control_Register：
+bit[0]: Timer_Enable; 0：时钟关闭，计数器不变；1：时钟使能，计数器递增；
+bit[1]: Comp_Enablea; 这个bit绑定了per-cpu。如果设置，允许Timer_Counter和Comparator Register比较。
+bit[2]：IRQ_Enable；这个bit绑定了per-cpu。会产生27号中断。
+bit[3]: 
+			0:one-shot 模式。当计数器达到比较器值时，设置事件标志。 这是负责软件更新比较器值以获得进一步的事件。 
+			1：auto increment 模式。每次计数器到达比较器值，比较器寄存器是用自动递增寄存器递增，所以可以定期设置更多事件无需任何软件更新。
+
+1.3 Global_Timer_Interrupt_Status_Register
+bit[0]：Event_flag。
+
+1.4 Comparator Value Register
+同Global_Timer_Control_Register。
+
+1.5 Auto_increment_Register
+此32位寄存器设置了比较寄存器的递增值。每个A9都有自己Auto-increment Register。
+控制寄存器的 Comp_Enablea和auto increment置1，如果 Global_Timer_Counter_Register 达到了Comparator Value Register值，
+比较寄存器自动+Auto_increment_Register值。中断就可以有序产生。
+
+读取寄存器值为：
+3333333 也就是10ms。
+2.代码相关：
+设备树：
+global_timer: timer@f8f00200 {
+			compatible = "arm,cortex-a9-global-timer";
+			reg = <0xf8f00200 0x20>;
+			interrupts = <1 11 0x301>;
+			interrupt-parent = <&intc>;
+			clocks = <&clkc 4>;  //设置时钟为cpu_3or2x
+		};
+驱动：
+global_timer_of_register
+	gt_ppi = irq_of_parse_and_map(np, 0); //映射私有中断
+	gt_clk = of_clk_get(np, 0);
+	clk_prepare_enable(gt_clk);
+	gt_clk_rate = clk_get_rate(gt_clk); //此3步是获取cpu_3or2x时钟。也就是cpu一半的时钟为 333MHz。
+	gt_evt = alloc_percpu(struct clock_event_device);//分配per-cpu变量clock_event_device。PPI根据此分别处理。
+	request_percpu_irq(gt_ppi, gt_clockevent_interrupt,"gt", gt_evt); //注册PPI中断，根据gt_gvt cpu各走各的
+	register_cpu_notifier(&gt_cpu_nb); //通知链
+	gt_clocksource_init(); //时钟源初始化
+		写计数器寄存器，并使能timer。
+		clocksource_register_hz(&gt_clocksource, gt_clk_rate);
+			__clocksource_register_scale(cs, 1, hz);
+				clocksource_enqueue(cs); //将该clock source按照rating的顺序插入到全局clock source list中。
+				clocksource_select(); //选择精度最高的时钟源。
+	gt_clockevents_init(this_cpu_ptr(gt_evt)); //per-cpu。设置时钟事件设备相关操作函数，oneshot，period。。。
+		设置 clock_event_device相关one-shot处理函数
+		clockevents_config_and_register(clk, gt_clk_rate,1, 0xffffffff);
+			clockevents_register_device(dev);
+				list_add(&dev->list, &clockevent_devices);
+				tick_check_new_device(dev); //tick device 两种模式：one-shot和period mode。per-cpu变量。
+					tick_setup_device(td, newdev, cpu, cpumask_of(cpu));
+						tick_setup_periodic(newdev, 0); //设置period模式的中断处理函数。
+						tick_setup_oneshot(newdev, handler, next_event);//
+					
+重点理解2个结构体：
+数据结构具有____cacheline_aligned; //cacheline 属性。因为经常访问，cache size对其
+static struct clocksource gt_clocksource = {
+	.name	= "arm_global_timer",
+	.rating	= 300,
+	.read	= gt_clocksource_read, //获取全局计数器的值
+	.mask	= CLOCKSOURCE_MASK(64),
+	.flags	= CLOCK_SOURCE_IS_CONTINUOUS,
+};
+				
+struct clock_event_device {
+	//event_handler顾名思义就是产生了clock event的时候调用的handler。一般而言，
+	//底层的clock event chip driver会注册中断处理函数，在硬件timer中断到来的时候调
+	//用该timer中断handler，而在这个中断handler中再调用event_handler
+	void			(*event_handler)(struct clock_event_device *);
+	//既然是产生clock event的device，那么总是要控制下一次event产生的时间点
+	int			(*set_next_event)(unsigned long evt, struct clock_event_device *); //set_next_ktime函数可以直接接收ktime作为参数
+	int			(*set_next_ktime)(ktime_t expires, struct clock_event_device *);//et_next_event设定的counter的cycle数值。一般的timer硬件都是用cycle值设定会比较方便
+	ktime_t			next_event;     //下一次触发时间
+	u64			max_delta_ns; //当前时间和下一次时间触发的差值。一个最小，一个最大
+	u64			min_delta_ns;
+	u32			mult;              //时钟周期数和ns之间的转换
+	u32			shift;
+	enum clock_event_state	state_use_accessors;  //event下的几种模式
+	unsigned int		features;
+	unsigned long		retries;
+
+	int			(*set_state_periodic)(struct clock_event_device *);
+	int			(*set_state_oneshot)(struct clock_event_device *);
+	int			(*set_state_oneshot_stopped)(struct clock_event_device *);
+	int			(*set_state_shutdown)(struct clock_event_device *);
+	int			(*tick_resume)(struct clock_event_device *);
+
+	void			(*broadcast)(const struct cpumask *mask);
+	void			(*suspend)(struct clock_event_device *);
+	void			(*resume)(struct clock_event_device *);
+	unsigned long		min_delta_ticks;
+	unsigned long		max_delta_ticks;
+
+	const char		*name;  //表示该事件的名称。/proc/timer_list
+	int			rating;
+	int			irq;
+	int			bound_on;
+	const struct cpumask	*cpumask; //它可以指示该clock event device为哪一个或者哪几个CPU core工作
+	struct list_head	list;
+	struct module		*owner;
+} ____cacheline_aligned;
+
+
+时钟中断处理函数：
+tick_periodic //ppi 每cpu中断处理函数
+	if (tick_do_timer_cpu == cpu) //如果是全局时钟
+		do_timer(1); //更新 jiffies_64
+		update_wall_time(); //更新walltime。
+	update_process_times(user_mode(get_irq_regs())); //per-cpu
+		run_local_timers(); 
+			hrtimer_run_queues(); //转换成高精度定时器
+				if (__hrtimer_hres_active(cpu_base)) //如果高精度定时器已经active，那么return
+				__hrtimer_run_queues(cpu_base, now); //执行高精度定时器的 rb tree
+					while ((node = timerqueue_getnext(&base->active))) //遍历
+						__run_hrtimer(cpu_base, base, timer, &basenow);
+							__remove_hrtimer(timer, base, HRTIMER_STATE_INACTIVE, 0);//移除当前处理timer
+								hrtimer_force_reprogram(cpu_base, 1);//开始查找rb tree中最近的一次时间事件，并设置ont-shot时间
+									tick_program_event(cpu_base->expires_next, 1);
+										clockevents_program_event(dev, expires, force);
+											dev->set_next_event((unsigned long) clc, dev);
+							restart = fn(timer); //执行回调函数
+							
+高精度定时器：
+hrtimer_init(&timer,CLOCK_MONOTONIC,HRTIMER_MODE_REL);
+	cpu_base = raw_cpu_ptr(&hrtimer_bases);//获取per-cpu变量的hrtimer_cpu_base
+	timer->base = &cpu_base->clock_base[base];
+	timerqueue_init(&timer->node); //清除rb tree
+
+hrtimer_start(&timer,kt,HRTIMER_MODE_REL); /* hrtimer启动 */
+	hrtimer_start_range_ns(timer, tim, 0, mode);
+		remove_hrtimer(timer, base, true);//如果这个timer已经入队了，那么清除掉
+		tim = ktime_add_safe(tim, base->get_time()); //把相对时间转换成取绝对时间
+		leftmost = enqueue_hrtimer(timer, new_base); //将timer加入到new_base的 rb tree 根节点中，如果是最邻近的，就要设置one-shot
+		hrtimer_reprogram(timer, new_base) //设置最近一次中断时间
+			
+			
+数据结构：
+per-cpu:
+struct hrtimer_cpu_base {																										
+	struct hrtimer			*running; 
+	struct hrtimer_clock_base	clock_base[index];--->-|
+	}																								 |
+					|-----------<------------------------<---|
+					|
+					|
+					|------>struct hrtimer_clock_base {
+										struct hrtimer_cpu_base	*cpu_base;
+										struct timerqueue_head	active;//红黑树root ---->struct timerqueue_head {
+									}																											struct rb_root head; //红黑树的根节点-------------->----------|
+																																				struct timerqueue_node *next;	//该红黑树中最早到期的节点			|
+																																			};																															|
+																																																																			|
+																					contain		找到hrtimer																																   			|
+																							 |-----<-------struct timerqueue_node {-----------<----------------------------------------
+																							 |								struct rb_node node;	//红黑树的节点
+																							 |								ktime_t expires;//该节点代表队hrtimer的到期时间
+																							 |							};
+								                               |	
+								                               |
+								                               |
+                            struct hrtimer {----
+																		struct timerqueue_node		node;
+																		ktime_t				_softexpires;
+																		enum hrtimer_restart		(*function)(struct hrtimer *); //时间处理回调函数
+																		struct hrtimer_clock_base	*base;
+																	  unsigned long			state;
+																	};
+
+				

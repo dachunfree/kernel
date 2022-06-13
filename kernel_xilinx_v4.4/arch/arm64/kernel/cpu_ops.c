@@ -86,11 +86,12 @@ static const char *__init cpu_read_enable_method(int cpu)
  */
 int __init cpu_read_ops(int cpu)
 {
+	//从dts中获取 初始化方式 arm64是 psci
 	const char *enable_method = cpu_read_enable_method(cpu);
 
 	if (!enable_method)
 		return -ENODEV;
-
+	// cpu_ops[cpu]= cpu_psci_ops
 	cpu_ops[cpu] = cpu_get_ops(enable_method);
 	if (!cpu_ops[cpu]) {
 		pr_warn("Unsupported enable-method: %s\n", enable_method);

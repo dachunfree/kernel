@@ -1,0 +1,29 @@
+
+生成BOOT.BIN的方法：
+
+./bootgen -arch zynqmp -image bootimage.bif -o BOOT.BIN -w on
+
+
+build bootgen目录下：
+
+
+1. bootimage-zynqmp-mmWave.bif
+
+the_ROM_image:
+{
+    [fsbl_config] a53_x64
+    [bootloader] ./zynqmp_fsbl.elf
+    [pmufw_image] ./pmufw.elf
+    [destination_cpu=a53-0, exception_level=el-3, trustzone] ./bl31.elf
+    [destination_cpu=a53-0, exception_level=el-2] ./u-boot.elf
+}
+
+
+BOOT.bin	用于系统启动
+
+Image	Linux Kernel
+System.dtb			:设备树文件
+urootfs.cpio.gz	: 文件系统
+u-boot.elf			: uboot文件。用于生成 BOOT.bin
+bl31.elf				:ATF固件 用于生成 BOOT.bin
+pmufw.elf				:PMU固件 用于生成 BOOT.bin

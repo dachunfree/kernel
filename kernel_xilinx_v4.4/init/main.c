@@ -524,6 +524,7 @@ asmlinkage __visible void __init start_kernel(void)
  * Interrupts are still disabled. Do necessary setups, then
  * enable them
  */
+ 	//设置当前cpu的4种状态。possible present online active
 	boot_cpu_init();
 	page_address_init();
 	pr_notice("%s", linux_banner); //printk
@@ -1002,11 +1003,12 @@ static noinline void __init kernel_init_freeable(void)
 
 	cad_pid = task_pid(current);
 
+	//设置cpu的状态为present. smc .
 	smp_prepare_cpus(setup_max_cpus);
 
 	do_pre_smp_initcalls();
 	lockup_detector_init();
-
+	//启动另外几个核
 	smp_init();
 	sched_init_smp();
 

@@ -238,6 +238,7 @@ static int _do_env_set(int flag, int argc, char *const argv[], int env_flag)
 		return do_env_set_efi(NULL, flag, --argc, ++argv);
 #endif
 
+   //argv[4] = { "setenv", varname, varvalue, NULL };
 	while (argc > 1 && **(argv + 1) == '-') {
 		char *arg = *++argv;
 

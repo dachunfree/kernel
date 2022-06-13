@@ -336,6 +336,7 @@ void __init setup_arch(char **cmdline_p)
 	if (acpi_disabled) {
 		//设备树解析
 		unflatten_device_tree();
+		//psci 相关初始化。到psci_ops
 		psci_dt_init();
 	} else {
 		psci_acpi_init();
@@ -343,7 +344,9 @@ void __init setup_arch(char **cmdline_p)
 	xen_early_init();
 
 	cpu_read_bootcpu_ops();
+	//从dts中设置cpu,设置cpu为possible状态
 	smp_init_cpus();
+
 	smp_build_mpidr_hash();
 
 #ifdef CONFIG_VT

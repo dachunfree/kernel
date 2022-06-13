@@ -103,6 +103,7 @@ static int __init cpu_psci_cpu_init(unsigned int cpu)
 
 static int __init cpu_psci_cpu_prepare(unsigned int cpu)
 {
+	//是否存在 psci_cpu_on
 	if (!psci_ops.cpu_on) {
 		pr_err("no cpu_on method, not booting CPU%d\n", cpu);
 		return -ENODEV;
@@ -113,6 +114,7 @@ static int __init cpu_psci_cpu_prepare(unsigned int cpu)
 
 static int cpu_psci_cpu_boot(unsigned int cpu)
 {
+	//psci_0_2_set_functions 函数中进行设置 psci_cpu_on
 	int err = psci_ops.cpu_on(cpu_logical_map(cpu), __pa(secondary_entry));
 	if (err)
 		pr_err("failed to boot CPU%d (%d)\n", cpu, err);

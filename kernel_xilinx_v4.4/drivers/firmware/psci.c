@@ -155,6 +155,7 @@ static int psci_cpu_on(unsigned long cpuid, unsigned long entry_point)
 	u32 fn;
 
 	fn = psci_function_id[PSCI_FN_CPU_ON];
+	//invoke_psci_fn =  __invoke_psci_fn_smc
 	err = invoke_psci_fn(fn, cpuid, entry_point, 0);
 	return psci_to_linux_errno(err);
 }
@@ -342,7 +343,7 @@ static int __init psci_probe(void)
 		pr_err("Conflicting PSCI version detected.\n");
 		return -EINVAL;
 	}
-
+	//设置psci的函数
 	psci_0_2_set_functions();
 
 	psci_init_migrate();
@@ -365,7 +366,7 @@ typedef int (*psci_initcall_t)(const struct device_node *);
 static int __init psci_0_2_init(struct device_node *np)
 {
 	int err;
-
+	//从dtb中获取smc
 	err = get_set_conduit_method(np);
 
 	if (err)
@@ -442,7 +443,7 @@ int __init psci_dt_init(void)
 	if (!np)
 		return -ENODEV;
 
-	init_fn = (psci_initcall_t)matched_np->data;
+	init_fn = (psci_initcall_t)matched_np->data; //psci_0_2_init
 	return init_fn(np);
 }
 

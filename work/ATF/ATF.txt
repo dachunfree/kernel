@@ -1,0 +1,83 @@
+
+zynqmp启动流程：
+
+time       ---------------------------------------------------------------------------------->
+PMU    release CSU                             power monitoring
+
+CSU								load FSBL													Tamper 	monitoring
+
+RPU													FSBL																
+
+APU																ATF   UBoot		Linux
+----------------------------------------------------------------------------------------------
+
+Zynqmp启动分为三个步骤，如下：
+
+1.预配置阶段（Pre-configuration stage）
+上电后，PMU（Platform Management Unit 平台管理单元）重置；
+执行PMU ROM中的预启动代码，以执行复位操作（包括CSU（configuration security unit 配置安全单元）复位）；
+
+
+2.配置阶段（Configuration stage）：
+CSU复位后，初始化OC-RAM，将FBSL加载到OC-RAM（on-chip RAM），处理器开始执行FSBL代码。
+
+FSBL（first-stage boot loader）的作用如下：
+
+初始化PS端配置，如：MIO、PLL、DDR、QSPI、SD等
+加载PL端程序，即：bitstream
+搬运用户程序到DDR，并跳转执行
+
+
+3.后配置阶段（Post-configuration stage）：
+FBSL执行后，CSU ROM代码进入Post-configuration阶段，负责起系统干预响应，提供硬件支持。
+PMU仍然需要运行，用于后续改变系统的电源状态（上电、睡眠、唤醒等等）
+
+
+
+编译：
+make PLAT=zynqmp RESET_TO_BL31=1 CROSS_COMPILE=aarch64-l
+
+
+代码：
+根据 bl31.ld.S 查看  bl31_entrypoint.S为入口函数
+
+1.主要代码结构：
+el3_entrypoint_common
+	_exception_vectors=runtime_exceptions //设置ｅｌ3的异常向量表
+	bl	bl31_early_platform_setup //跳转到平台早期设置
+	bl	bl31_plat_arch_setup //跳转到平台架构设置
+	bl	bl31_main //跳转到bl31_main   atf/bl31/aarch64/bl31_main.c:
+	b	el3_exit  
+
+1.1 bl31_main函数
+bl31_main
+	runtime_svc_init(); //调用每一个通过DECLARE_RT_SVC注册的服务. DECLARE_RT_SVC在lds中的rt_svc_descs段中
+		std_svc_smc_handler(uint32_t smc_fid,u_register_t x1,u_register_t x2,u_register_t x3,u_register_t x4,void *cookie,void *handle,u_register_t flags)
+			psci_smc_handler(smc_fid, x1, x2, x3, x4,cookie, handle, flags)
+				psci_cpu_on(x1, x2, x3) /64位
+					psci_validate_entry_point(&ep, entrypoint, context_id)
+					psci_cpu_on_start(target_cpu, &ep)	
+						 psci_plat_pm_ops->pwr_domain_on(target_cpu); // 现核上电（平台实现） zynqmp_pwr_domain_on
+						 cm_init_context_by_index(target_idx, ep); //返回到el1
+		
+1.2 了解异常向量表 
+runtime_exceptions
+	mrs	x30, esr_el3           //从esr_el3种获取 arm 32还是64位的信息，咱们是64位
+	ubfx	x30, x30, #ESR_EC_SHIFT, #ESR_EC_LENGTH
+	cmp	x30, #EC_AARCH64_SMC
+	b.eq	smc_handler64  //进行smc处理,传入参数如下：__invoke_psci_fn_smc(fn, cpuid, entry_point, 0)
+后续根据 fn + rt_svc_descs 找到处理函数，处理函数在bl31_main中初始化（psci_smc_handler）
+
+1.3 psci 多核启动调用  __invoke_psci_fn_smc
+
+调用smc 函数：
+fn: 					psci_function_id[PSCI_FN_CPU_ON] = PSCI_FN_NATIVE(0_2, CPU_ON);
+cpuid : 			cpu_logical_map(cpu)
+entry_point:	__pa(secondary_entry)
+
+__invoke_psci_fn_smc(fn, cpuid, entry_point, 0)
+	arm_smccc_smc(function_id, cpuid, entry_point, 0, 0, 0, 0, 0, &res);
+	
+	
+	
+	

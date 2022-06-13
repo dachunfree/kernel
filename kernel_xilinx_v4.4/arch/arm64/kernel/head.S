@@ -640,8 +640,8 @@ ENDPROC(el2_setup)
  * in x20. See arch/arm64/include/asm/virt.h for more info.
  */
 ENTRY(set_cpu_boot_mode_flag)
-	adr_l	x1, __boot_cpu_mode
-	cmp	w20, #BOOT_CPU_MODE_EL2
+	adr_l	x1, __boot_cpu_mode //__boot_cpu_mode用来保存启动时候的CPU mode
+	cmp	w20, #BOOT_CPU_MODE_EL2 //w20寄存器保存了cpu启动时候的Eexception level
 	b.ne	1f
 	add	x1, x1, #4
 1:	str	w20, [x1]			// This CPU has booted in EL1
@@ -696,8 +696,8 @@ ENTRY(secondary_startup)
 	/*
 	 * Common entry point for secondary CPUs.
 	 */
-	adrp	x25, idmap_pg_dir
-	adrp	x26, swapper_pg_dir
+	adrp	x25, idmap_pg_dir     //一致性映射
+	adrp	x26, swapper_pg_dir   //设置内核主页表
 	bl	__cpu_setup			// initialise processor
 
 	ldr	x21, =secondary_data
@@ -711,6 +711,26 @@ ENTRY(__secondary_switched)
 	mov	x29, #0
 	b	secondary_start_kernel
 ENDPROC(__secondary_switched)
+
+//linux 5.0
+SYM_FUNC_START_LOCAL(__secondary_switched)
+	adr_l	x5, vectors   //设置从处理器的异常向量表
+	msr vbar_el1, x5
+	isb
+
+	adr_l	x0, secondary_data     //获得主处理器传递过来的从处理器数据
+	ldr x1, [x0, #CPU_BOOT_STACK]	// get secondary_data.stack 获得栈地址
+	cbz x1, __secondary_too_slow
+	mov sp, x1  //设置到从处理器的ｓｐ
+	ldr x2, [x0, #CPU_BOOT_TASK]  //获得从处理器的ｔｓｋ  ｉｄｌｅ进程的ｔｓｋ结构，
+	cbz x2, __secondary_too_slow
+	msr sp_el0, x2  // arm64使用sp_el0保存当前进程的ｔｓｋ结构
+	scs_load x2, x3
+	mov x29, #0
+	mov x30, #0
+
+	b	secondary_start_kernel
+SYM_FUNC_END(__secondary_switched)
 
 /*
  * Enable the MMU.

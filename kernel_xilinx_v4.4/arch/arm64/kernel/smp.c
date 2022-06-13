@@ -78,6 +78,7 @@ enum ipi_msg_type {
  */
 static int boot_secondary(unsigned int cpu, struct task_struct *idle)
 {
+	// cpu_psci_ops中的cpu_psci_cpu_boot
 	if (cpu_ops[cpu]->cpu_boot)
 		return cpu_ops[cpu]->cpu_boot(cpu);
 
@@ -162,7 +163,7 @@ asmlinkage void secondary_start_kernel(void)
 	 * fail to come online.
 	 */
 	verify_local_cpu_capabilities();
-
+	//psci_0_2_set_functions函数中 未找到定义
 	if (cpu_ops[cpu]->cpu_postboot)
 		cpu_ops[cpu]->cpu_postboot();
 
@@ -186,6 +187,7 @@ asmlinkage void secondary_start_kernel(void)
 	pr_info("CPU%u: Booted secondary processor [%08x]\n",
 					 cpu, read_cpuid_id());
 	set_cpu_online(cpu, true);
+	//唤醒此函数
 	complete(&cpu_running);
 
 	local_dbg_enable();
@@ -387,9 +389,10 @@ static bool __init is_mpidr_duplicate(unsigned int cpu, u64 hwid)
  */
 static int __init smp_cpu_setup(int cpu)
 {
+	//获取cpu_ops
 	if (cpu_read_ops(cpu))
 		return -ENODEV;
-
+	//
 	if (cpu_ops[cpu]->cpu_init(cpu))
 		return -ENODEV;
 
@@ -533,6 +536,10 @@ void __init smp_init_cpus(void)
 	int i;
 
 	if (acpi_disabled)
+		/*调用of_parse_and_init_cpus接口解析DTS获得CPU拓扑，
+		该函数会将扫描到的CPU的硬件ID依次存放在__cpu_logical_map中，
+		也就是说__cpu_logical_map是一个数组，以CPU number为索引，
+		记录硬件ID。DTS中CPU节点的reg属性记录硬件ID*/
 		of_parse_and_init_cpus();
 	else
 		/*
@@ -603,7 +610,7 @@ void __init smp_prepare_cpus(unsigned int max_cpus)
 
 		if (!cpu_ops[cpu])
 			continue;
-
+		//cpu_psci_ops 中的 cpu_psci_cpu_prepare
 		err = cpu_ops[cpu]->cpu_prepare(cpu);
 		if (err)
 			continue;

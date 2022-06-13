@@ -818,6 +818,7 @@ __weak int clear_bss(void)
 static const init_fnc_t init_sequence_f[] = {
 	setup_mon_len,
 #ifdef CONFIG_OF_CONTROL
+	/*获取dtb的地址，并且验证dtb的合法性*/
 	fdtdec_setup,
 #endif
 #ifdef CONFIG_TRACE_EARLY

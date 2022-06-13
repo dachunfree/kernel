@@ -567,7 +567,7 @@ void __weak smp_announce(void)
 void __init smp_init(void)
 {
 	unsigned int cpu;
-
+	//不是bootcpu的话，fork idle线程
 	idle_threads_init();
 
 	/* FIXME: This should be done in userspace --RR */

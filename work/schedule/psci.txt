@@ -1,0 +1,186 @@
+
+这次遇到A53启动时候出现：
+
+smp: Bring up secondary CPUS ...
+CPU1：failed to come online
+CPU1: failed in unknown state : 0x0
+CPU2：failed to come online
+CPU2: failed in unknown state : 0x0
+CPU3：failed to come online
+CPU3: failed in unknown state : 0x0
+smp: Brought up 1 node,1 CPU
+
+正常打印是这样的：
+
+smp: Bring up secondary CPUS ...
+Detected VIPI I-cache on CPU1
+CPU1: Booted secondary processor 0x1 [0x410fd034]
+Detected VIPI I-cache on CPU2
+CPU2: Booted secondary processor 0x1 [0x410fd034]
+Detected VIPI I-cache on CPU3
+CPU3: Booted secondary processor 0x1 [0x410fd034]
+Detected VIPI I-cache on CPU4
+CPU4: Booted secondary processor 0x1 [0x410fd034]
+smp: Brought up 1 node,4 CPUS
+
+
+psci（Power State Coordination Interface）驱动：
+1.dts中：
+psci {
+        compatible = "arm,psci-0.2";
+        method = "smc";
+};
+smc是用于陷入el3（安全）, 
+hvc用于陷入el2（虚拟化, 虚拟化场景中一般通过hvc指令陷入el2来请求唤醒vcpu）, 
+svc用于陷入el1（系统）。
+
+psci.c中：
+
+static const struct of_device_id const psci_of_match[] __initconst = {
+	{ .compatible = "arm,psci",	.data = psci_0_1_init},
+	{ .compatible = "arm,psci-0.2",	.data = psci_0_2_init},
+	{ .compatible = "arm,psci-1.0",	.data = psci_0_2_init},
+	{},
+}; 
+ 
+setup_arch
+	psci_dt_init();
+		psci_0_2_init
+			get_set_conduit_method(np) //获取dts中的method，并进行匹配
+				invoke_psci_fn = __invoke_psci_fn_smc;
+			psci_probe()
+				psci_0_2_set_functions();
+					psci_ops.cpu_suspend = psci_cpu_suspend
+ 					psci_ops.cpu_off = psci_cpu_off
+ 					psci_ops.cpu_on = psci_cpu_on
+ 					psci_ops.affinity_info = psci_affinity_info
+ 			
+
+
+cpu有4大状态：
+possible，present，online和active四大状态分别记录在
+__cpu_possible_mask，set_cpu_present，__cpu_online_mask和__cpu_active_mask
+
+1.possilble状态：
+dts中定义了该cpu信息，表示该cpu可能存在。
+先看下dts：
+
+ cpus {
+        #address-cells = <1>;
+        #size-cells = <0>;
+
+        cpu0: cpu@0 {
+                compatible = "arm,cortex-a53";
+                device_type = "cpu";
+                enable-method = "psci";
+                operating-points-v2 = <&cpu_opp_table>;
+                reg = <0x0>;
+                cpu-idle-states = <&CPU_SLEEP_0>;
+        };
+
+        cpu1: cpu@1 {
+                compatible = "arm,cortex-a53";
+                device_type = "cpu";
+                enable-method = "psci";
+                reg = <0x1>;
+                operating-points-v2 = <&cpu_opp_table>;
+                cpu-idle-states = <&CPU_SLEEP_0>;
+        };
+    }
+
+再看下dts的解析：           
+start_kernel
+	setup_arch
+		smp_init_cpus();
+			of_parse_and_init_cpus //解析如上dts的reg信息，并传到到hwid
+				cpu_logical_map(cpu_count) = hwid; // __cpu_logical_map
+			smp_cpu_setup
+				cpu_read_ops(cpu) //获取cpu_psci_ops
+				set_cpu_possible(cpu, true); //设置cpu状态为possible
+			
+2.presetn状态：
+
+kernel_init
+	kernel_init_freeable
+		smp_prepare_cpus(setup_max_cpus)
+			for_each_possible_cpu(cpu)
+				cpu_ops[cpu]->cpu_prepare(cpu)
+					cpu_psci_cpu_prepare
+						psci_cpu_on //判断是否存在cpon 函数来决定是否present
+							invoke_psci_fn(fn, cpuid, entry_point, 0)
+								__invoke_psci_fn_smc
+				set_cpu_present(cpu, true) //设置cpu present标志
+
+
+3.online状态：
+
+smp_init
+	idle_threads_init(); //不是bootcpu的话，fork idle线程
+	cpu_up
+		_cpu_up(cpu, 0)
+			__cpu_up(cpu, idle)
+				boot_secondary(cpu, idle)
+					cpu_ops[cpu]->cpu_boot(cpu) // cpu_psci_ops中的cpu_psci_cpu_boot
+					psci_ops.cpu_on(cpu_logical_map(cpu), __pa(secondary_entry)
+						cpu_psci_cpu_boot(cpu_logical_map(cpu), __pa(secondary_entry))
+							psci_cpu_on(cpu_logical_map(cpu), __pa(secondary_entry))
+								invoke_psci_fn(fn, cpuid, entry_point, 0) //entry point为secondary_entry
+
+进入secondary_entry 的汇编函数：
+ENTRY(secondary_entry)
+	bl	el2_setup			// Drop to EL1
+	bl	set_cpu_boot_mode_flag
+	b	secondary_startup
+ENDPROC(secondary_entry)
+
+ENTRY(secondary_startup)
+	/*
+	 * Common entry point for secondary CPUs.
+	 */
+	adrp	x25, idmap_pg_dir
+	adrp	x26, swapper_pg_dir
+	bl	__cpu_setup			// initialise processor
+
+	ldr	x21, =secondary_data
+	ldr	x27, =__secondary_switched	// address to jump to after enabling the MMU
+	b	__enable_mmu
+ENDPROC(secondary_startup)
+
+ENTRY(__secondary_switched)
+	ldr	x0, [x21]			// get secondary_data.stack
+	mov	sp, x0
+	mov	x29, #0
+	b	secondary_start_kernel
+ENDPROC(__secondary_switched)
+
+进入启动kernel函数：
+secondary_start_kernel
+	
+	
+	
+4.active 状态
+当CPU处于active的时候，说明它已经准备好了一切，可以参与进程调度了
+
+	
+
+
+看打印上面的函数 启动流程是这样的：
+start_kernel
+	rest_init
+		kernel_thread(kernel_init, NULL, CLONE_FS);
+
+看下kernel_init:
+kernel_init
+	kernel_init_freeable();
+		smp_init();
+			cpu_up(cpu)
+				ret = __cpu_up(cpu, idle);
+					boot_secondary(cpu, idle)
+						wait_for_completion_timeout(&cpu_running,msecs_to_jiffies(1000))
+								if (!cpu_online(cpu)) {
+										pr_crit("CPU%u: failed to come online\n", cpu);
+
+		
+		
+一些文章参考：
+http://blog.chinaunix.net/uid-30228127-id-5171516.html
