@@ -383,7 +383,7 @@ static void __init setup_command_line(char *command_line)
 
 static __initdata DECLARE_COMPLETION(kthreadd_done);
 
-//???????????????????????init?????idle?????
+
 static noinline void __init_refok rest_init(void)
 {
 	int pid;
@@ -940,7 +940,7 @@ static noinline void __init kernel_init_freeable(void);
 static int __ref kernel_init(void *unused)
 {
 	int ret;
-
+	//相关初始化
 	kernel_init_freeable();
 	/* need to finish all async __init code before freeing the memory */
 	async_synchronize_full();

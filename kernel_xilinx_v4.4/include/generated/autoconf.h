@@ -376,6 +376,9 @@
 #define CONFIG_UNIX 1
 #define CONFIG_USB_NET_DRIVERS 1
 #define CONFIG_NO_HZ_COMMON 1
+#define CONFIG_NO_HZ_FULL 1  //只有一个进程时候，没有time_tick中断
+#define CONFIG_NO_HZ_IDLE 1  //idle 模式没有tick中断，但是只要有进程调度上面，就开始tick中断。
+
 #define CONFIG_HAVE_CLK 1
 #define CONFIG_CRYPTO_HASH2 1
 #define CONFIG_THERMAL_GOV_STEP_WISE 1

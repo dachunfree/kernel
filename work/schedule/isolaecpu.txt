@@ -31,3 +31,19 @@ void set_rt_policy(void)
 4.相关命令：
 4.1  查看进程运行在哪个cpu上的命令：ps -eo pid,args,psr
 4.2  看自己进程cpu 占用率：top。
+
+
+1.	Never omit scheduling-clock ticks (CONFIG_HZ_PERIODIC=y or CONFIG_NO_HZ=n for older kernels).  You normally will -not-
+	want to choose this option.
+2.	Omit scheduling-clock ticks on idle CPUs (CONFIG_NO_HZ_IDLE=y or CONFIG_NO_HZ=y for older kernels).  This is the most common
+	approach, and should be the default.
+3.	Omit scheduling-clock ticks on CPUs that are either idle or that have only one runnable task (CONFIG_NO_HZ_FULL=y).  Unless you
+	are running realtime applications or certain types of HPC
+	workloads, you will normally -not- want this option.
+	
+	
+1.一直发生 schedule tick，旧内核 CONFIG_HZ_PERIODIC=y or CONFIG_NO_HZ=n。
+2.在idle cpu中从不发生schedule tick。
+3.在idle cpu 或者只有一个进程调度的cpu，不发生schedule tick。
+
+隔离cpu： 会隔离中断，普通线程，内核线程。schedule tick是心跳，得注意。
