@@ -461,10 +461,10 @@ void of_fdt_unflatten_tree(const unsigned long *blob,
 EXPORT_SYMBOL_GPL(of_fdt_unflatten_tree);
 
 /* Everything below here references initial_boot_params directly. */
-int __initdata dt_root_addr_cells;
+int __initdata dt_root_addr_cells; //early_init_dt_scan_root 中获取，多少字节表示
 int __initdata dt_root_size_cells;
 
-void *initial_boot_params;
+void *initial_boot_params; //存放dtb的虚拟地址
 
 #ifdef CONFIG_OF_EARLY_FLATTREE
 

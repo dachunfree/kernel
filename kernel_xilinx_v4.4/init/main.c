@@ -1003,7 +1003,7 @@ static noinline void __init kernel_init_freeable(void)
 
 	cad_pid = task_pid(current);
 
-	//设置cpu的状态为present. smc .
+	//设置cpu的状态为present. smc .设置cpu的拓扑关系
 	smp_prepare_cpus(setup_max_cpus);
 
 	do_pre_smp_initcalls();

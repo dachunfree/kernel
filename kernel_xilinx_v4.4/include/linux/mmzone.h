@@ -1115,7 +1115,7 @@ struct mem_section {
 	 * Making it a UL at least makes someone do a cast
 	 * before using it wrong.
 	 */
-	unsigned long section_mem_map; //存放nid等标志位+struct page 地址?
+	unsigned long section_mem_map; //存放nid等标志位+struct page 地址?  __section_mem_map_addr
 
 	/* See declaration of similar field in struct zone */
 	unsigned long *pageblock_flags; //bit map?指示isolate_pages

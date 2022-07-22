@@ -5,7 +5,7 @@ git config http.sslVerify "false"
 
 https://github.com/settings/tokens
 ssh
-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
+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
 
 如果在push的时候没有出现输入用户名密码 请执行 git config --system --unset credential.helper 完了再输入用户名密码
 

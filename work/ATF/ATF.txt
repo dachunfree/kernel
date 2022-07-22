@@ -33,9 +33,21 @@ FBSLÖ´ĞĞºó£¬CSU ROM´úÂë½øÈëPost-configuration½×¶Î£¬¸ºÔğÆğÏµÍ³¸ÉÔ¤ÏìÓ¦£¬Ìá¹©Ó²¼şÖ
 PMUÈÔÈ»ĞèÒªÔËĞĞ£¬ÓÃÓÚºóĞø¸Ä±äÏµÍ³µÄµçÔ´×´Ì¬£¨ÉÏµç¡¢Ë¯Ãß¡¢»½ĞÑµÈµÈ£©
 
 
+¸ù¾İhttps://xilinx-wiki.atlassian.net/wiki/spaces/A/pages/18842019/Zynq+UltraScale+FSBLÁË½âÒ»Ğ©ÄÚÈİ£º
+
+OCMÊÇ256KB´óĞ¡¡£ÓÉ4¸ö64KB ram×é³É¡£
+
+FFFC_0000¡ªFFFC_FFFF 64 KB 0
+FFFD_0000¡ªFFFD_FFFF 64 KB 1
+FFFE_0000¡ªFFFE_FFFF 64 KB 2
+FFFF_0000¡ªFFFF_FFFF 64 KB 3
+
+FSBL: 0xFFFC0000 ¨C 0xFFFE9FFF¡£
+ATF £º0xFFFEA000 - 0xFFFFFFFF¡£
+
 
 ±àÒë£º
-make PLAT=zynqmp RESET_TO_BL31=1 CROSS_COMPILE=aarch64-l
+make PLAT=zynqmp RESET_TO_BL31=1 CROSS_COMPILE=aarch64-linux-gnu-
 
 
 ´úÂë£º
@@ -77,6 +89,11 @@ entry_point:	__pa(secondary_entry)
 
 __invoke_psci_fn_smc(fn, cpuid, entry_point, 0)
 	arm_smccc_smc(function_id, cpuid, entry_point, 0, 0, 0, 0, 0, &res);
+	
+	
+	
+	
+
 	
 	
 	

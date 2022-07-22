@@ -432,6 +432,7 @@ void __init smp_prepare_boot_cpu(void)
 
 void __init smp_prepare_cpus(unsigned int max_cpus)
 {
+	// 获取possibe (dtb)中的内容
 	unsigned int ncores = num_possible_cpus();
 
 	init_cpu_topology();

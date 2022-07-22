@@ -184,3 +184,38 @@ kernel_init
 		
 一些文章参考：
 http://blog.chinaunix.net/uid-30228127-id-5171516.html
+
+
+可以顺便了解下cpu的启动方式：
+
+看下dts：
+		cpu0: cpu@0 {
+			compatible = "arm,cortex-a53";
+			device_type = "cpu";
+			enable-method = "psci";  // "可以是spin-table"
+			operating-points-v2 = <&cpu_opp_table>;
+			reg = <0x0>;
+			cpu-idle-states = <&CPU_SLEEP_0>;
+		};
+
+		cpu1: cpu@1 {
+			compatible = "arm,cortex-a53";
+			device_type = "cpu";
+			enable-method = "psci";
+			reg = <0x1>;
+			operating-points-v2 = <&cpu_opp_table>;
+			cpu-idle-states = <&CPU_SLEEP_0>;
+		};
+}
+
+解析cpu信息从以下代码：
+smp_init_cpus
+	of_parse_and_init_cpus(); //从DTS获得CPU拓扑，该函数会将扫描到的CPU的硬件ID依次存放在__cpu_logical_map中
+	smp_cpu_setup
+		cpu_read_ops(cpu)
+			char *enable_method = cpu_read_enable_method(cpu); //psci or spin-table
+			cpu_ops[cpu] = cpu_get_ops(enable_method); //操作方法放到全局变量中。smp_spin_table_ops or cpu_psci_ops
+			
+			
+				
+		

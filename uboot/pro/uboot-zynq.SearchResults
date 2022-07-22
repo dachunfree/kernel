@@ -1,0 +1,122 @@
+---- CONFIG_SPL_STACK Matches (121 in 95 files) ----
+Alt.h (f:\mygit\kernel\uboot\include\configs):#define CONFIG_SPL_STACK		0xe6340000
+At91sam9m10g45ek.h (f:\mygit\kernel\uboot\include\configs):#define CONFIG_SPL_STACK		0x310000
+At91sam9n12ek.h (f:\mygit\kernel\uboot\include\configs):#define CONFIG_SPL_STACK		0x308000
+At91sam9x5ek.h (f:\mygit\kernel\uboot\include\configs):#define CONFIG_SPL_STACK		0x308000
+Capricorn-common.h (f:\mygit\kernel\uboot\include\configs):#define CONFIG_SPL_STACK		0x013E000
+Ci20.h (f:\mygit\kernel\uboot\include\configs):#define CONFIG_SPL_STACK		0xf4008000 /* only max. 2KB spare! */
+Clearfog.h (f:\mygit\kernel\uboot\include\configs):#define CONFIG_SPL_STACK		(0x40000000 + ((192 - 16) << 10))
+Clearfog.h (f:\mygit\kernel\uboot\include\configs):#define CONFIG_SPL_BOOTROM_SAVE		(CONFIG_SPL_STACK + 4)
+Config_whitelist.txt (f:\mygit\kernel\uboot\scripts):CONFIG_SPL_STACK
+Controlcenterdc.h (f:\mygit\kernel\uboot\include\configs):#define CONFIG_SPL_STACK		(0x40000000 + ((212 - 16) << 10))
+Controlcenterdc.h (f:\mygit\kernel\uboot\include\configs):#define CONFIG_SPL_BOOTROM_SAVE		(CONFIG_SPL_STACK + 4)
+Corvus.h (f:\mygit\kernel\uboot\include\configs):#define CONFIG_SPL_STACK		(SZ_16K)
+crt0.S (f:\mygit\kernel\uboot\arch\arm\lib):#elif defined(CONFIG_SPL_BUILD) && defined(CONFIG_SPL_STACK)
+crt0.S (f:\mygit\kernel\uboot\arch\arm\lib):	ldr	r0, =(CONFIG_SPL_STACK)
+crt0_64.S (f:\mygit\kernel\uboot\arch\arm\lib):#elif defined(CONFIG_SPL_BUILD) && defined(CONFIG_SPL_STACK)
+crt0_64.S (f:\mygit\kernel\uboot\arch\arm\lib):	ldr	x0, =(CONFIG_SPL_STACK)
+Da850evm.h (f:\mygit\kernel\uboot\include\configs):#define CONFIG_SPL_STACK	0x8001ff00
+Db-88f6720.h (f:\mygit\kernel\uboot\include\configs):#define CONFIG_SPL_STACK		(0x40000000 + ((192 - 16) << 10))
+Db-88f6720.h (f:\mygit\kernel\uboot\include\configs):#define CONFIG_SPL_BOOTROM_SAVE		(CONFIG_SPL_STACK + 4)
+Db-88f6820-amc.h (f:\mygit\kernel\uboot\include\configs):#define CONFIG_SPL_STACK		(0x40000000 + ((192 - 16) << 10))
+Db-88f6820-amc.h (f:\mygit\kernel\uboot\include\configs):#define CONFIG_SPL_BOOTROM_SAVE		(CONFIG_SPL_STACK + 4)
+Db-88f6820-gp.h (f:\mygit\kernel\uboot\include\configs):#define CONFIG_SPL_STACK		(0x40000000 + ((192 - 16) << 10))
+Db-88f6820-gp.h (f:\mygit\kernel\uboot\include\configs):#define CONFIG_SPL_BOOTROM_SAVE		(CONFIG_SPL_STACK + 4)
+Db-mv784mp-gp.h (f:\mygit\kernel\uboot\include\configs):#define CONFIG_SPL_STACK		(0x40000000 + ((192 - 16) << 10))
+Db-mv784mp-gp.h (f:\mygit\kernel\uboot\include\configs):#define CONFIG_SPL_BOOTROM_SAVE		(CONFIG_SPL_STACK + 4)
+Devkit3250.h (f:\mygit\kernel\uboot\include\configs):#define CONFIG_SPL_STACK		0x0000FFF8
+Ds414.h (f:\mygit\kernel\uboot\include\configs):#define CONFIG_SPL_STACK		(0x40000000 + ((192 - 16) << 10))
+Ds414.h (f:\mygit\kernel\uboot\include\configs):#define CONFIG_SPL_BOOTROM_SAVE		(CONFIG_SPL_STACK + 4)
+Edminiv2.h (f:\mygit\kernel\uboot\include\configs):#define CONFIG_SPL_STACK		0x00020000
+Espresso7420.h (f:\mygit\kernel\uboot\include\configs):#define CONFIG_SPL_STACK		CONFIG_IRAM_END
+Gardena-smart-gateway-at91sam.h (f:\mygit\kernel\uboot\include\configs):#define CONFIG_SPL_STACK		0x308000
+Gose.h (f:\mygit\kernel\uboot\include\configs):#define CONFIG_SPL_STACK		0xe6340000
+Helios4.h (f:\mygit\kernel\uboot\include\configs):#define CONFIG_SPL_STACK		(0x40000000 + ((192 - 16) << 10))
+Helios4.h (f:\mygit\kernel\uboot\include\configs):#define CONFIG_SPL_BOOTROM_SAVE		(CONFIG_SPL_STACK + 4)
+Imx6_spl.h (f:\mygit\kernel\uboot\include\configs):#define CONFIG_SPL_STACK		0x0093FFB8
+Imx6_spl.h (f:\mygit\kernel\uboot\include\configs):#define CONFIG_SPL_STACK		0x0091FFB8
+Imx7_spl.h (f:\mygit\kernel\uboot\include\configs):#define CONFIG_SPL_STACK		0x00946BB8
+Imx8mm_beacon.h (f:\mygit\kernel\uboot\include\configs):#define CONFIG_SPL_STACK		0x920000
+Imx8mm_evk.h (f:\mygit\kernel\uboot\include\configs):#define CONFIG_SPL_STACK		0x920000
+Imx8mn_evk.h (f:\mygit\kernel\uboot\include\configs):#define CONFIG_SPL_STACK		0x95fff0
+Imx8mp_evk.h (f:\mygit\kernel\uboot\include\configs):#define CONFIG_SPL_STACK		0x960000
+Imx8mq_evk.h (f:\mygit\kernel\uboot\include\configs):#define CONFIG_SPL_STACK		0x187FF0
+Imx8mq_phanbell.h (f:\mygit\kernel\uboot\include\configs):#define CONFIG_SPL_STACK		0x187FF0
+Imx8qm_mek.h (f:\mygit\kernel\uboot\include\configs):#define CONFIG_SPL_STACK		0x013E000
+Imx8qxp_mek.h (f:\mygit\kernel\uboot\include\configs):#define CONFIG_SPL_STACK		0x013E000
+Imxrt1020-evk.h (f:\mygit\kernel\uboot\include\configs):#define CONFIG_SPL_STACK		CONFIG_SYS_INIT_SP_ADDR
+Imxrt1050-evk.h (f:\mygit\kernel\uboot\include\configs):#define CONFIG_SPL_STACK		CONFIG_SYS_INIT_SP_ADDR
+Koelsch.h (f:\mygit\kernel\uboot\include\configs):#define CONFIG_SPL_STACK		0xe6340000
+Kontron_sl28.h (f:\mygit\kernel\uboot\include\configs):#define CONFIG_SPL_STACK		(CONFIG_SYS_FSL_OCRAM_BASE + 0x9ff0)
+Lager.h (f:\mygit\kernel\uboot\include\configs):#define CONFIG_SPL_STACK		0xe6340000
+lowlevel_init.S (f:\mygit\kernel\uboot\arch\arm\cpu\armv7):#if defined(CONFIG_SPL_BUILD) && defined(CONFIG_SPL_STACK)
+lowlevel_init.S (f:\mygit\kernel\uboot\arch\arm\cpu\armv7):	ldr	sp, =CONFIG_SPL_STACK
+lowlevel_init.S (f:\mygit\kernel\uboot\arch\arm\cpu\armv8):#if defined(CONFIG_SPL_BUILD) && defined(CONFIG_SPL_STACK)
+lowlevel_init.S (f:\mygit\kernel\uboot\arch\arm\cpu\armv8):	ldr	w0, =CONFIG_SPL_STACK
+Ls1021aiot.h (f:\mygit\kernel\uboot\include\configs):#define CONFIG_SPL_STACK		0x1001d000
+Ls1021aqds.h (f:\mygit\kernel\uboot\include\configs):#define CONFIG_SPL_STACK		0x1001d000
+Ls1021aqds.h (f:\mygit\kernel\uboot\include\configs):#define CONFIG_SPL_STACK		0x1001d000
+Ls1021atsn.h (f:\mygit\kernel\uboot\include\configs):#define CONFIG_SPL_STACK		0x1001d000
+Ls1021atwr.h (f:\mygit\kernel\uboot\include\configs):#define CONFIG_SPL_STACK		0x1001d000
+Ls1043a_common.h (f:\mygit\kernel\uboot\include\configs):#define CONFIG_SPL_STACK		0x1001e000
+Ls1043a_common.h (f:\mygit\kernel\uboot\include\configs):#define CONFIG_SPL_STACK		0x1001d000
+Ls1046a_common.h (f:\mygit\kernel\uboot\include\configs):#define CONFIG_SPL_STACK		0x10020000
+Ls1046a_common.h (f:\mygit\kernel\uboot\include\configs):#define CONFIG_SPL_STACK		0x10020000
+Ls1046a_common.h (f:\mygit\kernel\uboot\include\configs):#define CONFIG_SPL_STACK		0x1001f000
+Ls1088a_common.h (f:\mygit\kernel\uboot\include\configs):#define CONFIG_SPL_STACK               (CONFIG_SYS_FSL_OCRAM_BASE + 0x9ff0)
+Ls2080a_common.h (f:\mygit\kernel\uboot\include\configs):#define CONFIG_SPL_STACK		(CONFIG_SYS_FSL_OCRAM_BASE + 0x9ff0)
+M53menlo.h (f:\mygit\kernel\uboot\include\configs):#define CONFIG_SPL_STACK		0x70004000
+Maxbcm.h (f:\mygit\kernel\uboot\include\configs):#define CONFIG_SPL_STACK		(0x40000000 + ((192 - 16) << 10))
+Maxbcm.h (f:\mygit\kernel\uboot\include\configs):#define CONFIG_SPL_BOOTROM_SAVE		(CONFIG_SPL_STACK + 4)
+Mt7629.h (f:\mygit\kernel\uboot\include\configs):#define CONFIG_SPL_STACK		0x106000
+Omapl138_lcdk.h (f:\mygit\kernel\uboot\include\configs):#define CONFIG_SPL_STACK	0x8001ff00
+Phycore_imx8mm.h (f:\mygit\kernel\uboot\include\configs):#define CONFIG_SPL_STACK		0x920000
+Pico-imx8mq.h (f:\mygit\kernel\uboot\include\configs):#define CONFIG_SPL_STACK		0x187FF0
+Picosam9g45.h (f:\mygit\kernel\uboot\include\configs):#define CONFIG_SPL_STACK		0x310000
+Pm9g45.h (f:\mygit\kernel\uboot\include\configs):#define CONFIG_SPL_STACK		0x310000
+Porter.h (f:\mygit\kernel\uboot\include\configs):#define CONFIG_SPL_STACK		0xe6340000
+Px30_common.h (f:\mygit\kernel\uboot\include\configs):#define CONFIG_SPL_STACK		0x00400000
+Rcar-gen3-common.h (f:\mygit\kernel\uboot\include\configs):#define CONFIG_SPL_STACK		0xe6304000
+Rk3036_common.h (f:\mygit\kernel\uboot\include\configs):#define CONFIG_SPL_STACK		0x10081fff
+Rk3188_common.h (f:\mygit\kernel\uboot\include\configs):#define CONFIG_SPL_STACK		0x10087fff
+Rk3288_common.h (f:\mygit\kernel\uboot\include\configs):#define CONFIG_SPL_STACK		0xff718000
+Rk3308_common.h (f:\mygit\kernel\uboot\include\configs):#define CONFIG_SPL_STACK		0x00400000
+Rk3328_common.h (f:\mygit\kernel\uboot\include\configs):#define CONFIG_SPL_STACK		0x00400000
+Rk3368_common.h (f:\mygit\kernel\uboot\include\configs):#define CONFIG_SPL_STACK                0x00188000
+Rk3399_common.h (f:\mygit\kernel\uboot\include\configs):#define CONFIG_SPL_STACK		0x00400000
+Rk3399_common.h (f:\mygit\kernel\uboot\include\configs):#define CONFIG_SPL_STACK		0xff8effff
+Sifive-fu540.h (f:\mygit\kernel\uboot\include\configs):#define CONFIG_SPL_STACK	(0x08000000 + 0x001D0000 - \
+Silk.h (f:\mygit\kernel\uboot\include\configs):#define CONFIG_SPL_STACK		0xe6340000
+Sniper.h (f:\mygit\kernel\uboot\include\configs):#define CONFIG_SPL_STACK		LOW_LEVEL_SRAM_STACK
+Socfpga_common.h (f:\mygit\kernel\uboot\include\configs):#define CONFIG_SPL_STACK		CONFIG_SYS_BOOTCOUNT_ADDR
+Socfpga_common.h (f:\mygit\kernel\uboot\include\configs):#define CONFIG_SPL_STACK			\
+Socfpga_common.h (f:\mygit\kernel\uboot\include\configs):#define CONFIG_SYS_INIT_SP_ADDR		CONFIG_SPL_STACK
+Socfpga_soc64_common.h (f:\mygit\kernel\uboot\include\configs):#define CONFIG_SPL_STACK		CONFIG_SYS_INIT_SP_ADDR
+start.S (f:\mygit\kernel\uboot\arch\arm\cpu\armv7):#if defined(CONFIG_SPL_BUILD) && defined(CONFIG_SPL_STACK)
+start.S (f:\mygit\kernel\uboot\arch\arm\cpu\armv7):	ldr	r0, =(CONFIG_SPL_STACK)
+Stm32f746-disco.h (f:\mygit\kernel\uboot\include\configs):#define CONFIG_SPL_STACK		CONFIG_SYS_INIT_SP_ADDR
+Stm32mp1.h (f:\mygit\kernel\uboot\include\configs):#define CONFIG_SPL_STACK		(STM32_SYSRAM_BASE + \
+Stout.h (f:\mygit\kernel\uboot\include\configs):#define CONFIG_SPL_STACK		0xe6340000
+Sunxi-common.h (f:\mygit\kernel\uboot\include\configs):#define CONFIG_SPL_STACK		LOW_LEVEL_SRAM_STACK
+Tam3517-common.h (f:\mygit\kernel\uboot\include\configs):#define CONFIG_SPL_STACK		LOW_LEVEL_SRAM_STACK
+Taurus.h (f:\mygit\kernel\uboot\include\configs):#define	CONFIG_SPL_STACK		(ATMEL_BASE_SRAM1 + SZ_16K)
+Tegra114-common.h (f:\mygit\kernel\uboot\include\configs):#define CONFIG_SPL_STACK		0x800ffffc
+Tegra124-common.h (f:\mygit\kernel\uboot\include\configs):#define CONFIG_SPL_STACK		0x800ffffc
+Tegra20-common.h (f:\mygit\kernel\uboot\include\configs):#define CONFIG_SPL_STACK		0x000ffffc
+Tegra30-common.h (f:\mygit\kernel\uboot\include\configs):#define CONFIG_SPL_STACK		0x800ffffc
+Theadorable.h (f:\mygit\kernel\uboot\include\configs):#define CONFIG_SPL_STACK		(0x40000000 + ((192 - 16) << 10))
+Theadorable.h (f:\mygit\kernel\uboot\include\configs):#define CONFIG_SPL_BOOTROM_SAVE		(CONFIG_SPL_STACK + 4)
+Ti_armv7_keystone2.h (f:\mygit\kernel\uboot\include\configs):#define CONFIG_SPL_STACK		(CONFIG_SYS_SPL_MALLOC_START + \
+Ti_armv7_keystone2.h (f:\mygit\kernel\uboot\include\configs):#define SRAM_SCRATCH_SPACE_ADDR	CONFIG_SPL_STACK + 0x8
+Tmio-common.c (f:\mygit\kernel\uboot\drivers\mmc):	if (addr < CONFIG_SPL_STACK)
+Turris_omnia.h (f:\mygit\kernel\uboot\include\configs):#define CONFIG_SPL_STACK		(0x40000000 + ((192 - 16) << 10))
+Turris_omnia.h (f:\mygit\kernel\uboot\include\configs):#define CONFIG_SPL_BOOTROM_SAVE		(CONFIG_SPL_STACK + 4)
+Uniphier.h (f:\mygit\kernel\uboot\include\configs):#define CONFIG_SPL_STACK		(0x00100000)
+Verdin-imx8mm.h (f:\mygit\kernel\uboot\include\configs):#define CONFIG_SPL_STACK		0x920000
+Wb45n.h (f:\mygit\kernel\uboot\include\configs):#define CONFIG_SPL_STACK            0x308000
+Work_92105.h (f:\mygit\kernel\uboot\include\configs):#define CONFIG_SPL_STACK     0x0000FFF8
+X530.h (f:\mygit\kernel\uboot\include\configs):#define CONFIG_SPL_STACK		(0x40000000 + ((192 - 16) << 10))
+X530.h (f:\mygit\kernel\uboot\include\configs):#define CONFIG_SPL_BOOTROM_SAVE		(CONFIG_SPL_STACK + 4)
+Xea.h (f:\mygit\kernel\uboot\include\configs):#define CONFIG_SPL_STACK		0x20000
+Xilinx_zynqmp.h (f:\mygit\kernel\uboot\include\configs):#define CONFIG_SPL_STACK		0xfffffffc
+Zynq-common.h (f:\mygit\kernel\uboot\include\configs):#define CONFIG_SPL_STACK	0xfffffe00

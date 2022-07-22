@@ -1,14 +1,4 @@
----- pwr_domain_on Matches (13 in 11 files) ----
-Css_pm.c (f:\mygit\kernel\atf\plat\arm\css\common):	.pwr_domain_on		= css_pwr_domain_on,
-Fvp_pm.c (f:\mygit\kernel\atf\plat\arm\board\fvp):	.pwr_domain_on = fvp_pwr_domain_on,
-Juno_pm.c (f:\mygit\kernel\atf\plat\arm\board\juno):	.pwr_domain_on			= css_pwr_domain_on,
-Plat_pm.c (f:\mygit\kernel\atf\plat\rockchip\common):	.pwr_domain_on = rockchip_pwr_domain_on,
-Plat_pm_compat.c (f:\mygit\kernel\atf\plat\compat):		compat_psci_ops.pwr_domain_on = pwr_domain_on_compat;
-Plat_psci.c (f:\mygit\kernel\atf\plat\xilinx\zynqmp):	.pwr_domain_on			= zynqmp_pwr_domain_on,
-Plat_psci.c (f:\mygit\kernel\atf\plat\xilinx\zynqmp):	.pwr_domain_on			= zynqmp_nopmu_pwr_domain_on,
-Psci.h (f:\mygit\kernel\atf\include\lib\psci):	int (*pwr_domain_on)(u_register_t mpidr);
-Psci_on.c (f:\mygit\kernel\atf\lib\psci):	assert(psci_plat_pm_ops->pwr_domain_on &&
-Psci_on.c (f:\mygit\kernel\atf\lib\psci):	rc = psci_plat_pm_ops->pwr_domain_on(target_cpu); // 现核上电（平台实现）
-Psci_setup.c (f:\mygit\kernel\atf\lib\psci):	if (psci_plat_pm_ops->pwr_domain_on &&
-Qemu_pm.c (f:\mygit\kernel\atf\plat\qemu):	.pwr_domain_on = qemu_pwr_domain_on,
-Tegra_pm.c (f:\mygit\kernel\atf\plat\nvidia\tegra\common):	.pwr_domain_on			= tegra_pwr_domain_on,
+---- bl31_prepare_next_image_entry Matches (3 in 2 files) ----
+Bl31.h (f:\mygit\kernel\atf\include\bl31):void bl31_prepare_next_image_entry(void);
+Bl31_main.c (f:\mygit\kernel\atf\bl31):	bl31_prepare_next_image_entry();
+Bl31_main.c (f:\mygit\kernel\atf\bl31):void bl31_prepare_next_image_entry(void)

@@ -26,6 +26,7 @@
  * with 4K (section size = 2M) but not with 16K (section size = 32M) or
  * 64K (section size = 512M).
  */
+ /*只有4K page size的情况下，才可以启用section map,这时候正好映射2M section。*/
 #ifdef CONFIG_ARM64_4K_PAGES
 #define ARM64_SWAPPER_USES_SECTION_MAPS 1
 #else

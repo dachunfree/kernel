@@ -150,6 +150,19 @@ ENDPROC(cpu_do_switch_mm)
  *	Initialise the processor for turning the MMU on.  Return in x0 the
  *	value of the SCTLR_EL1 register.
  */
+/*
+sclr 寄存器介绍:
+SCTLR_EL1是一个对整个系统（包括memory system）进行控制的寄存器，我们这里描述几个重要的域。
+这些域有两种类型，一种是控制EL0状态时候能访问的资源。例如：UCI bit[26]控制是否允许EL0执行
+cache maintemance的指令（DC或者IC指令），如果不允许，那么会陷入EL1。nTWE bit[18]控制是否允
+许EL0执行WFE指令，如果不允许，那么会陷入EL1。bit 16类似bit 18，但是是for WFI指令的。UCT bit[15]控制
+是否允许EL0访问CTR_EL0（该寄存器保存了cache信息），如果不允许，那么会陷入EL1。UMA，bit [9]控制是否可
+以访问cpu状态寄存器的PSTATE.{D,A, I, F}比特。还有一种是实际控制memory system的域，例如：C bit[2]是用
+来enable或者disable EL0 & EL1 的data cache。具体包括通过stage 1 translation table访问的memory以及对
+stage 1 translation table自身memory的访问。I bit[12]是用来enable或者disable EL0 & EL1 的instruction cache。
+M bit[0]是用来enable或者disable EL0 & EL1 的MMU。
+
+*/
 ENTRY(__cpu_setup)
 	tlbi	vmalle1				// Invalidate local TLB
 	dsb	nsh

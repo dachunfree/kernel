@@ -128,7 +128,8 @@ static int __init __reserved_mem_alloc_size(unsigned long node,
 	if (IS_ENABLED(CONFIG_CMA) && of_flat_dt_is_compatible(node, "shared-dma-pool"))
 		align = max(align, (phys_addr_t)PAGE_SIZE << max(MAX_ORDER - 1, pageblock_order));
 
-	prop = of_get_flat_dt_prop(node, "alloc-ranges", &len);
+	prop = of_get_flat_dt_prop(node, "alloc-ranges", &len); /*alloc-ranges:申请动态保留内存的区间*/
+	/*通过memblock 动态分配*/
 	if (prop) {
 
 		if (len % t_len != 0) {
@@ -156,6 +157,7 @@ static int __init __reserved_mem_alloc_size(unsigned long node,
 		}
 
 	} else {
+	/*dtb 指定地址和大小，静态分配的*/
 		ret = early_init_dt_alloc_reserved_memory_arch(size, align,
 							0, 0, nomap, &base);
 		if (ret == 0)

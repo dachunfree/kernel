@@ -216,7 +216,7 @@ static void alloc_init_pud(struct mm_struct *mm, pgd_t *pgd,
 	BUG_ON(pgd_bad(*pgd));
 	/*pud的页表内存已经有了，但是addr对应PUD中的哪一个描述符呢？pud_offset给出了答案，其返回
 	的指针指向传入参数addr地址对应的pud 描述符内存，而我们随后的任务就是填充pud entry了*/
-	pud = pud_offset(pgd, addr); //根据addr从PGD中找到对应的PUD项。
+	pud = pud_offset(pgd, addr); //根据addr从PGD中找到对应的PUD项 虚拟地址。
 	//通过循环，逐一填充pud entry，同时分配并初始化下一阶页表
 	do {
 		next = pud_addr_end(addr, end);
@@ -275,6 +275,7 @@ static void  __create_mapping(struct mm_struct *mm, pgd_t *pgd,
 		next = pgd_addr_end(addr, end);
 		/*一是填充pgd entry，二是创建后续的pud translation table（如果需要的话）
 		并进行下游Translation table的建立*/
+		//next 就是当前的end
 		alloc_init_pud(mm, pgd, addr, next, phys, prot, alloc);
 		phys += next - addr;
 	} while (pgd++, addr = next, addr != end);

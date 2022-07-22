@@ -182,6 +182,7 @@ void __meminit mminit_validate_memmodel_limits(unsigned long *start_pfn,
 }
 
 /* Record a memory area against a node. */
+/*传入参数为pfn*/
 void __init memory_present(int nid, unsigned long start, unsigned long end)
 {
 	unsigned long pfn;
@@ -608,7 +609,7 @@ void __init sparse_init(void)
 							(void *)usemap_map);
 
 #ifdef CONFIG_SPARSEMEM_ALLOC_MEM_MAP_TOGETHER
-	size2 = sizeof(struct page *) * NR_MEM_SECTIONS;
+ 	size2 = sizeof(struct page *) * NR_MEM_SECTIONS; //分配1g section中的page个
 	map_map = memblock_virt_alloc(size2, 0);
 	if (!map_map)
 		panic("can not allocate map_map\n");
@@ -616,7 +617,7 @@ void __init sparse_init(void)
 	alloc_usemap_and_memmap(sparse_early_mem_maps_alloc_node,
 							(void *)map_map);
 #endif
-
+	//依次放入
 	for (pnum = 0; pnum < NR_MEM_SECTIONS; pnum++) {
 		if (!present_section_nr(pnum))
 			continue;
@@ -632,7 +633,7 @@ void __init sparse_init(void)
 #endif
 		if (!map)
 			continue;
-
+		/*usemap 传给mem_section bitmap，map记录struct page信息*/
 		sparse_init_one_section(__nr_to_section(pnum), pnum, map,
 								usemap);
 	}
