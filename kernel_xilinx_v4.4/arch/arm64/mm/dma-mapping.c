@@ -103,7 +103,7 @@ static void *__dma_alloc_coherent(struct device *dev, size_t size,
 	if (dev_get_cma_area(dev) && gfpflags_allow_blocking(flags)) {
 		struct page *page;
 		void *addr;
-
+		//Í¨¹ýcma·ÖÅä
 		page = dma_alloc_from_contiguous(dev, size >> PAGE_SHIFT,
 							get_order(size));
 		if (!page)

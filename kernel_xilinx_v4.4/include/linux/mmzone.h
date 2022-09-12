@@ -451,7 +451,7 @@ enum pageblock_bits;
 	 * touching zone->managed_pages and totalram_pages.
 	 */
 	 //伙伴分配器管理的物理页数量。(出去memblock已经分配出去的?分配出去的不受伙伴管理?)
-	unsigned long		managed_pages;
+	unsigned long		managed_pages;  //__free_pages_boot_core函数
 	//当前区域跨越的总页数，包括空洞
 	unsigned long		spanned_pages;
 	//当前区域存在的物理页数量，不包括空洞

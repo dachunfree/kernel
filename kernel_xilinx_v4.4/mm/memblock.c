@@ -912,6 +912,11 @@ void __init_memblock __next_reserved_mem_region(u64 *idx,
 并没有把该段内存从memory_region中删除，而是在reserve region中把它标记为已经预留。所以才有
 了下面比较诡异的判断算法。
 */
+/*
+memory block中的:
+type_a:	memory
+type_b:	reserved
+*/
 void __init_memblock __next_mem_range(u64 *idx, int nid, ulong flags,
 				      struct memblock_type *type_a,
 				      struct memblock_type *type_b,
@@ -926,6 +931,7 @@ void __init_memblock __next_mem_range(u64 *idx, int nid, ulong flags,
 		nid = NUMA_NO_NODE;
 	//这是是外循环，针对每个region，执行内循环依次比较。
 	for (; idx_a < type_a->cnt; idx_a++) {
+		//这个是memory类型
 		struct memblock_region *m = &type_a->regions[idx_a];
 
 		phys_addr_t m_start = m->base;

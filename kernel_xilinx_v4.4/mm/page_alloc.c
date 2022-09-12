@@ -1048,6 +1048,7 @@ static void __init __free_pages_boot_core(struct page *page,
 
 	page_zone(page)->managed_pages += nr_pages;
 	set_page_refcounted(page);
+	//加入伙伴系统中
 	__free_pages(page, order);
 }
 
@@ -5396,6 +5397,7 @@ static void __paginginit free_area_init_core(struct pglist_data *pgdat)
 		set_pageblock_order();
 		//分配usemap，里面有 NR_PAGEBLOCK_BITS 标志位。
 		setup_usemap(pgdat, zone, zone_start_pfn, size);
+		//初始化 zone->free_area[order].free_list[t]
 		ret = init_currently_empty_zone(zone, zone_start_pfn, size);
 		BUG_ON(ret);
 		//初始化struct page。为什么要设置为可迁移类型呢?
@@ -5437,7 +5439,7 @@ static void __init_refok alloc_node_mem_map(struct pglist_data *pgdat)
 		if (!map)
 			map = memblock_virt_alloc_node_nopanic(size,
 							       pgdat->node_id);
-		pgdat->node_mem_map = map + offset;
+		pgdat->node_mem_map = map + offset; //__page_to_pfn里面是page和pfn的转换
 	}
 #ifndef CONFIG_NEED_MULTIPLE_NODES
 	/*
@@ -6621,6 +6623,7 @@ void set_pfnblock_flags_mask(struct page *page, unsigned long flags,
 
 	zone = page_zone(page);
 	bitmap = get_pageblock_bitmap(zone, pfn);
+	/*根据pfn获取index*/
 	bitidx = pfn_to_bitidx(zone, pfn);
 	word_bitidx = bitidx / BITS_PER_LONG;
 	bitidx &= (BITS_PER_LONG-1);
@@ -6659,16 +6662,21 @@ bool has_unmovable_pages(struct zone *zone, struct page *page, int count,
 	 * For avoiding noise data, lru_add_drain_all() should be called
 	 * If ZONE_MOVABLE, the zone never contains unmovable pages
 	 */
+	 //如果zone的类型是ZONE_MOVABLE，从来不包含 unmovable pages。
 	if (zone_idx(zone) == ZONE_MOVABLE)
 		return false;
+	//获取page的类型，如果是MIGRATE_MOVABLE 或者是 MIGRATE_CMA类型，就不包含包含不可移动页。
 	mt = get_pageblock_migratetype(page);
 	if (mt == MIGRATE_MOVABLE || is_migrate_cma(mt))
 		return false;
 
+	//进行检测
 	pfn = page_to_pfn(page);
+	/*page block里面的page进行检查*/
 	for (found = 0, iter = 0; iter < pageblock_nr_pages; iter++) {
 		unsigned long check = pfn + iter;
 
+		//检测是不是在hole里面，空洞内存没有意义
 		if (!pfn_valid_within(check))
 			continue;
 
@@ -6679,6 +6687,7 @@ bool has_unmovable_pages(struct zone *zone, struct page *page, int count,
 		 * We need not scan over tail pages bacause we don't
 		 * handle each tail page individually in migration.
 		 */
+		 //hugepage不在lru链表中，但是他们是可移动的。
 		if (PageHuge(page)) {
 			iter = round_up(iter + 1, 1<<compound_order(page)) - 1;
 			continue;
@@ -6702,7 +6711,7 @@ bool has_unmovable_pages(struct zone *zone, struct page *page, int count,
 		 */
 		if (skip_hwpoisoned_pages && PageHWPoison(page))
 			continue;
-
+		//不在LRU中的就是不可移动的
 		if (!PageLRU(page))
 			found++;
 		/*

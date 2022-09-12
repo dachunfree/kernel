@@ -129,10 +129,10 @@ static unsigned long __init free_low_memory_core_early(void)
 	u64 i;
 
 	memblock_clear_hotplug(0, -1);
-
+	//从 memblock中获取 start 和 end 地址
 	for_each_reserved_mem_region(i, &start, &end)
 		reserve_bootmem_region(start, end);
-
+	//取出空闲区域 memory - reserved类型
 	for_each_free_mem_range(i, NUMA_NO_NODE, MEMBLOCK_NONE, &start, &end,
 				NULL)
 		count += __free_memory_core(start, end);

@@ -10,6 +10,15 @@
 2.tools/perf编译
 make CROSS_COMPILE=aarch64-linux-gnu-  ARCH=arm64
 
+
+发现：
+
+make CROSS_COMPILE=aarch64-openwrt-linux- ARCH=arm64 clean
+
+No gnu/libc-version.h found, please install glibc-dev[el]
+
+把LIBC_SUPPORT := 1 加进去。
+
 3.把编译出来的perf和Image考进去。
 
 perf 的一些说明：https://www.cnblogs.com/yml435/p/6914467.html

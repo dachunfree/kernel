@@ -1,0 +1,63 @@
+
+参考：
+https://mp.weixin.qq.com/s/LIlOLx7VKVcKYRAgDLUByw
+
+/***********************************kernel memory leak********************************************************/
+
+1.配置内核
+	makemenuconfig 
+			kernel hacking
+					kernel debuging
+							memory debuging	
+									kernel memory leak detector
+
+2.使用方法：
+
+	a、挂载debugfs
+	
+	mount -t debugfs nodev /sys/kernel/debug/
+	
+	
+	b、内核线程每10分钟(默认情况下)扫描一次，并打印找到的可疑的内存泄漏object。也可以在任意时刻执行kmemleak的内存扫描。
+	
+	echo scan > /sys/kernel/debug/kmemleak
+	
+	
+	c、详细的输出信息通过/sys/kernel/debug/kmemleak获取。
+	
+	cat /sys/kernel/debug/kmemleak
+
+	d.clear
+	echo clear > /sys/kernel/debug/kmemleak
+	
+详细的使用方法参考kenrel文档Documentation/dev-tools/kmemleak.txt。
+
+3.原理
+
+		kmemleak的实现原理非常简单，通过暴力扫描内存（假定内存中存放的都是指针，以ARM64为例，每次扫描8个字节)，如果找不到
+指向起始地址或者内存块任何位置的指针，则分配的内存块被认为是孤立的。这意味着内核可能无法将分配内存块的地址传递给释放函
+数，因此该内存块被视为内存泄漏。
+		内存块(object)有3种颜色，分别为黑色、白色、灰色， 通过count和min_count区分不同颜色的object。
+		
+		黑色: min_count = -1，表示被忽略的object，此object不包含对别人的引用，也不会存在内存泄漏，比如代码段会标记为黑色。
+		白色: count < min_count，孤立的object，没有足够的引用指向这个object，一轮扫描结束后被认为泄漏的内存块。
+		灰色: min_count = 0，表示不是孤立的object，即不存在内存泄漏的object，如代码中主动标记object为灰色，防止误报
+（如data、bss、ro_after_init）。或者count >= min_count，对该object有足够的指针引用，认为不存在内存泄漏的内存块。
+
+具体检测步骤如下：
+		1、通过struct kmemleak_object(简称为object)描述kmalloc、vmalloc、kmem_cache_alloc等函数申请的内存块，记录申请内存的起始地址，
+大小、call trace等信息。同时把object加入到红黑树object_tree_root和双向链表object_list中，红黑树中的key值为内存块的起始地址。
+
+	2、遍历双向链表object_list，把所有的object的count计数清0，即在新的一轮扫描前，尽可能的把能复位成白色的object标记为白色。
+然后判断object是否是灰色(默认data、bss、ro_after_init段会被标记为灰色)，如果是灰色的object则把object加入到灰色链表gray_list中。
+		
+	3、扫描内存中可能存放指针的内存区域(per-cpu段、struct page的内容、内核栈、灰色链表),根据挂在红黑树中所有的object的地址范围
+进行对比。如果有指针指向某一个object(指向该object的起始地址或者指向object地址范围内)，会把object对应的count字段增加1，如果object
+变成灰色，则会把object加入到灰色链表中
+	
+	4、扫描object_list中的白色对象的object，判断object所描述的地址范围的内容的crc值是否发生变化，如果发生变化，则同样把object加入
+到灰色链表gray_list中。说明通过间接的方式访问了object描述的地址范围，不是内存泄漏，减少误报
+
+	5、重新扫描灰色链表，因为步骤4中，可能有些白色的object加入到了灰色链表中，需要重新扫描。
+	
+	6、经过上述一系列的扫描，剩余白色的object就是可疑的内存泄漏点。

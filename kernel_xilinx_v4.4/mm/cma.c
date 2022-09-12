@@ -359,7 +359,7 @@ err:
 /**
  * cma_alloc() - allocate pages from contiguous area
  * @cma:   Contiguous memory region for which the allocation is performed.
- * @count: Requested number of pages.
+ * @count: Requested number of pages.需要多少页
  * @align: Requested alignment of pages (in PAGE_SIZE order).
  *
  * This function allocates part of contiguous memory on specific

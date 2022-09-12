@@ -25,7 +25,7 @@ static int set_migratetype_isolate(struct page *page,
 	pfn = page_to_pfn(page);
 	arg.start_pfn = pfn;
 	arg.nr_pages = pageblock_nr_pages;
-	arg.pages_found = 0;
+	arg.pages_found = 0;  //0就是希望一个unmovable的page都没有
 
 	/*
 	 * It may be possible to isolate a pageblock even if the
@@ -46,6 +46,7 @@ static int set_migratetype_isolate(struct page *page,
 	 * FIXME: Now, memory hotplug doesn't call shrink_slab() by itself.
 	 * We just check MOVABLE pages.
 	 */
+	 /*如果没有unmovable页面*/
 	if (!has_unmovable_pages(zone, page, arg.pages_found,
 				 skip_hwpoisoned_pages))
 		ret = 0;
@@ -56,18 +57,22 @@ static int set_migratetype_isolate(struct page *page,
 	 */
 
 out:
+	/*没有unmovable_pages*/
 	if (!ret) {
 		unsigned long nr_pages;
+		/*获取page当前的迁移类型*/
 		int migratetype = get_pageblock_migratetype(page);
 
+		/*设置当前迁移类型为MIGRATE_ISOLATE*/
 		set_pageblock_migratetype(page, MIGRATE_ISOLATE);
 		zone->nr_isolate_pageblock++;
 		nr_pages = move_freepages_block(zone, page, MIGRATE_ISOLATE);
-
+		/*从 free_list中移除*/
 		__mod_zone_freepage_state(zone, -nr_pages, migratetype);
 	}
 
 	spin_unlock_irqrestore(&zone->lock, flags);
+	/*没有unmovable_pages*/
 	if (!ret)
 		drain_all_pages(zone);
 	return ret;
@@ -169,6 +174,7 @@ int start_isolate_page_range(unsigned long start_pfn, unsigned long end_pfn,
 	     pfn < end_pfn;
 	     pfn += pageblock_nr_pages) {
 		page = __first_valid_page(pfn, pageblock_nr_pages);
+		/*如果有page && 设置MIGRATE_ISOLATE没成功 就退出*/
 		if (page &&
 		    set_migratetype_isolate(page, skip_hwpoisoned_pages)) {
 			undo_pfn = pfn;

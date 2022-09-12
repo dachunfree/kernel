@@ -1,0 +1,51 @@
+https://mp.weixin.qq.com/s/s6AvLiVVkoMX4dIGpqmXYA
+
+参考宋宝华的 文章：
+
+a. DMB：Data Memory Barrier
+
+b. DSB：Data Synchronization Barrier
+
+c. ISB：Instruction Synchronization Barrier
+
+d. LDAR(Load-Acquire)/STLR(Store-Release)
+
+理解：
+
+谁和谁保序；在哪里保序；朝哪个方向保序
+
+
+有两类操作：
+1.memory的操作 load/store
+2.非memory的操作：tlbi、add加法或者写的是ARM64系统寄存器（MSR指令）
+
+因为以上两类做了如下屏障：
+DMB针对的是memory的load/store之间；
+DSB强调的是同类或不同类事物的先后完成；
+
+a. A(load); dmb ISHLD; B; C(load/store)
+
+保证Inner内，A和C的顺序，只要A是load，无论C是load还是store；如果B既不是load也不是store，而是别的性质的事情，则dmb完全管不到B；
+
+b. A(load); dsb ISHLD; B; C(load/store)
+
+保证Inner内，A和C的顺序，只要A是load，无论C是load还是store；无论B是什么事情，inner都先到干完了A，再干B（注意这里是dsb啊，亲）。
+
+c. A(store); dmb ISHLD; B; C(store)
+
+A,B,C三个东西完全乱序，因为dmb约束不了性质不同的B，“LD”约束不了A和C的store顺序。
+
+d. A(store); dmb ISHST; B; C(store)
+
+ST约束了A和C 2个东西在inner这里看起来是顺序的，因为dmb约束不了B，所以B和A、C之间乱序。
+
+
+我们可以去掉LD和ST，这样的保序方向是any-any.
+
+DMB和DSB的区别，一个是保序内存load,store；一个是保序内存load,store + 其他指令。
+
+
+
+
+
+

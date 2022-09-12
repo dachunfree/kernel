@@ -19,7 +19,8 @@ echo function > /sys/kernel/debug/tracing/current_tracer
 echo nop > /sys/kernel/debug/tracing/current_tracer
 echo 0 > /sys/kernel/debug/tracing/tracing_on
 echo function_graph > /sys/kernel/debug/tracing/current_tracer
-echo iq_write > /sys/kernel/debug/tracing/set_graph_function
+echo cma_alloc > /sys/kernel/debug/tracing/set_graph_function
+echo alloc_contig_range >> /sys/kernel/debug/tracing/set_graph_function
 echo 1 > /sys/kernel/debug/tracing/tracing_on
 
 echo dma_alloc_coherent >> /sys/kernel/debug/tracing/set_graph_function  

@@ -488,6 +488,7 @@ static void __init mm_init(void)
 	 * bigger than MAX_ORDER unless SPARSEMEM.
 	 */
 	page_ext_init_flatmem();
+	//buddy
 	mem_init();
 	kmem_cache_init();
 	percpu_init_late();
@@ -563,6 +564,7 @@ asmlinkage __visible void __init start_kernel(void)
 	sort_main_extable();
 	trap_init();
 	//里面包含 kmem_cache(slub kmalloc)应用
+	/*free memory(不包含reserved memroy)交给buddy*/
 	mm_init();
 
 	/*
@@ -1010,6 +1012,7 @@ static noinline void __init kernel_init_freeable(void)
 	lockup_detector_init();
 	//启动另外几个核
 	smp_init();
+	//设置cpu的isolcpus.cpu_isolated_map
 	sched_init_smp();
 
 	page_alloc_init_late();

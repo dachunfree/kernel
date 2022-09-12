@@ -1,0 +1,107 @@
+
+
+今天遇到一个问题：
+[  242.739622] INFO: task Savefile Thread:1215 blocked for more than 120 seconds.
+[  242.746918]       Not tainted 4.14.95-00120-ge23f072-dirty #5
+[  242.752723] "echo 0 > /proc/sys/kernel/hung_task_timeout_secs" disables this message.
+[  242.760626] Savefile Thread D    0  1215      2 0x00000000
+[  242.766172] Call trace:
+[  242.768660] [<ffff0000080852e4>] __switch_to+0x8c/0xd0
+[  242.773854] [<ffff000008853ad0>] __schedule+0x198/0x5b0
+[  242.779133] [<ffff000008853f20>] schedule+0x38/0xa0
+[  242.784063] [<ffff0000080cbc50>] kthread+0xd0/0x130
+[  242.788990] [<ffff0000080846c0>] ret_from_fork+0x10/0x18
+[  242.794354] INFO: task restart_kthread:1216 blocked for more than 120 seconds.
+[  242.801644]       Not tainted 4.14.95-00120-ge23f072-dirty #5
+[  242.807444] "echo 0 > /proc/sys/kernel/hung_task_timeout_secs" disables this message.
+[  242.815342] restart_kthread D    0  1216      2 0x00000000
+
+打印这些，最后确认是因为watchdog里面120检查一次hungtask进程：
+hung_task_init
+	watchdog_task = kthread_run(watchdog, NULL, "khungtaskd")
+		watchdog
+			hung_timeout_jiffies(hung_last_checked, timeout); //120s检查一次
+			check_hung_uninterruptible_tasks
+				if (t->state == TASK_UNINTERRUPTIBLE) //如果是TASK_UNINTERRUPTIBLE（D）状态
+					check_hung_task(struct task_struct *t, unsigned long timeout)
+						pr_err("INFO: task %s:%d blocked for more than %ld seconds.\n",t->comm, t->pid, timeout);
+
+
+后面看看为什么进程是TASK_UNINTERRUPTIBLE状态？
+
+进程创建方法：
+
+sta_savefile_thread = kthread_create(savefile_main, NULL, "Savefile Thread");
+	if (!IS_ERR(sta_savefile_thread)) {
+		kthread_bind(sta_savefile_thread, 3);
+	}
+	
+	
+1.先看kthread_create 函数
+kthread_create(savefile_main, NULL, "Savefile Thread");
+	kthread_create_on_node(threadfn, data, NUMA_NO_NODE, namefmt, ##arg)
+		struct kthread_create_info *create = kmalloc(sizeof(*create),GFP_KERNEL); //分配kthread_create_info
+		list_add_tail(&create->list, &kthread_create_list); //把当前进程加入到kthread_create_list
+		wake_up_process(kthreadd_task); //唤醒 kthreadadd进程
+		task = create->result; //kthread_add传输回来
+		sched_setscheduler_nocheck(task, SCHED_NORMAL, &param); //设置进程级别
+		set_cpus_allowed_ptr(task, cpu_all_mask); //绑定cpu
+		
+
+kthreadd进程创建：
+rest_init
+	pid = kernel_thread(kthreadd, NULL, CLONE_FS | CLONE_FILES);
+	kthreadd_task = find_task_by_pid_ns(pid, &init_pid_ns);
+
+kthreadd 进程：
+int kthreadd(void *unused)
+	for (;;) {
+		set_current_state(TASK_INTERRUPTIBLE);
+		if (list_empty(&kthread_create_list)) //判断kthread_create_list是否为空
+		__set_current_state(TASK_RUNNING); //不空的话设置当前进程为运行状态
+		create_kthread(create); //取出链表节点，创建进程
+		pid = kernel_thread(kthread, create, CLONE_FS | CLONE_FILES | SIGCHLD); //注意kthread
+		complete(done);
+		
+	
+kernel_thread函数：
+/*传入kthread和create函数*/
+kernel_thread(kthread, create, CLONE_FS | CLONE_FILES | SIGCHLD);
+	pid_t kernel_thread(int (*fn)(void *), void *arg, unsigned long flags)
+		_do_fork(flags|CLONE_VM|CLONE_UNTRACED, (unsigned long)fn,(unsigned long)arg, NULL, NULL, 0);
+			copy_process(clone_flags, stack_start, stack_size,child_tidptr, NULL, trace, tls); //stack_start=fn；stack_size=arg
+				copy_thread_tls(clone_flags, stack_start, stack_size, p, tls); //
+					copy_thread(clone_flags, sp, arg, p);
+							p->thread.cpu_context.x19 = stack_start; //kthread 函数
+							p->thread.cpu_context.x20 = stk_sz; //create 变量
+							p->thread.cpu_context.pc = (unsigned long)ret_from_fork; //pc指向ret_from_fork，一会wake up调用这个
+							p->thread.cpu_context.sp = (unsigned long)childregs;
+			 wake_up_new_task(p);
+			 	set_task_cpu(p, select_task_rq(p, task_cpu(p), SD_BALANCE_FORK, 0)); //选择cpu
+			 	activate_task(rq, p, 0); //将进程加入就绪队列
+
+进程调用时候pc指向ret_from_fork：
+ret_from_fork
+	mov	x0, x20 //x20就是create 变量，就是传参
+	blr	x19  //跳转到kthread 函数
+						
+kthread函数：
+static int kthread(void *_create)
+	int (*threadfn)(void *data) = create->threadfn; //获取执行函数
+	__set_current_state(TASK_UNINTERRUPTIBLE); //设置当前进程为D状态
+	schedule();//调度出去！！！！！！！！！！！！！！这是为什么D状态
+	if (!test_bit(KTHREAD_SHOULD_STOP, &self.flags))
+		ret = threadfn(data);//执行函数
+
+
+kthread_bind 绑定cpu进程
+kthread_bind(sta_savefile_thread, 3);
+		__kthread_bind(p, cpu, TASK_UNINTERRUPTIBLE);
+			__kthread_bind_mask(p, cpumask_of(cpu), state);
+				do_set_cpus_allowed(p, mask);
+					dequeue_task(rq, p, DEQUEUE_SAVE | DEQUEUE_NOCLOCK); //出队
+					p->sched_class->set_cpus_allowed(p, new_mask); //设置cpu亲核性
+					enqueue_task(rq, p, ENQUEUE_RESTORE | ENQUEUE_NOCLOCK); //入队
+
+
+	

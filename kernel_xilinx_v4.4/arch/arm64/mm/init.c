@@ -81,7 +81,7 @@ static void __init zone_sizes_init(unsigned long min, unsigned long max)
 {
 	struct memblock_region *reg;
 	//统计zone_size[ZONE_DMA] 和 zone_size[ZONE_NORMAL]的大小。
-	unsigned long zone_size[MAX_NR_ZONES], zhole_size[MAX_NR_ZONES];
+	unsigned long zone_size[MAX_NR_ZONES], zhole_size[MAX_NR_ZONES]; //zhole_size表示空洞的大小
 	unsigned long max_dma = min;
 
 	memset(zone_size, 0, sizeof(zone_size));
@@ -94,7 +94,7 @@ static void __init zone_sizes_init(unsigned long min, unsigned long max)
 	zone_size[ZONE_NORMAL] = max - max_dma;
 
 	memcpy(zhole_size, zone_size, sizeof(zhole_size));
-
+	//注意里面是 memblock_type 类型。
 	for_each_memblock(memory, reg) {
 		unsigned long start = memblock_region_memory_base_pfn(reg);
 		unsigned long end = memblock_region_memory_end_pfn(reg);

@@ -207,7 +207,7 @@ devicemaps_init 进行 vectors设置。
 */
 
 	.align	11
-ENTRY(vectors)
+ENTRY(vectors) //__enable_mmu中设置了中断向量表
 	ventry	el1_sync_invalid		// Synchronous EL1t  0x000
 	ventry	el1_irq_invalid			// IRQ EL1t          0x080
 	ventry	el1_fiq_invalid			// FIQ EL1t		   0x100
@@ -293,7 +293,7 @@ ENDPROC(el1_error_invalid)
 /*
  * EL1 mode handlers.
 
- 异常状态寄存器 esr_el1
+ 异常状态寄存器 esr_el1:exception syndrome register for exception level 1
 The ESR_ELx fields are:
 EC, bits[31:26]:异常类别，指示异常引起的原因
 IL, bit[25] The Instruction length bit, for synchronous exceptions, that indicates whether a trapped

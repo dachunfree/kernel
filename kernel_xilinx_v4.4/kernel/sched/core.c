@@ -7185,6 +7185,7 @@ static int init_sched_domains(const struct cpumask *cpu_map)
 	doms_cur = alloc_sched_domains(ndoms_cur);
 	if (!doms_cur)
 		doms_cur = &fallback_doms;
+	/*cpu_active ÖÐÈ¥³ýcpu_isolated_map£¬¸ødoms_cur*/
 	cpumask_andnot(doms_cur[0], cpu_map, cpu_isolated_map);
 	err = build_sched_domains(doms_cur[0], NULL);
 	register_sched_domain_sysctl();

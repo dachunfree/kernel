@@ -128,6 +128,8 @@
 				 __GFP_NOWARN)
 
 /* scanning area inside a memory block */
+/*struct kmemleak_scan_area内存块的扫描区域描述符。为了降低误报，限制所属的object描述
+的内存块的扫描范围，对object描述的地址范围划分为不同的kmemleak_scan_area区域进行扫描*/
 struct kmemleak_scan_area {
 	struct hlist_node node;
 	unsigned long start;
@@ -146,36 +148,65 @@ struct kmemleak_scan_area {
  * (use_count) and freed using the RCU mechanism.
  */
 struct kmemleak_object {
-	spinlock_t lock;
-	unsigned long flags;		/* object status flags */
-	struct list_head object_list;
-	struct list_head gray_list;
-	struct rb_node rb_node;
+	spinlock_t lock;   /*spinlock锁用于保护当前的object对象。*/
+
+	unsigned long flags;	//OBJECT_ALLOCATED见下	/* object status flags */
+
+	struct list_head object_list; /*通过该字段把objec添加到object_list链表中*/
+
+	struct list_head gray_list; /*通过该字段把object添加到gray_list链表中*/
+
+	struct rb_node rb_node; /*通过该字段把object添加到object_tree_root的红黑树中*/
+
 	struct rcu_head rcu;		/* object_list lockless traversal */
+
 	/* object usage count; object freed when use_count == 0 */
+	/*object使用计数。通过get_object增加计数，put_object减少计数，当use_count = 0时
+	 释放该object*/
 	atomic_t use_count;
-	unsigned long pointer;
-	size_t size;
+
+	unsigned long pointer; /*object的起始地址*/
+
+	size_t size; /*object的大小*/
+
 	/* minimum number of a pointers found before it is considered leak */
-	int min_count;
+	int min_count; /*指向内存块的最少指针个数。如果小于该值，说明有内存泄漏的嫌疑*/
+
 	/* the total number of pointers found pointing to this object */
-	int count;
+	int count; /*扫描到的指向内存块的指针总数，和min_count配合使用*/
+
 	/* checksum for detecting modified objects */
-	u32 checksum;
+	u32 checksum; /*内存块的CRC校验和*/
+
 	/* memory ranges to be scanned inside an object (empty for all) */
+	/*如果area_list链表为NULL，则以object的pointer为起始地址和size为大小的地址范围扫描。
+	如果不为NULL,以area_list链表中的kmemleak_scan_area节点的start和size为地址范围扫描。
+	一个object描述的内存块可能被分割为多个kmemleak_scan_area区域，所有的kmemleak_scan_area
+	通过node节点添加到area_list为头的链表中*/
 	struct hlist_head area_list;
-	unsigned long trace[MAX_TRACE];
-	unsigned int trace_len;
-	unsigned long jiffies;		/* creation timestamp */
-	pid_t pid;			/* pid of the current task */
-	char comm[TASK_COMM_LEN];	/* executable name */
+
+	unsigned long trace[MAX_TRACE]; /*保存创建object的stack trace的地址*/
+
+	unsigned int trace_len; /*表示stack trace的实际深度，最大深度为MAX_TRACE(16)*/
+
+	unsigned long jiffies;		/* creation timestamp 创建object时的jiffies*/
+
+	pid_t pid;			/* pid of the current task 表示创建objcet的pid号*/
+
+	char comm[TASK_COMM_LEN];	/* executable name 创建object的进程名*/
 };
 
 /* flag representing the memory block allocation status */
+/*表示已经分配的内存块的状态标志。在创建object的时候，会置上此标记，
+	在释放object的时候，清除此标记*/
 #define OBJECT_ALLOCATED	(1 << 0)
 /* flag set after the first reporting of an unreference object */
+/*表示经过一轮内存扫描之后，把有内存泄漏风险的object的flags置上OBJECT_REPORTED，
+然后用户可以通过cat /sys/kernel/debug/kmemleak获取有内存泄漏风险的object*/
 #define OBJECT_REPORTED		(1 << 1)
 /* flag set to not scan the object */
+/*表示不去扫描此内存块。kmemleak为了减少误报和漏报，通过封装好的接口设置内存块是
+否需要扫描，如果不需要扫描则flags置上OBJECT_NO_SCAN标志。*/
 #define OBJECT_NO_SCAN		(1 << 2)
 
 /* number of bytes to print per line; must be 16 or 32 */
@@ -188,11 +219,19 @@ struct kmemleak_object {
 #define HEX_MAX_LINES		2
 
 /* the list of all allocated objects */
+/*新创建的object会挂入到全局的objcet_list链表中*/
 static LIST_HEAD(object_list);
+
+/*如果object不存在内存泄漏的风险，会把object加入到gray_list链表中，
+表示不存在内存泄漏风险的object*/
 /* the list of gray-colored objects (see color_gray comment below) */
 static LIST_HEAD(gray_list);
+
+/*了加快查询速度，新创建的object，不仅会加入到object_list全局链表中，
+同时会加入到object_tree_root为根的红黑树，红黑树的key值为object的起始地址*/
 /* search tree for object boundaries */
 static struct rb_root object_tree_root = RB_ROOT;
+
 /* rw_lock protecting the access to object_list and object_tree_root */
 static DEFINE_RWLOCK(kmemleak_lock);
 
@@ -214,12 +253,25 @@ static int kmemleak_warning;
 static int kmemleak_error;
 
 /* minimum and maximum address that may be valid pointers */
+/*所有object中最小的起始地址。有可能最小起始地址的object已经不在object链表中或者红黑树中。
+目的是为了对检测的地址进行简单的过滤*/
 static unsigned long min_addr = ULONG_MAX;
+
+/*所有object中最大的结束地址。有可能最大结束地址的object已经不在object链表中或者红黑树中。
+目的是为了对检测的地址进行简单的过滤*/
 static unsigned long max_addr;
 
 static struct task_struct *scan_thread;
 /* used to avoid reporting of recently allocated objects */
+
+
+/*为了减少误报，避免报告最近分配的object。因为最近分配的object的指针有可能临时存放在cpu的寄存器中。
+默认值为MSECS_MIN_AGE(5s)。通过unreferenced_object函数可以看出上报有内存泄漏风险的object，需要在此
+扫描周期开始的T0之前创建object。而T0之后到扫描结束之间创建的object，要在下一个周期进行扫描检测。*/
+
 static unsigned long jiffies_min_age;
+
+/*开始扫描时候的jiffies*/
 static unsigned long jiffies_last_scan;
 /* delay between automatic memory scannings */
 static signed long jiffies_scan_wait;

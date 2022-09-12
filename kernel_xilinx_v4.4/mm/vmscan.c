@@ -1311,10 +1311,12 @@ unsigned long reclaim_clean_pages_from_list(struct zone *zone,
 	struct page *page, *next;
 	LIST_HEAD(clean_pages);
 
+	/*寻找干净的文件页面*/
 	list_for_each_entry_safe(page, next, page_list, lru) {
 		if (page_is_file_cache(page) && !PageDirty(page) &&
 		    !isolated_balloon_page(page)) {
 			ClearPageActive(page);
+			/*将page添加到clean_pages 链表中*/
 			list_move(&page->lru, &clean_pages);
 		}
 	}

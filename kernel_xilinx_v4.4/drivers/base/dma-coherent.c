@@ -326,4 +326,15 @@ static int __init rmem_dma_setup(struct reserved_mem *rmem)
 }
 //dma-coherent用来分配per device coherent memory的
 RESERVEDMEM_OF_DECLARE(dma, "shared-dma-pool", rmem_dma_setup);
-#endif
+/*
+_OF_DECLARE(reservedmem, name, compat, init, reservedmem_of_init_fn)
+
+#define _OF_DECLARE(table, name, compat, fn, fn_type)			\
+	static const struct of_device_id __of_table_dma		\
+		__used __section(__reservedmem_of_table)			\
+		 = { .compatible = compat,				\
+		     .data = (fn == (fn_type)NULL) ? fn : fn  }
+
+和__reserved_mem_init_node 进行匹配
+*/
+

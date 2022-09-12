@@ -1,0 +1,30 @@
+
+http://www.wowotech.net/armv8a_arch/__cpu_setup.html
+
+3、 memory attribute
+
+上一节将memory分成两个大类：normal memory和device，但是这么分似乎有些粗糙，我们可以进一步通过memory attribute将memory分成更多的区域。
+一个memory range对应的memory attribute是定义在页表的描述符中（由upper attribues和lower attributes组成），最重要的attributes定义在
+lower attributes中的AttrIndx[2:0]，该域只是一个index而已，指向MAIR_ELx中具体的memory attribute。8-bit的memory attribute的具体解释
+可以参考ARM ARM。
+
+对于device type，其总是non cacheable的，而且是outer shareable，因此它的attribute不多，主要有下面几种附加的特性：
+
+（1）Gathering 或者non Gathering (G or nG)。这个特性表示对多个memory的访问是否可以合并，如果是nG，表示处理器必须严格按照代码中内存访
+		问来进行，不能把两次访问合并成一次。例如：代码中有2次对同样的一个地址的读访问，那么处理器必须严格进行两次read transaction。
+
+（2）Re-ordering (R or nR)。这个特性用来表示是否允许处理器对内存访问指令进行重排。nR表示必须严格执行program order。
+
+（3）Early Write Acknowledgement (E or nE)。PE访问memory是有问有答的（更专业的术语叫做transaction），对于write而言，PE需要write ack操作
+	以便确定完成一个write transaction。为了加快写的速度，系统的中间环节可能会设定一些write buffer。nE表示写操作的ack必须来自最终的目的地而
+	不是中间的write buffer。
+
+对于normal memory，可以是non-cacheable的，也可以是cacheable的，这样就需要进一步了解Cacheable和shareable atrribute，具体如下：
+
+（1）是否cacheable
+
+（2）write through or write back
+
+（3）Read allocate or write allocate
+
+（4）transient or non-transient cache
