@@ -1,0 +1,17 @@
+
+CONFIG_KASAN 有相关的kasan操作：
+
+1.初始化：
+
+32TB 的kasan空间 ,0xffff,0000,0000,0000 - 0xffff,2000,0000,0000。
+映射 256TB的 内核空间。8bytes的内核空间数据的使用情况对应1bytes的kasan空间。
+
+kasan_early_init：把32TB 的虚拟页映射到 kasan_zero_page 只读页。
+
+2.物理页分配的检测：
+
+kasan_alloc_pages
+	kasan_unpoison_shadow(page_address(page), PAGE_SIZE << order)
+		kasan_unpoison_shadow(const void *address, size_t size)
+			
+	
