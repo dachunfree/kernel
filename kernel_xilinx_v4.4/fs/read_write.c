@@ -410,13 +410,15 @@ int rw_verify_area(int read_write, struct file *file, const loff_t *ppos, size_t
 
 static ssize_t new_sync_read(struct file *filp, char __user *buf, size_t len, loff_t *ppos)
 {
+	//存储存放数据的 地址和长度
 	struct iovec iov = { .iov_base = buf, .iov_len = len };
 	struct kiocb kiocb;
 	struct iov_iter iter;
 	ssize_t ret;
-
+	//里面传输kiocb
 	init_sync_kiocb(&kiocb, filp);
 	kiocb.ki_pos = *ppos;
+	//将iov 内容传递到 iter中
 	iov_iter_init(&iter, READ, &iov, 1, len);
 
 	ret = filp->f_op->read_iter(&kiocb, &iter); // ext4_file_operations

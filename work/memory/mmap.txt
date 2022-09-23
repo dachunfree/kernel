@@ -1,0 +1,7 @@
+
+
+系统调用：
+do_mmap_pgoff(struct file *file, unsigned long addr,unsigned long len, unsigned long prot, unsigned long flags,unsigned long pgoff, unsigned long *populate)
+	do_mmap(file, addr, len, prot, flags, 0, pgoff, populate);
+		addr = get_unmapped_area(file, addr, len, pgoff, flags);
+			

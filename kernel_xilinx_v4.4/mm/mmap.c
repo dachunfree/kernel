@@ -1291,6 +1291,7 @@ unsigned long do_mmap(struct file *file, unsigned long addr,
 		return -ENOMEM;
 
 	/* offset overflow? */
+
 	if ((pgoff + (len >> PAGE_SHIFT)) < pgoff)
 		return -EOVERFLOW;
 

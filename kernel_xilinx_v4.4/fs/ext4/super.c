@@ -3872,7 +3872,7 @@ no_journal:
 	}
 
 	block = ext4_count_free_clusters(sb);
-	ext4_free_blocks_count_set(sbi->s_es, 
+	ext4_free_blocks_count_set(sbi->s_es,
 				   EXT4_C2B(sbi, block));
 	err = percpu_counter_init(&sbi->s_freeclusters_counter, block,
 				  GFP_KERNEL);
@@ -5256,28 +5256,34 @@ static int __init ext4_init_fs(void)
 	if (err)
 		return err;
 
+	//分配io页缓存空间
 	err = ext4_init_pageio();
 	if (err)
 		goto out5;
 
+	//分配ext4需要的系统空间，存放entry入口
 	err = ext4_init_system_zone();
 	if (err)
 		goto out4;
-
+	//在/sys下创建kobject
 	err = ext4_init_sysfs();
 	if (err)
 		goto out3;
-
+	//分配预配置内存，申请和释放用到的内存
 	err = ext4_init_mballoc();
 	if (err)
 		goto out2;
 	else
 		ext4_mballoc_ready = 1;
+	//分配存放inode的内存
 	err = init_inodecache();
 	if (err)
 		goto out1;
+	//把ext3注册到系统中，因为ext4兼容ext3
 	register_as_ext3();
+	//把ext2注册到系统中，因为ext4兼容ext2
 	register_as_ext2();
+	//把ext4注册到系统中
 	err = register_filesystem(&ext4_fs_type);
 	if (err)
 		goto out;

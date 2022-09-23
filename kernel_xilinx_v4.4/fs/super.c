@@ -15,7 +15,7 @@
  *  Added kerneld support: Jacques Gelinas and Bjorn Ekwall
  *  Added change_root: Werner Almesberger & Hans Lermen, Feb '96
  *  Added options to /proc/mounts:
- *    Torbjörn Lindh (torbjorn.lindh@gopta.se), April 14, 1996.
+ *    Torbj?rn Lindh (torbjorn.lindh@gopta.se), April 14, 1996.
  *  Added devfs support: Richard Gooch <rgooch@atnf.csiro.au>, 13-JAN-1998
  *  Heavily rewritten for 'one fs - one tree' dcache architecture. AV, Mar 2000
  */
@@ -482,7 +482,7 @@ retry:
 			return ERR_PTR(-ENOMEM);
 		goto retry;
 	}
-		
+
 	err = set(s, data);
 	if (err) {
 		spin_unlock(&sb_lock);
@@ -583,7 +583,7 @@ EXPORT_SYMBOL(iterate_supers_type);
 /**
  *	get_super - get the superblock of a device
  *	@bdev: device to get the superblock for
- *	
+ *
  *	Scans the superblock list and finds the superblock of the file system
  *	mounted on the device given. %NULL is returned if no match is found.
  */
@@ -673,7 +673,7 @@ restart:
 	spin_unlock(&sb_lock);
 	return NULL;
 }
- 
+
 struct super_block *user_get_super(dev_t dev)
 {
 	struct super_block *sb;
@@ -973,6 +973,7 @@ struct dentry *mount_bdev(struct file_system_type *fs_type,
 	if (!(flags & MS_RDONLY))
 		mode |= FMODE_WRITE;
 
+	//通过dev_name设备名分配对应的block_device结构
 	bdev = blkdev_get_by_path(dev_name, mode, fs_type);
 	if (IS_ERR(bdev))
 		return ERR_CAST(bdev);
@@ -988,13 +989,15 @@ struct dentry *mount_bdev(struct file_system_type *fs_type,
 		error = -EBUSY;
 		goto error_bdev;
 	}
+	//得到已经存在或者新分配的super_block结构
 	s = sget(fs_type, test_bdev_super, set_bdev_super, flags | MS_NOSEC,
 		 bdev);
 	mutex_unlock(&bdev->bd_fsfreeze_mutex);
 	if (IS_ERR(s))
 		goto error_s;
-
+	//s->s_root不为空，说明得到的是已经存在的超级快
 	if (s->s_root) {
+		//判断此次的挂载flag是否和之前的挂载有读/写冲突，如果有冲突则返回错误
 		if ((flags ^ s->s_flags) & MS_RDONLY) {
 			deactivate_locked_super(s);
 			error = -EBUSY;
@@ -1009,14 +1012,17 @@ struct dentry *mount_bdev(struct file_system_type *fs_type,
 		 * holding an active reference.
 		 */
 		up_write(&s->s_umount);
+		//因为已经有了之前存在的超级快，也就是block_dev之前也分配过了，所以这个新的bdev就可以释放了。
 		blkdev_put(bdev, mode);
 		down_write(&s->s_umount);
-	} else {
+	} else {   //s->s_root为空，说明得到的是新的超级快
 		char b[BDEVNAME_SIZE];
 
+		//设置新的超级快的mode, id, blocksize
 		s->s_mode = mode;
 		strlcpy(s->s_id, bdevname(bdev, b), sizeof(s->s_id));
 		sb_set_blocksize(s, block_size(bdev));
+		//fill_super是一个传入参数，它由具体文件系统自己实现，ext4就实现了ext4_fill_super
 		error = fill_super(s, data, flags & MS_SILENT ? 1 : 0);
 		if (error) {
 			deactivate_locked_super(s);

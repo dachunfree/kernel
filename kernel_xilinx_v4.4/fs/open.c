@@ -875,7 +875,7 @@ struct file *dentry_open(const struct path *path, int flags,
 				fput(f);
 				f = ERR_PTR(error);
 			}
-		} else { 
+		} else {
 			put_filp(f);
 			f = ERR_PTR(error);
 		}
@@ -985,7 +985,7 @@ struct file *filp_open(const char *filename, int flags, umode_t mode)
 {
 	struct filename *name = getname_kernel(filename);
 	struct file *file = ERR_CAST(name);
-	
+
 	if (!IS_ERR(name)) {
 		file = file_open_name(name, flags, mode);
 		putname(name);
@@ -1010,16 +1010,19 @@ EXPORT_SYMBOL(file_open_root);
 long do_sys_open(int dfd, const char __user *filename, int flags, umode_t mode)
 {
 	struct open_flags op;
+
+	//根据用户传进来的mode和flags计算出op。
 	int fd = build_open_flags(flags, mode, &op);
 	struct filename *tmp;
 
 	if (fd)
 		return fd;
 
+	/*将filename从用户空间拷贝到内核空间*/
 	tmp = getname(filename);
 	if (IS_ERR(tmp))
 		return PTR_ERR(tmp);
-
+	/*获取一个可用的fd*/
 	fd = get_unused_fd_flags(flags);
 	if (fd >= 0) {
 		struct file *f = do_filp_open(dfd, tmp, &op);

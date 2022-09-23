@@ -119,6 +119,7 @@ struct file *get_empty_filp(void)
 			goto over;
 	}
 
+	//分配struct file结构体
 	f = kmem_cache_zalloc(filp_cachep, GFP_KERNEL);
 	if (unlikely(!f))
 		return ERR_PTR(-ENOMEM);
@@ -310,7 +311,7 @@ void put_filp(struct file *file)
 }
 
 void __init files_init(void)
-{ 
+{
 	filp_cachep = kmem_cache_create("filp", sizeof(struct file), 0,
 			SLAB_HWCACHE_ALIGN | SLAB_PANIC, NULL);
 	percpu_counter_init(&nr_files, 0, GFP_KERNEL);
@@ -329,4 +330,4 @@ void __init files_maxfiles_init(void)
 	n = ((totalram_pages - memreserve) * (PAGE_SIZE / 1024)) / 10;
 
 	files_stat.max_files = max_t(unsigned long, n, NR_FILE);
-} 
+}

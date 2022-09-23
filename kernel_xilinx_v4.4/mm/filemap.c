@@ -1796,7 +1796,7 @@ generic_file_read_iter(struct kiocb *iocb, struct iov_iter *iter)
 					pos + count - 1);
 		if (!retval) {
 			struct iov_iter data = *iter;
-			retval = mapping->a_ops->direct_IO(iocb, &data, pos);
+			retval = mapping->a_ops->direct_IO(iocb, &data, pos); // ext4_direct_IO
 		}
 
 		if (retval > 0) {
