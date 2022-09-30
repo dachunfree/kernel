@@ -42,3 +42,13 @@ echo 1 > /sys/kernel/debug/tracing/tracing_on
 
 抓取函数：
 cat /sys/kernel/debug/tracing/trace > 1.txt
+
+
+看vfs_read
+
+echo nop > /sys/kernel/debug/tracing/current_tracer
+echo 0 > /sys/kernel/debug/tracing/tracing_on
+echo function_graph > /sys/kernel/debug/tracing/current_tracer
+echo `pidof read` > $debugfs/tracing/set_ftrace_pid
+echo vfs_read > /sys/kernel/debug/tracing/set_graph_function
+echo 1 > /sys/kernel/debug/tracing/tracing_on

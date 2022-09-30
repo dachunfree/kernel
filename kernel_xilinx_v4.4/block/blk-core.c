@@ -2061,7 +2061,7 @@ blk_qc_t generic_make_request(struct bio *bio)
 		struct request_queue *q = bdev_get_queue(bio->bi_bdev);
 
 		if (likely(blk_queue_enter(q, __GFP_DIRECT_RECLAIM) == 0)) {
-
+			/*电梯调度算法:blk_queue_bio*/
 			ret = q->make_request_fn(q, bio);
 
 			blk_queue_exit(q);

@@ -52,3 +52,7 @@ echo dma_irq >> /sys/kernel/debug/tracing/set_ftrace_filter
 echo  vprintk_func > /sys/kernel/debug/tracing/set_ftrace_notrace
 echo  handle_percpu_devid_irq >> /sys/kernel/debug/tracing/set_ftrace_notrace
 echo  schedule >> /sys/kernel/debug/tracing/set_ftrace_notrace
+
+
+½²µÄ²»´íµÄ£º
+https://blog.csdn.net/feelabclihu/article/details/109882231

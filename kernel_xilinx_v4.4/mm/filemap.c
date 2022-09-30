@@ -1576,6 +1576,9 @@ find_page:
 			if (unlikely(page == NULL))
 				goto no_cached_page;
 		}
+		/*内核会给第2页标识一个PageReadahead标记，意思就是如果app接着读第2页，
+		就可以预判app在做顺序读，这样我们在app读第2页的时候，内核可以进一步异步预读*/
+
 		 /*发现找到的page已经是预读的情况了，再继续预读*/
          /*这里预读就是一种经验的猜测*/
 		if (PageReadahead(page)) {
@@ -1778,7 +1781,7 @@ out:
 ssize_t
 generic_file_read_iter(struct kiocb *iocb, struct iov_iter *iter)
 {
-	struct file *file = iocb->ki_filp;
+	struct file *file = iocb->ki_filp; //new_sync_read
 	ssize_t retval = 0;
 	loff_t *ppos = &iocb->ki_pos;
 	loff_t pos = *ppos;

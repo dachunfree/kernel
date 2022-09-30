@@ -30,7 +30,7 @@ struct iov_iter {
 	size_t iov_offset;
 	size_t count;
 	union {
-		const struct iovec *iov;
+		const struct iovec *iov; //存放数据的地址和长度。
 		const struct kvec *kvec;
 		const struct bio_vec *bvec;
 	};

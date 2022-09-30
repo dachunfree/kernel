@@ -94,7 +94,7 @@ struct bio {
 
 	atomic_t		__bi_cnt;	/* pin count */
 
-	struct bio_vec		*bi_io_vec;	/* vec向量数组指针 */
+	struct bio_vec		*bi_io_vec;	/* vec向量数组指针 与这个bio请求对应的所有内存*/
 
 	struct bio_set		*bi_pool;
 
