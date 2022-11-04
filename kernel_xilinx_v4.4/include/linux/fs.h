@@ -365,9 +365,10 @@ typedef struct {
 typedef int (*read_actor_t)(read_descriptor_t *, struct page *,
 		unsigned long, unsigned long);
 
+
 struct address_space_operations {
 	int (*writepage)(struct page *page, struct writeback_control *wbc);//写操作，从页写到所有者的磁盘映象
-	int (*readpage)(struct file *, struct page *);//读操作，从所有者的磁盘映像度到页
+	int (*readpage)(struct file *, struct page *);//把文件的一页从存储设备读到内存
 
 	/* Write back some dirty pages from this mapping. */
 	int (*writepages)(struct address_space *, struct writeback_control *);//将制定数量的脏业写回到磁盘
@@ -423,18 +424,24 @@ int pagecache_write_end(struct file *, struct address_space *mapping,
 				loff_t pos, unsigned len, unsigned copied,
 				struct page *page, void *fsdata);
 
+/*address_space管理了一个文件在内存中缓存的所有pages*/
+/*每个进程打开一个文件的时候，都会生成一个表示这个文件的struct file，
+但是文件的struct inode只有一个，inode才是文件的唯一标识，指向address_space
+的指针就是内嵌在inode结构体中的。在page cache中，每个page都有对应的文件，这个
+文件就是这个page的owner，address_space将属于同一owner的pages联系起来，将这些pages的
+操作方法与文件所属的文件系统联系起来。*/
 struct address_space {
 	struct inode		*host;		/* owner: inode, block_device 指向拥有该对象索引节点的指针 */
 	struct radix_tree_root	page_tree;	/* radix tree of all pages 表示拥有者页的基树的根，实现pagecache高效查找*/
-	spinlock_t		tree_lock;	/* and lock protecting it */
+	spinlock_t		tree_lock;	/* and lock protecting it 保护基数树*/
 	atomic_t		i_mmap_writable;/* count VM_SHARED mappings */
 	struct rb_root		i_mmap;		/* tree of private and shared mappings   指向vm_area_struct*/
 	struct rw_semaphore	i_mmap_rwsem;	/* protect tree, count, list */
 	/* Protected by tree_lock together with the radix tree */
-	unsigned long		nrpages;	/* number of total pages */
+	unsigned long		nrpages;	/* number of total pages address_space中含有的page frames的总数*/
 	unsigned long		nrshadows;	/* number of shadow entries */
 	pgoff_t			writeback_index;/* writeback starts here */
-	const struct address_space_operations *a_ops;	/* methods */
+	const struct address_space_operations *a_ops;	/* methods  page cache如何与磁盘（backing store）交互的一系列operations*/
 	unsigned long		flags;		/* error bits/gfp mask */
 	spinlock_t		private_lock;	/* for use by the address_space */
 	struct list_head	private_list;	/* ditto */
@@ -843,7 +850,7 @@ static inline int ra_has_index(struct file_ra_state *ra, pgoff_t index)
 	return (index >= ra->start &&
 		index <  ra->start + ra->size);
 }
-
+/*当进程打开一个文件的时候，虚拟文件系统就会创建文件的一个打开实例:file结构体*/
 struct file {
 	union {
 		struct llist_node	fu_llist;
@@ -862,7 +869,7 @@ struct file {
 	unsigned int 		f_flags;
 	fmode_t			f_mode; //访问模式
 	struct mutex		f_pos_lock;
-	loff_t			f_pos; //文件偏移ji进程当前正在访问的位置
+	loff_t			f_pos; //文件偏移进程当前正在访问的位置
 	struct fown_struct	f_owner;
 	const struct cred	*f_cred;
 	struct file_ra_state	f_ra;
@@ -1280,7 +1287,7 @@ struct sb_writers {
 	wait_queue_head_t		wait_unfrozen;	/* for get_super_thawed() */
 	struct percpu_rw_semaphore	rw_sem[SB_FREEZE_LEVELS];
 };
-/*存放已安装文件系统的有关信息，通常对应于存放在磁盘上的文件系统控制块
+/*vfs 存放已安装文件系统的有关信息，通常对应于存放在磁盘上的文件系统控制块
 每挂载一个文件系统对应一个超级块对象*/
 struct super_block {
 	struct list_head	s_list;	//用来把所有超级块实例连接到全局链表 super_blocks	 /* Keep this first */

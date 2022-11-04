@@ -1,0 +1,67 @@
+dts£º
+
+memory@0 {
+		device_type = "memory";
+		reg = <0x0 0x0 0x0 0x80000000>;
+};
+reserved-memory {
+		ranges;
+		#address-cells = <2>;
+		#size-cells = <2>;
+		/*
+		linux,cma {
+			compatible = "shared-dma-pool";
+			reusable;
+			size = <0x4000000>;
+			alignment = <0x2000>;
+			linux,cma-default;
+		};
+		*/
+		fac_write_reserved: fac_write_reserved@78000000 {
+			compatible = "fac_write_reserved";
+			reg = <0x0 0x78000000 0x0 0x8000000>;
+			no-map;
+		};
+		fac_read_reserved: fac_read_reserved@70000000 {
+			compatible = "fac_read_reserved";
+			reg = <0x0 0x70000000 0x0 0x8000000>;
+			no-map;
+		};
+	};
+
+fac: fac@a4800000 {
+			compatible = "nufront,euht_fac";
+			interrupt-parent = <&gic>;
+			interrupts = <0 95 4>;
+			reg = <0 0xa4800000 0 0x1000>;
+			memory-region = <&fac_write_reserved>, <&fac_read_reserved>;
+		};
+	};
+
+
+driver£º
+
+	num_mems = of_count_phandle_with_args(np, "memory-region", NULL);
+	if (num_mems <= 0)
+		return 0;
+	for (i = 0; i < num_mems; i++) {
+		struct device_node *node;
+		struct reserved_mem *rmem;
+
+		node = of_parse_phandle(np, "memory-region", i);
+		rmem = of_reserved_mem_lookup(node);
+		if (!rmem) {
+			dev_err(dev, "unable to acquire memory-region\n");
+			return -EINVAL;
+		}
+
+		if (strstr(node->name, "fac_write_reserved")) {
+			fac->dma_map[WRITE_DMA_BUFFER].dma_addr= (dma_addr_t)rmem->base;
+			fac->dma_map[WRITE_DMA_BUFFER].reservd_size=  rmem->size;
+		}else if(strstr(node->name, "fac_read_reserved")) {
+			fac->dma_map[READ_DMA_BUFFER].dma_addr= (dma_addr_t)rmem->base;
+			fac->dma_map[READ_DMA_BUFFER].reservd_size=  rmem->size;
+		}
+
+		printk("%s,dma_addr = 0x%x,size = 0x%x,\n\r",node->name,fac->dma_map[i].dma_addr,fac->dma_map[i].size);
+	}

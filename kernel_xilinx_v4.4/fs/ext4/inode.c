@@ -3336,6 +3336,7 @@ static const struct address_space_operations ext4_journalled_aops = {
 	.error_remove_page	= generic_error_remove_page,
 };
 
+
 static const struct address_space_operations ext4_da_aops = {
 	.readpage		= ext4_readpage,
 	.readpages		= ext4_readpages,

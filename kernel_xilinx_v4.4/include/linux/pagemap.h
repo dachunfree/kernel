@@ -270,6 +270,7 @@ struct page *pagecache_get_page(struct address_space *mapping, pgoff_t offset,
  *
  * Otherwise, %NULL is returned.
  */
+ /*根据文件的页索引在缓存中查找内存页*/
 static inline struct page *find_get_page(struct address_space *mapping,
 					pgoff_t offset)
 {

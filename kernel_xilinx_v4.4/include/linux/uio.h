@@ -30,7 +30,7 @@ struct iov_iter {
 	size_t iov_offset;
 	size_t count;
 	union {
-		const struct iovec *iov; //´æ·ÅÊı¾İµÄµØÖ·ºÍ³¤¶È¡£
+		const struct iovec *iov; /*åŒ…å«åœ°å€å’Œé•¿åº¦*/
 		const struct kvec *kvec;
 		const struct bio_vec *bvec;
 	};

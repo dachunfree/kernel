@@ -447,7 +447,7 @@ int elv_merge(struct request_queue *q, struct request **req, struct bio *bio)
 	}
 
 	if (e->type->ops.elevator_merge_fn)
-		return e->type->ops.elevator_merge_fn(q, req, bio);
+		return e->type->ops.elevator_merge_fn(q, req, bio); /*cfq_merge Completely Fair Queueing绝对公平调度器，*/
 
 	return ELEVATOR_NO_MERGE;
 }

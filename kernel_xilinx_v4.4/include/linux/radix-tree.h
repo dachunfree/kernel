@@ -8,12 +8,12 @@
  * modify it under the terms of the GNU General Public License as
  * published by the Free Software Foundation; either version 2, or (at
  * your option) any later version.
- * 
+ *
  * This program is distributed in the hope that it will be useful, but
  * WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
  * General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
@@ -106,8 +106,8 @@ struct radix_tree_node {
 /* root tags are stored in gfp_mask, shifted by __GFP_BITS_SHIFT */
 struct radix_tree_root {
 	unsigned int		height;
-	gfp_t			gfp_mask;
-	struct radix_tree_node	__rcu *rnode;
+	gfp_t			gfp_mask; /*分配内存页的掩码*/
+	struct radix_tree_node	__rcu *rnode; /*根节点*/
 };
 
 #define RADIX_TREE_INIT(mask)	{					\

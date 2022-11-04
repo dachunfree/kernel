@@ -938,6 +938,7 @@ vfs_kern_mount(struct file_system_type *type, int flags, const char *name, void 
 	if (!type)
 		return ERR_PTR(-ENODEV);
 
+	/*从高速缓存中分配mnt，并进行初始化*/
 	mnt = alloc_vfsmnt(name);
 	if (!mnt)
 		return ERR_PTR(-ENOMEM);
@@ -3083,23 +3084,27 @@ static void __init init_mount_tree(void)
 	type = get_fs_type("rootfs");
 	if (!type)
 		panic("Can't find rootfs type");
+
+	/*挂载rootfs文件系统*/
 	mnt = vfs_kern_mount(type, 0, "rootfs", NULL);
 	put_filesystem(type);
 	if (IS_ERR(mnt))
 		panic("Can't create rootfs");
-
+	/*创建第一个挂载命名空间*/
 	ns = create_mnt_ns(mnt);
 	if (IS_ERR(ns))
 		panic("Can't allocate initial namespace");
 
+	/*设置0号线程的挂载命名空间*/
 	init_task.nsproxy->mnt_ns = ns;
 	get_mnt_ns(ns);
 
 	root.mnt = mnt;
 	root.dentry = mnt->mnt_root;
 	mnt->mnt_flags |= MNT_LOCKED;
-
+	/*把0号线程的当前工作目录设置为rootfs的文件系统根目录*/
 	set_fs_pwd(current->fs, &root);
+	/*把0号线程的根目录设置为rootfs文件系统根目录*/
 	set_fs_root(current->fs, &root);
 }
 
@@ -3139,7 +3144,9 @@ void __init mnt_init(void)
 	fs_kobj = kobject_create_and_add("fs", NULL);
 	if (!fs_kobj)
 		printk(KERN_WARNING "%s: kobj create error\n", __func__);
+	/*将rootfs_fs_type 进行注册*/
 	init_rootfs();
+	/*负责挂载rootfs文件系统*/
 	init_mount_tree();
 }
 

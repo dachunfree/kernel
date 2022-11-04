@@ -438,7 +438,7 @@ retry:
 out:
 	put_page(page);
 }
- 
+
 #ifdef CONFIG_ROOT_NFS
 
 #define NFSROOT_TIMEOUT_MIN	5
@@ -571,6 +571,7 @@ void __init prepare_namespace(void)
 		root_device_name = saved_root_name;
 		if (!strncmp(root_device_name, "mtd", 3) ||
 		    !strncmp(root_device_name, "ubi", 3)) {
+		    /*如果是存储设备是闪存分区，设备名称以mtd开头*/
 			mount_block_root(root_device_name, root_mountflags);
 			goto out;
 		}
@@ -616,7 +617,7 @@ static struct dentry *rootfs_mount(struct file_system_type *fs_type,
 
 	if (IS_ENABLED(CONFIG_TMPFS) && is_tmpfs)
 		fill = shmem_fill_super;
-
+	/*分配sb 并进行初始化填充*/
 	return mount_nodev(fs_type, flags, data, fill);
 }
 

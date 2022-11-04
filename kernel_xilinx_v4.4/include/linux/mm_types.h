@@ -134,8 +134,8 @@ struct page {
 					};
 					int units;	/* SLOB */
 				};
-				/*引用计数，表示内核中引用该page的次数，如果要操作该page，引用计数会+1，操作完成-1。当该值为0时(放回buddy中)，
-				  表示没有引用该page的位置，所以该page可以被解除映射，这往往在内存回收时是有用的*/
+				/*当count值为0时，该page frame可被free掉；如果不为0，说明该page正在被某个进程或者内核使用，调用page_count()
+				可获得count值*/
 				atomic_t _count;		/* Usage count, see below. */
 			};
 			unsigned int active;	/* SLAB */

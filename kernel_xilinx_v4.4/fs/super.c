@@ -1125,7 +1125,7 @@ mount_fs(struct file_system_type *type, int flags, const char *name, void *data)
 		if (error)
 			goto out_free_secdata;
 	}
-
+	/*rootfs_fs_type  中的 rootfs_mount*/
 	root = type->mount(type, flags, name, data);
 	if (IS_ERR(root)) {
 		error = PTR_ERR(root);

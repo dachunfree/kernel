@@ -665,6 +665,7 @@ asmlinkage __visible void __init start_kernel(void)
 	key_init();
 	security_init();
 	dbg_late_init();
+	/*根文件系统rootfs初始化。init_rootfs*/
 	vfs_caches_init();
 	signals_init();
 	/* rootfs populating might need page-writeback */
@@ -1035,6 +1036,7 @@ static noinline void __init kernel_init_freeable(void)
 
 	if (sys_access((const char __user *) ramdisk_execute_command, 0) != 0) {
 		ramdisk_execute_command = NULL;
+		//挂载根文件系统
 		prepare_namespace();
 	}
 

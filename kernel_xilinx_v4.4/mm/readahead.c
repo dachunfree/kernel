@@ -114,7 +114,7 @@ static int read_pages(struct address_space *mapping, struct file *filp,
 	struct blk_plug plug;
 	unsigned page_idx;
 	int ret;
-
+	/*即蓄流/泄流，蓄流的目的是为了提高bio在elevator queue合并和排序的机会，以提高 IO效率*/
 	blk_start_plug(&plug);
 
 	if (mapping->a_ops->readpages) {
@@ -136,6 +136,8 @@ static int read_pages(struct address_space *mapping, struct file *filp,
 	ret = 0;
 
 out:
+	/*将plug list里的request再次尝试与elevator queue进行merge，不能merge再添加到elevator queue；
+		plug list处理完之后再将elevator queue的request往块设备分发*/
 	blk_finish_plug(&plug);
 
 	return ret;
@@ -196,6 +198,7 @@ int __do_page_cache_readahead(struct address_space *mapping, struct file *filp,
 	 * uptodate then the caller will launch readpage again, and
 	 * will then handle the error.
 	 */
+	 //分配出pagecache 开始load数据
 	if (ret)
 		read_pages(mapping, filp, &page_pool, ret);
 	BUG_ON(!list_empty(&page_pool));

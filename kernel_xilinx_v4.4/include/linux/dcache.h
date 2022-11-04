@@ -105,6 +105,8 @@ extern unsigned int full_name_hash(const unsigned char *, unsigned int);
 
 #define d_lock	d_lockref.lock
 
+/*文件系统把目录当做文件，这种文件的数据是由目录项组成的，每个目录项存储一个子目录或
+文件的名称以及队形的索引节点号*/
 struct dentry {
 	/* RCU lookup touched fields */
 	unsigned int d_flags;		/* protected by d_lock */
@@ -112,8 +114,7 @@ struct dentry {
 	struct hlist_bl_node d_hash;//把目录项加入到散列表 /* lookup hash list */
 	struct dentry *d_parent; //指向父目录 	/* parent directory */
 	struct qstr d_name;		//存储文件的名称
-	struct inode *d_inode;		//文件的索引节点 /* Where the name belongs to - NULL is
-					 * negative */
+	struct inode *d_inode;		//文件的索引节点 /* Where the name belongs to - NULL is negative */
 	unsigned char d_iname[DNAME_INLINE_LEN];	/* small names */
 
 	/* Ref lookup also touches following */
